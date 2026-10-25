@@ -1,8 +1,9 @@
 {
   "buildCommand": "node scripts/build.mjs",
   "outputDirectory": "public",
+  "cleanUrls": true,
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/", "destination": "/index.html" },
     { "source": "/healthz", "destination": "/api" }
   ]
 }
