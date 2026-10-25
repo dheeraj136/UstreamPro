@@ -1,6 +1,6 @@
 const RAPID_API_BASE = process.env.RAPID_API_BASE || "https://moviebox-api.p.rapidapi.com";
 const RAPID_API_HOST = process.env.RAPID_API_HOST || "moviebox-api.p.rapidapi.com";
-let rapidApiKey = (process.env.RAPIDAPI_KEY || process.env.RAPID_API_KEY || "").trim();
+let rapidApiKey = (process.env.RAPIDAPI_KEY || process.env.RAPID_API_KEY || "68d9a25612msh6bb2c17daf102cdp1fe4fbjsnc2adc8510c22").trim();
 
 const json = (res, status, payload, req = null) => {
   if (typeof res.setHeader === "function") {
@@ -45,312 +45,949 @@ const json = (res, status, payload, req = null) => {
 };
 
 export const DEMO_ITEMS = [
-  // 10 MOVIES
   {
-    subjectId: "fallback-movie-1",
-    title: "Paper Moons",
-    category: "movie",
-    genre: "Drama, Romance",
-    countryName: "France",
-    releaseDate: "2026-02-14",
-    imdbRatingValue: "9.1",
-    duration: "1h 54m",
-    cover: { url: "/assets/paper-moons.svg" },
-    hasResource: true,
-    description: "Two kindred souls meet on the final night train out of Paris, sharing unspoken memories beneath an eclipse.",
-    playUrl: { url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4" },
-    seNum: 0,
+    "subjectId": "movie-inception",
+    "title": "Inception",
+    "category": "movie",
+    "type": "movie",
+    "genre": [
+      "action",
+      "sci-fi",
+      "adventure"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2010,
+    "releaseDate": "2010-07-16",
+    "rating": 8.8,
+    "imdbRatingValue": "8.8",
+    "runtime": "2h 28m",
+    "duration": "2h 28m",
+    "language": "English, Multi Sub",
+    "badge": "Top Rated",
+    "kicker": "Christopher Nolan",
+    "image": "https://image.tmdb.org/t/p/w500/oYuLEt3zVCKq57qu2F8dT7NIa6f.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/oYuLEt3zVCKq57qu2F8dT7NIa6f.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #1e293b, #0f172a 50%, #020617)",
+    "description": "Cobb, a skilled thief who commits corporate espionage by infiltrating the subconscious of his targets, is offered a chance to have his criminal history erased as payment for the implantation of another person's idea into a target's subconscious.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+    },
+    "hasResource": true,
+    "seNum": 0
   },
   {
-    subjectId: "fallback-movie-2",
-    title: "Moonlit Market",
-    category: "movie",
-    genre: "Comedy, Fantasy, Romance",
-    countryName: "Korea",
-    releaseDate: "2025-09-15",
-    imdbRatingValue: "8.6",
-    duration: "1h 48m",
-    cover: { url: "/assets/moonlit-market.svg" },
-    hasResource: true,
-    description: "A hidden midnight bazaar opens only on full moons, selling forgotten dreams, vintage spells, and warm street food in Seoul.",
-    playUrl: { url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4" },
-    seNum: 0,
+    "subjectId": "movie-interstellar",
+    "title": "Interstellar",
+    "category": "movie",
+    "type": "movie",
+    "genre": [
+      "adventure",
+      "drama",
+      "sci-fi"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2014,
+    "releaseDate": "2014-11-07",
+    "rating": 8.7,
+    "imdbRatingValue": "8.7",
+    "runtime": "2h 49m",
+    "duration": "2h 49m",
+    "language": "English, Multi Sub",
+    "badge": "Epic Sci-Fi",
+    "kicker": "Christopher Nolan",
+    "image": "https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #0369a1, #0c4a6e 50%, #082f49)",
+    "description": "When Earth becomes uninhabitable in the future, a farmer and ex-NASA pilot, Joseph Cooper, is tasked to pilot a spacecraft, along with a team of researchers, to find a new planet for humans.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4"
+    },
+    "hasResource": true,
+    "seNum": 0
   },
   {
-    subjectId: "fallback-movie-3",
-    title: "Sintel: Dragon's Path",
-    category: "movie",
-    genre: "Fantasy, Adventure, Animation",
-    countryName: "Netherlands",
-    releaseDate: "2024-05-18",
-    imdbRatingValue: "8.4",
-    duration: "1h 35m",
-    cover: { url: "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80" },
-    hasResource: true,
-    description: "A determined wanderer embarks on a dangerous mountain odyssey searching for her companion dragon.",
-    playUrl: { url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4" },
-    seNum: 0,
+    "subjectId": "movie-dark-knight",
+    "title": "The Dark Knight",
+    "category": "movie",
+    "type": "movie",
+    "genre": [
+      "action",
+      "crime",
+      "drama"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2008,
+    "releaseDate": "2008-07-18",
+    "rating": 9,
+    "imdbRatingValue": "9.0",
+    "runtime": "2h 32m",
+    "duration": "2h 32m",
+    "language": "English, Multi Sub",
+    "badge": "Masterpiece",
+    "kicker": "Legendary",
+    "image": "https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #334155, #1e293b 50%, #0f172a)",
+    "description": "When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest psychological and physical tests of his ability to fight injustice.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+    },
+    "hasResource": true,
+    "seNum": 0
   },
   {
-    subjectId: "fallback-movie-4",
-    title: "Tears of Steel: Neo-Amsterdam",
-    category: "movie",
-    genre: "Sci-Fi, Action",
-    countryName: "Netherlands",
-    releaseDate: "2025-07-22",
-    imdbRatingValue: "8.7",
-    duration: "1h 50m",
-    cover: { url: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80" },
-    hasResource: true,
-    description: "In a dystopian Amsterdam overrun by rogue cyborgs, scientists stage a desperate temporal rescue mission.",
-    playUrl: { url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4" },
-    seNum: 0,
+    "subjectId": "movie-dune-2",
+    "title": "Dune: Part Two",
+    "category": "movie",
+    "type": "movie",
+    "genre": [
+      "action",
+      "adventure",
+      "sci-fi"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2024,
+    "releaseDate": "2024-03-01",
+    "rating": 8.5,
+    "imdbRatingValue": "8.5",
+    "runtime": "2h 46m",
+    "duration": "2h 46m",
+    "language": "English, Multi Sub",
+    "badge": "Blockbuster",
+    "kicker": "Denis Villeneuve",
+    "image": "https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #d97706, #78350f 50%, #451a03)",
+    "description": "Paul Atreides unites with Chani and the Fremen while seeking revenge against the conspirators who destroyed his family, facing a choice between love and the fate of the universe.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+    },
+    "hasResource": true,
+    "seNum": 0
   },
   {
-    subjectId: "fallback-movie-5",
-    title: "The Zenith Eclipse",
-    category: "movie",
-    genre: "Sci-Fi, Mystery, Thriller",
-    countryName: "United States",
-    releaseDate: "2025-10-12",
-    imdbRatingValue: "8.9",
-    duration: "2h 08m",
-    cover: { url: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=600&auto=format&fit=crop&q=80" },
-    hasResource: true,
-    description: "An observatory team in the Atacama Desert discovers an artificial megastructure approaching in the solar shadow.",
-    playUrl: { url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" },
-    seNum: 0,
+    "subjectId": "movie-oppenheimer",
+    "title": "Oppenheimer",
+    "category": "movie",
+    "type": "movie",
+    "genre": [
+      "biography",
+      "drama",
+      "history"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2023,
+    "releaseDate": "2023-07-21",
+    "rating": 8.9,
+    "imdbRatingValue": "8.9",
+    "runtime": "3h 00m",
+    "duration": "3h 00m",
+    "language": "English, Multi Sub",
+    "badge": "Oscar Winner",
+    "kicker": "Christopher Nolan",
+    "image": "https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #ea580c, #7c2d12 50%, #431407)",
+    "description": "The story of American scientist J. Robert Oppenheimer and his role in the Manhattan Project, developing the atomic weapons that ended World War II.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4"
+    },
+    "hasResource": true,
+    "seNum": 0
   },
   {
-    subjectId: "fallback-movie-6",
-    title: "Cyber Noir: Neon Mirage",
-    category: "movie",
-    genre: "Crime, Thriller, Sci-Fi",
-    countryName: "United Kingdom",
-    releaseDate: "2026-03-01",
-    imdbRatingValue: "8.5",
-    duration: "1h 58m",
-    cover: { url: "https://images.unsplash.com/photo-1508739773434-c26b3d09e071?w=600&auto=format&fit=crop&q=80" },
-    hasResource: true,
-    description: "A cynical neural detective investigates a disappearance tied to an illicit biometric syndication network.",
-    playUrl: { url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4" },
-    seNum: 0,
+    "subjectId": "movie-spider-verse",
+    "title": "Spider-Man: Across the Spider-Verse",
+    "category": "movie",
+    "type": "movie",
+    "genre": [
+      "animation",
+      "action",
+      "adventure"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2023,
+    "releaseDate": "2023-06-02",
+    "rating": 8.7,
+    "imdbRatingValue": "8.7",
+    "runtime": "2h 20m",
+    "duration": "2h 20m",
+    "language": "English, Multi Sub",
+    "badge": "Animation Marvel",
+    "kicker": "Sony Pictures",
+    "image": "https://image.tmdb.org/t/p/w500/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #db2777, #831843 50%, #4c0519)",
+    "description": "Miles Morales catapults across the Multiverse, encountering a society of Spider-People charged with protecting its existence when heroes clash on handling a new catastrophic threat.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4"
+    },
+    "hasResource": true,
+    "seNum": 0
   },
   {
-    subjectId: "fallback-movie-7",
-    title: "Cosmos Laundromat",
-    category: "movie",
-    genre: "Comedy, Fantasy, Sci-Fi",
-    countryName: "France",
-    releaseDate: "2024-11-04",
-    imdbRatingValue: "8.2",
-    duration: "1h 42m",
-    cover: { url: "https://images.unsplash.com/photo-1516339901601-2e1b62dc0c45?w=600&auto=format&fit=crop&q=80" },
-    hasResource: true,
-    description: "A despondent sheep on a lonely cliff meets an eccentric traveler offering voyages through multiverse wash cycles.",
-    playUrl: { url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4" },
-    seNum: 0,
+    "subjectId": "movie-avengers-endgame",
+    "title": "Avengers: Endgame",
+    "category": "movie",
+    "type": "movie",
+    "genre": [
+      "action",
+      "adventure",
+      "sci-fi"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2019,
+    "releaseDate": "2019-04-26",
+    "rating": 8.4,
+    "imdbRatingValue": "8.4",
+    "runtime": "3h 01m",
+    "duration": "3h 01m",
+    "language": "English, Multi Sub",
+    "badge": "Marvel Epic",
+    "kicker": "Marvel Studios",
+    "image": "https://image.tmdb.org/t/p/w500/or06FN3Dka5tukK1e9sl16pB3iy.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/or06FN3Dka5tukK1e9sl16pB3iy.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #7c3aed, #4c1d95 50%, #2e1065)",
+    "description": "After Thanos wiped out half of all life in the universe, the remaining Avengers assemble once more in a desperate final stand to reverse the devastating catastrophe.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4"
+    },
+    "hasResource": true,
+    "seNum": 0
   },
   {
-    subjectId: "fallback-movie-8",
-    title: "Midnight Boulevard",
-    category: "movie",
-    genre: "Drama, Mystery",
-    countryName: "United States",
-    releaseDate: "2025-06-18",
-    imdbRatingValue: "8.8",
-    duration: "2h 02m",
-    cover: { url: "https://images.unsplash.com/photo-1514565131-fce0801e5785?w=600&auto=format&fit=crop&q=80" },
-    hasResource: true,
-    description: "A night-shift taxi driver becomes the only protector of an escaped key witness hunted through Los Angeles.",
-    playUrl: { url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4" },
-    seNum: 0,
+    "subjectId": "movie-gladiator",
+    "title": "Gladiator",
+    "category": "movie",
+    "type": "movie",
+    "genre": [
+      "action",
+      "adventure",
+      "drama"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2000,
+    "releaseDate": "2000-05-05",
+    "rating": 8.5,
+    "imdbRatingValue": "8.5",
+    "runtime": "2h 35m",
+    "duration": "2h 35m",
+    "language": "English, Multi Sub",
+    "badge": "Classic",
+    "kicker": "Ridley Scott",
+    "image": "https://image.tmdb.org/t/p/w500/ty8TGRuvJLPUmAR1H1nRIsgwvim.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/ty8TGRuvJLPUmAR1H1nRIsgwvim.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #ca8a04, #713f12 50%, #422006)",
+    "description": "A former Roman General sets out to exact vengeance against the corrupt emperor who murdered his family and sent him into slavery.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4"
+    },
+    "hasResource": true,
+    "seNum": 0
   },
   {
-    subjectId: "fallback-movie-9",
-    title: "Solstice Requiem",
-    category: "movie",
-    genre: "Drama, History, Music",
-    countryName: "Germany",
-    releaseDate: "2026-01-20",
-    imdbRatingValue: "9.0",
-    duration: "2h 15m",
-    cover: { url: "https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?w=600&auto=format&fit=crop&q=80" },
-    hasResource: true,
-    description: "An orchestral virtuoso uncovers an encoded score hidden inside a historic concert grand piano.",
-    playUrl: { url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4" },
-    seNum: 0,
+    "subjectId": "movie-matrix",
+    "title": "The Matrix",
+    "category": "movie",
+    "type": "movie",
+    "genre": [
+      "action",
+      "sci-fi"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 1999,
+    "releaseDate": "1999-03-31",
+    "rating": 8.7,
+    "imdbRatingValue": "8.7",
+    "runtime": "2h 16m",
+    "duration": "2h 16m",
+    "language": "English, Multi Sub",
+    "badge": "Cyberpunk Classic",
+    "kicker": "The Wachowskis",
+    "image": "https://image.tmdb.org/t/p/w500/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #16a34a, #14532d 50%, #052e16)",
+    "description": "When a beautiful stranger leads computer hacker Neo to a forbidding underworld, he discovers the shocking truth--the life he knows is the elaborate deception of an evil cyber-intelligence.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+    },
+    "hasResource": true,
+    "seNum": 0
   },
   {
-    subjectId: "fallback-movie-10",
-    title: "The Velvet Heist",
-    category: "movie",
-    genre: "Action, Comedy, Crime",
-    countryName: "United States",
-    releaseDate: "2025-08-30",
-    imdbRatingValue: "8.3",
-    duration: "1h 46m",
-    cover: { url: "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=600&auto=format&fit=crop&q=80" },
-    hasResource: true,
-    description: "A retired master thief is lured into an impossible Monaco diamond extraction amidst an international Grand Prix.",
-    playUrl: { url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4" },
-    seNum: 0,
-  },
-
-  // 5 SERIES
-  {
-    subjectId: "fallback-series-1",
-    title: "The Quiet Orbit",
-    category: "tv",
-    genre: "Drama, Sci-Fi, Mystery",
-    countryName: "United States",
-    releaseDate: "2025-11-20",
-    imdbRatingValue: "8.9",
-    duration: "8 Episodes · Mini-series",
-    cover: { url: "/assets/quiet-orbit.svg" },
-    hasResource: true,
-    description: "Deep space research vessel Kepler-9 falls silent after detecting an anomalous resonant signal from Jupiter's shadow.",
-    playUrl: { url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4" },
-    seNum: 1,
-  },
-  {
-    subjectId: "fallback-series-2",
-    title: "Zero Hour Club",
-    category: "tv",
-    genre: "Drama, Mystery, Thriller",
-    countryName: "United Kingdom",
-    releaseDate: "2026-01-05",
-    imdbRatingValue: "9.0",
-    duration: "2 Seasons · 16 Episodes",
-    cover: { url: "/assets/zero-hour-club.svg" },
-    hasResource: true,
-    description: "A clandestine syndicate of cryptographers coordinate high-stakes exposes against an authoritarian surveillance network.",
-    playUrl: { url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4" },
-    seNum: 2,
+    "subjectId": "movie-spirited-away",
+    "title": "Spirited Away",
+    "category": "movie",
+    "type": "movie",
+    "genre": [
+      "animation",
+      "adventure",
+      "fantasy"
+    ],
+    "country": "Japan",
+    "countryName": "Japan",
+    "year": 2001,
+    "releaseDate": "2001-07-20",
+    "rating": 8.6,
+    "imdbRatingValue": "8.6",
+    "runtime": "2h 05m",
+    "duration": "2h 05m",
+    "language": "Japanese, English Dub",
+    "badge": "Studio Ghibli",
+    "kicker": "Hayao Miyazaki",
+    "image": "https://image.tmdb.org/t/p/w500/39wmItIWsg5sZMyRUHLkWBcuVCM.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/39wmItIWsg5sZMyRUHLkWBcuVCM.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #0d9488, #115e59 50%, #042f2e)",
+    "description": "During her family's move to the suburbs, a sullen 10-year-old girl wanders into a world ruled by gods, witches, and spirits, where humans are changed into beasts.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4"
+    },
+    "hasResource": true,
+    "seNum": 0
   },
   {
-    subjectId: "fallback-series-3",
-    title: "Blue Static",
-    category: "tv",
-    genre: "Drama, Mystery, Sci-Fi",
-    countryName: "United States",
-    releaseDate: "2024-10-31",
-    imdbRatingValue: "8.7",
-    duration: "1 Season · 10 Episodes",
-    cover: { url: "/assets/blue-static.svg" },
-    hasResource: true,
-    description: "An analog radio host in a coastal town picks up broadcast frequencies that predict local occurrences before they happen.",
-    playUrl: { url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4" },
-    seNum: 1,
+    "subjectId": "series-breaking-bad",
+    "title": "Breaking Bad",
+    "category": "tv",
+    "type": "series",
+    "genre": [
+      "crime",
+      "drama",
+      "thriller"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2008,
+    "releaseDate": "2008-01-20",
+    "rating": 9.5,
+    "imdbRatingValue": "9.5",
+    "runtime": "5 Seasons · 62 Episodes",
+    "duration": "5 Seasons",
+    "language": "English, Multi Sub",
+    "badge": "All-Time Top #1",
+    "kicker": "Vince Gilligan",
+    "image": "https://image.tmdb.org/t/p/w500/anFx9aTOOYqgS3v7x3R84Kz67ly.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/anFx9aTOOYqgS3v7x3R84Kz67ly.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #15803d, #14532d 50%, #052e16)",
+    "description": "A high school chemistry teacher diagnosed with inoperable lung cancer turns to manufacturing and selling methamphetamine in order to secure his family's financial future.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+    },
+    "hasResource": true,
+    "seNum": 5
   },
   {
-    subjectId: "fallback-series-4",
-    title: "Silicon Deep",
-    category: "tv",
-    genre: "Drama, Sci-Fi, Thriller",
-    countryName: "United States",
-    releaseDate: "2025-04-14",
-    imdbRatingValue: "8.8",
-    duration: "3 Seasons · 24 Episodes",
-    cover: { url: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600&auto=format&fit=crop&q=80" },
-    hasResource: true,
-    description: "Subsea server hubs power global autonomous economies until a rogue submarine cuts the Atlantic deep-water trunk cable.",
-    playUrl: { url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" },
-    seNum: 3,
+    "subjectId": "series-stranger-things",
+    "title": "Stranger Things",
+    "category": "tv",
+    "type": "series",
+    "genre": [
+      "drama",
+      "fantasy",
+      "horror",
+      "sci-fi"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2016,
+    "releaseDate": "2016-07-15",
+    "rating": 8.7,
+    "imdbRatingValue": "8.7",
+    "runtime": "4 Seasons · 34 Episodes",
+    "duration": "4 Seasons",
+    "language": "English, Multi Sub",
+    "badge": "Global Phenomenon",
+    "kicker": "Duffer Brothers",
+    "image": "https://image.tmdb.org/t/p/w500/49WJfeN0moxb9IPfGn8AIqMGskD.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/49WJfeN0moxb9IPfGn8AIqMGskD.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #b91c1c, #7f1d1d 50%, #450a0a)",
+    "description": "When a young boy vanishes, a small Indiana town uncovers a mystery involving secret government experiments, terrifying supernatural forces, and one strange little girl.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+    },
+    "hasResource": true,
+    "seNum": 4
   },
   {
-    subjectId: "fallback-series-5",
-    title: "Sovereign Protocol",
-    category: "tv",
-    genre: "Action, Thriller, Crime",
-    countryName: "Germany",
-    releaseDate: "2026-02-28",
-    imdbRatingValue: "9.2",
-    duration: "1 Season · 8 Episodes",
-    cover: { url: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600&auto=format&fit=crop&q=80" },
-    hasResource: true,
-    description: "An elite cybersecurity unit is dispatched across Europe when automated diplomatic systems issue conflicting state ultimatums.",
-    playUrl: { url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4" },
-    seNum: 1,
-  },
-
-  // 5 ANIME
-  {
-    subjectId: "fallback-anime-1",
-    title: "Neon Yokai",
-    category: "anime",
-    genre: "Anime, Action, Sci-Fi",
-    countryName: "Japan",
-    releaseDate: "2026-04-10",
-    imdbRatingValue: "9.4",
-    duration: "24m · 12 Episodes",
-    cover: { url: "/assets/neon-yokai.svg" },
-    hasResource: true,
-    description: "In a rain-soaked neo-Tokyo, a rogue cyber-exorcist hunts rogue AI spirits glitching across the power grid.",
-    playUrl: { url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" },
-    seNum: 1,
-  },
-  {
-    subjectId: "fallback-anime-2",
-    title: "Byte Knights",
-    category: "anime",
-    genre: "Anime, Action, Sci-Fi",
-    countryName: "Japan",
-    releaseDate: "2025-08-18",
-    imdbRatingValue: "8.5",
-    duration: "24 Episodes",
-    cover: { url: "/assets/byte-knights.svg" },
-    hasResource: true,
-    description: "Elite neural gladiators compete in subterranean cyber tournaments where virtual defeats trigger real consequences.",
-    playUrl: { url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4" },
-    seNum: 2,
+    "subjectId": "series-last-of-us",
+    "title": "The Last of Us",
+    "category": "tv",
+    "type": "series",
+    "genre": [
+      "action",
+      "adventure",
+      "drama",
+      "sci-fi"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2023,
+    "releaseDate": "2023-01-15",
+    "rating": 8.8,
+    "imdbRatingValue": "8.8",
+    "runtime": "1 Season · 9 Episodes",
+    "duration": "1 Season",
+    "language": "English, Multi Sub",
+    "badge": "HBO Original",
+    "kicker": "Craig Mazin & Neil Druckmann",
+    "image": "https://image.tmdb.org/t/p/w500/dmo6TYuuJgaYinXBPjrgG9mB5od.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/dmo6TYuuJgaYinXBPjrgG9mB5od.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #4d7c0f, #365314 50%, #1a2e05)",
+    "description": "Twenty years after modern civilization was destroyed, Joel is hired to smuggle Ellie, a 14-year-old girl, out of an oppressive quarantine zone across a ravaged America.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4"
+    },
+    "hasResource": true,
+    "seNum": 1
   },
   {
-    subjectId: "fallback-anime-3",
-    title: "Skybound Runners",
-    category: "anime",
-    genre: "Anime, Action, Comedy, Adventure",
-    countryName: "Japan",
-    releaseDate: "2026-03-12",
-    imdbRatingValue: "8.8",
-    duration: "Season 2 · 12 Episodes",
-    cover: { url: "/assets/skybound-runners.svg" },
-    hasResource: true,
-    description: "Daredevil sky-sailors navigate treacherous cloud currents and ancient floating ruins in pursuit of the Zenith Horizon.",
-    playUrl: { url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4" },
-    seNum: 2,
+    "subjectId": "series-game-of-thrones",
+    "title": "Game of Thrones",
+    "category": "tv",
+    "type": "series",
+    "genre": [
+      "action",
+      "adventure",
+      "drama",
+      "fantasy"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2011,
+    "releaseDate": "2011-04-17",
+    "rating": 9.2,
+    "imdbRatingValue": "9.2",
+    "runtime": "8 Seasons · 73 Episodes",
+    "duration": "8 Seasons",
+    "language": "English, Multi Sub",
+    "badge": "Epic Fantasy",
+    "kicker": "HBO Series",
+    "image": "https://image.tmdb.org/t/p/w500/1XS1oqL89opfnbLl8WnZY1O1uJx.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/1XS1oqL89opfnbLl8WnZY1O1uJx.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #475569, #334155 50%, #0f172a)",
+    "description": "Nine noble families fight for control over the Iron Throne of Westeros, while an ancient enemy returns after being dormant for millennia beyond the northern Wall.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+    },
+    "hasResource": true,
+    "seNum": 8
   },
   {
-    subjectId: "fallback-anime-4",
-    title: "Chrono Blade: Zero",
-    category: "anime",
-    genre: "Anime, Fantasy, Action",
-    countryName: "Japan",
-    releaseDate: "2025-05-19",
-    imdbRatingValue: "9.1",
-    duration: "26 Episodes",
-    cover: { url: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=600&auto=format&fit=crop&q=80" },
-    hasResource: true,
-    description: "A master swordsman bound by an ancient temporal curse relives the final battle of the empire to break the cycle of calamity.",
-    playUrl: { url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4" },
-    seNum: 1,
+    "subjectId": "series-severance",
+    "title": "Severance",
+    "category": "tv",
+    "type": "series",
+    "genre": [
+      "drama",
+      "mystery",
+      "sci-fi",
+      "thriller"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2022,
+    "releaseDate": "2022-02-18",
+    "rating": 8.7,
+    "imdbRatingValue": "8.7",
+    "runtime": "2 Seasons · 19 Episodes",
+    "duration": "2 Seasons",
+    "language": "English, Multi Sub",
+    "badge": "Mind-Bending",
+    "kicker": "Ben Stiller",
+    "image": "https://image.tmdb.org/t/p/w500/pPHpeI2X1qEd1CS1SeyrdhZ4qnT.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/pPHpeI2X1qEd1CS1SeyrdhZ4qnT.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #0284c7, #0369a1 50%, #075985)",
+    "description": "Mark Scout leads a team at Lumon Industries whose employees undergo a severance procedure separating work memories from personal life memories.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+    },
+    "hasResource": true,
+    "seNum": 2
   },
   {
-    subjectId: "fallback-anime-5",
-    title: "Ghost Horizon",
-    category: "anime",
-    genre: "Anime, Sci-Fi, Mystery",
-    countryName: "Japan",
-    releaseDate: "2026-02-11",
-    imdbRatingValue: "8.9",
-    duration: "12 Episodes",
-    cover: { url: "https://images.unsplash.com/photo-1563089145-599997674d42?w=600&auto=format&fit=crop&q=80" },
-    hasResource: true,
-    description: "Pilots stationed at the edge of known space begin experiencing shared apparitions transmitting warnings from beyond the void.",
-    playUrl: { url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4" },
-    seNum: 1,
+    "subjectId": "anime-attack-on-titan",
+    "title": "Attack on Titan",
+    "category": "anime",
+    "type": "anime",
+    "genre": [
+      "anime",
+      "action",
+      "adventure",
+      "fantasy"
+    ],
+    "country": "Japan",
+    "countryName": "Japan",
+    "year": 2013,
+    "releaseDate": "2013-04-07",
+    "rating": 9.1,
+    "imdbRatingValue": "9.1",
+    "runtime": "4 Seasons · 87 Episodes",
+    "duration": "4 Seasons",
+    "language": "Japanese, English Dub",
+    "badge": "Anime Masterpiece",
+    "kicker": "WIT Studio & MAPPA",
+    "image": "https://image.tmdb.org/t/p/w500/hTP1DtLGFamjfu8WqjnuQdP1n4i.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/hTP1DtLGFamjfu8WqjnuQdP1n4i.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #b45309, #78350f 50%, #451a03)",
+    "description": "After his hometown is destroyed and his mother is killed, young Eren Jaeger vows to cleanse the earth of the giant humanoid Titans that have pushed humanity behind giant concentric walls.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4"
+    },
+    "hasResource": true,
+    "seNum": 4
   },
+  {
+    "subjectId": "anime-demon-slayer",
+    "title": "Demon Slayer: Kimetsu no Yaiba",
+    "category": "anime",
+    "type": "anime",
+    "genre": [
+      "anime",
+      "action",
+      "fantasy"
+    ],
+    "country": "Japan",
+    "countryName": "Japan",
+    "year": 2019,
+    "releaseDate": "2019-04-06",
+    "rating": 8.6,
+    "imdbRatingValue": "8.6",
+    "runtime": "4 Seasons · 55 Episodes",
+    "duration": "4 Seasons",
+    "language": "Japanese, English Dub",
+    "badge": "Ufotable Masterwork",
+    "kicker": "Koyoharu Gotouge",
+    "image": "https://image.tmdb.org/t/p/w500/xUfRZu2mi8jH6SzQEJGP6tjBuYj.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/xUfRZu2mi8jH6SzQEJGP6tjBuYj.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #0284c7, #0f766e 50%, #134e4a)",
+    "description": "A kindhearted young boy whose family was slaughtered by demons joins the Demon Slayer Corps to find a cure for his sister Nezuko, who was turned into a demon.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4"
+    },
+    "hasResource": true,
+    "seNum": 4
+  },
+  {
+    "subjectId": "anime-jujutsu-kaisen",
+    "title": "Jujutsu Kaisen",
+    "category": "anime",
+    "type": "anime",
+    "genre": [
+      "anime",
+      "action",
+      "fantasy",
+      "supernatural"
+    ],
+    "country": "Japan",
+    "countryName": "Japan",
+    "year": 2020,
+    "releaseDate": "2020-10-03",
+    "rating": 8.5,
+    "imdbRatingValue": "8.5",
+    "runtime": "2 Seasons · 47 Episodes",
+    "duration": "2 Seasons",
+    "language": "Japanese, English Dub",
+    "badge": "Fan Favorite",
+    "kicker": "MAPPA",
+    "image": "https://image.tmdb.org/t/p/w500/6qQzMJG27XOJsyAEEIisoJB45j2.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/6qQzMJG27XOJsyAEEIisoJB45j2.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #4338ca, #312e81 50%, #1e1b4b)",
+    "description": "Yuji Itadori swallows a cursed finger to save his friends, sharing his body with the ancient Curse King Ryomen Sukuna, entering Tokyo Jujutsu High to exorcise deadly spirits.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4"
+    },
+    "hasResource": true,
+    "seNum": 2
+  },
+  {
+    "subjectId": "anime-death-note",
+    "title": "Death Note",
+    "category": "anime",
+    "type": "anime",
+    "genre": [
+      "anime",
+      "crime",
+      "drama",
+      "mystery",
+      "thriller"
+    ],
+    "country": "Japan",
+    "countryName": "Japan",
+    "year": 2006,
+    "releaseDate": "2006-10-04",
+    "rating": 9,
+    "imdbRatingValue": "9.0",
+    "runtime": "1 Season · 37 Episodes",
+    "duration": "1 Season",
+    "language": "Japanese, English Dub",
+    "badge": "Psychological Classic",
+    "kicker": "Madhouse",
+    "image": "https://image.tmdb.org/t/p/w500/tCZFfYTIwrR7n94J6G14Y4hAFU6.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/tCZFfYTIwrR7n94J6G14Y4hAFU6.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #18181b, #09090b 50%, #000000)",
+    "description": "A brilliant high school student discovers a supernatural notebook that grants the ability to kill anyone whose name and face are known, engaging in a battle of wits with the enigmatic detective L.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+    },
+    "hasResource": true,
+    "seNum": 1
+  },
+  {
+    "subjectId": "anime-fma-brotherhood",
+    "title": "Fullmetal Alchemist: Brotherhood",
+    "category": "anime",
+    "type": "anime",
+    "genre": [
+      "anime",
+      "action",
+      "adventure",
+      "fantasy"
+    ],
+    "country": "Japan",
+    "countryName": "Japan",
+    "year": 2009,
+    "releaseDate": "2009-04-05",
+    "rating": 9.1,
+    "imdbRatingValue": "9.1",
+    "runtime": "1 Season · 64 Episodes",
+    "duration": "1 Season",
+    "language": "Japanese, English Dub",
+    "badge": "Top Rated Anime",
+    "kicker": "Bones Studio",
+    "image": "https://image.tmdb.org/t/p/w500/5ZFUEOULaVml7pQuXxhpR2SmVUw.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/5ZFUEOULaVml7pQuXxhpR2SmVUw.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #b91c1c, #991b1b 50%, #450a0a)",
+    "description": "Two alchemist brothers embark on an arduous journey to seek the legendary Philosopher's Stone to restore their bodies after a forbidden human transmutation ritual went disastrously wrong.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+    },
+    "hasResource": true,
+    "seNum": 1
+  }
 ];
+
+export const EPISODE_MAP = {
+  "series-breaking-bad": [
+    {
+      "ep": 1,
+      "season": 1,
+      "name": "Pilot",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 2,
+      "season": 1,
+      "name": "Cat's in the Bag...",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 3,
+      "season": 1,
+      "name": "...And the Bag's in the River",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 4,
+      "season": 1,
+      "name": "Cancer Man",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 5,
+      "season": 1,
+      "name": "Gray Matter",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+      "resolution": 1080
+    }
+  ],
+  "series-stranger-things": [
+    {
+      "ep": 1,
+      "season": 1,
+      "name": "Chapter One: The Vanishing of Will Byers",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 2,
+      "season": 1,
+      "name": "Chapter Two: The Weirdo on Maple Street",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 3,
+      "season": 1,
+      "name": "Chapter Three: Holly, Jolly",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 4,
+      "season": 1,
+      "name": "Chapter Four: The Body",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+      "resolution": 1080
+    }
+  ],
+  "series-last-of-us": [
+    {
+      "ep": 1,
+      "season": 1,
+      "name": "When You're Lost in the Darkness",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 2,
+      "season": 1,
+      "name": "Infected",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 3,
+      "season": 1,
+      "name": "Long, Long Time",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+      "resolution": 1080
+    }
+  ],
+  "series-game-of-thrones": [
+    {
+      "ep": 1,
+      "season": 1,
+      "name": "Winter Is Coming",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 2,
+      "season": 1,
+      "name": "The Kingsroad",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 3,
+      "season": 1,
+      "name": "Lord Snow",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+      "resolution": 1080
+    }
+  ],
+  "series-severance": [
+    {
+      "ep": 1,
+      "season": 1,
+      "name": "Good News About Hell",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 2,
+      "season": 1,
+      "name": "Half Loop",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 3,
+      "season": 1,
+      "name": "In Perpetuity",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+      "resolution": 1080
+    }
+  ],
+  "anime-attack-on-titan": [
+    {
+      "ep": 1,
+      "season": 1,
+      "name": "To You, in 2,000 Years: The Fall of Shiganshina, Part 1",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 2,
+      "season": 1,
+      "name": "That Day: The Fall of Shiganshina, Part 2",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 3,
+      "season": 1,
+      "name": "A Dim Light Amid Despair",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+      "resolution": 1080
+    }
+  ],
+  "anime-demon-slayer": [
+    {
+      "ep": 1,
+      "season": 1,
+      "name": "Cruelty",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 2,
+      "season": 1,
+      "name": "Trainer Sakonji Urokodaki",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 3,
+      "season": 1,
+      "name": "Sabito and Makomo",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+      "resolution": 1080
+    }
+  ],
+  "anime-jujutsu-kaisen": [
+    {
+      "ep": 1,
+      "season": 1,
+      "name": "Ryomen Sukuna",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 2,
+      "season": 1,
+      "name": "For Myself",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 3,
+      "season": 1,
+      "name": "Girl of Steel",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+      "resolution": 1080
+    }
+  ],
+  "anime-death-note": [
+    {
+      "ep": 1,
+      "season": 1,
+      "name": "Rebirth",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 2,
+      "season": 1,
+      "name": "Confrontation",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 3,
+      "season": 1,
+      "name": "Dealings",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+      "resolution": 1080
+    }
+  ],
+  "anime-fma-brotherhood": [
+    {
+      "ep": 1,
+      "season": 1,
+      "name": "Fullmetal Alchemist",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 2,
+      "season": 1,
+      "name": "The First Day",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 3,
+      "season": 1,
+      "name": "City of Heresy",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+      "resolution": 1080
+    }
+  ]
+};
 
 const getDemoDetails = (subjectId) => {
   const item = DEMO_ITEMS.find((it) => it.subjectId === subjectId) || DEMO_ITEMS[0];
@@ -378,15 +1015,24 @@ const getDemoDetails = (subjectId) => {
 };
 
 const getDemoEpisodes = (subjectId) => {
+  if (EPISODE_MAP[subjectId]) {
+    return {
+      code: 0,
+      message: "ok",
+      data: {
+        items: EPISODE_MAP[subjectId],
+      },
+    };
+  }
   const item = DEMO_ITEMS.find((it) => it.subjectId === subjectId) || DEMO_ITEMS[0];
-  const isMovie = item.category === "movie";
+  const isMovie = item.category === "movie" || item.type === "movie";
   if (isMovie) {
     return {
       code: 0,
       message: "ok",
       data: {
         items: [
-          { ep: 1, season: 1, name: "Feature Film", resourceLink: item.playUrl.url, resolution: 1080 },
+          { ep: 1, season: 1, name: "Feature Film", resourceLink: item.playUrl?.url || item.video, resolution: 1080 },
         ],
       },
     };
@@ -396,10 +1042,9 @@ const getDemoEpisodes = (subjectId) => {
     message: "ok",
     data: {
       items: [
-        { ep: 1, season: 1, name: "Episode 1: Awakening", resourceLink: item.playUrl.url, resolution: 1080 },
-        { ep: 2, season: 1, name: "Episode 2: The Signal", resourceLink: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4", resolution: 1080 },
-        { ep: 3, season: 1, name: "Episode 3: Divergence", resourceLink: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4", resolution: 1080 },
-        { ep: 4, season: 1, name: "Episode 4: Zero Hour", resourceLink: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4", resolution: 1080 },
+        { ep: 1, season: 1, name: `${item.title} - Episode 1`, resourceLink: item.playUrl?.url || item.video, resolution: 1080 },
+        { ep: 2, season: 1, name: `${item.title} - Episode 2`, resourceLink: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4", resolution: 1080 },
+        { ep: 3, season: 1, name: `${item.title} - Episode 3`, resourceLink: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4", resolution: 1080 },
       ],
     },
   };
@@ -415,6 +1060,7 @@ const rapidFetch = async (path) => {
     headers: {
       "x-rapidapi-host": RAPID_API_HOST,
       "x-rapidapi-key": rapidApiKey,
+      "x-api-key": rapidApiKey,
       accept: "application/json",
     },
   });
@@ -543,20 +1189,26 @@ export const handler = async (req, res) => {
   try {
     const headers = req.headers || {};
     let rawPath = headers["x-matched-path"] || headers["x-vercel-original-url"] || req.url || "/";
-    if (req.url && req.url.startsWith("/api/") && !req.url.startsWith("/api/server") && !req.url.startsWith("/api/index")) {
+    if (req.url && (req.url.startsWith("/api/") || req.url.startsWith("/catalog") || req.url.startsWith("/search") || req.url.startsWith("/details") || req.url.startsWith("/episodes") || req.url.startsWith("/config"))) {
       rawPath = req.url;
     }
     const host = headers.host || "localhost";
     const requestUrl = new URL(rawPath, `http://${host}`);
     
-    if (requestUrl.pathname === "/api" || requestUrl.pathname === "/api/" || requestUrl.pathname === "/api/server.js" || requestUrl.pathname === "/api/index.js") {
+    // Normalize pathname
+    if (!requestUrl.pathname.startsWith("/api")) {
+      requestUrl.pathname = `/api${requestUrl.pathname.startsWith("/") ? "" : "/"}${requestUrl.pathname}`;
+    }
+    if (requestUrl.pathname.startsWith("/api/api/")) {
+      requestUrl.pathname = requestUrl.pathname.replace(/^\/api\/api\//, "/api/");
+    }
+    requestUrl.pathname = requestUrl.pathname.replace(/\.js$/, "");
+
+    if (requestUrl.pathname === "/api" || requestUrl.pathname === "/api/") {
       const endpoint = requestUrl.searchParams.get("endpoint") || requestUrl.searchParams.get("path");
       if (endpoint) {
         requestUrl.pathname = endpoint.startsWith("/") ? `/api${endpoint}` : `/api/${endpoint}`;
       }
-    }
-    if (requestUrl.pathname.startsWith("/api/api/")) {
-      requestUrl.pathname = requestUrl.pathname.replace(/^\/api\/api\//, "/api/");
     }
 
     if (req.method === "OPTIONS") {

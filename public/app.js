@@ -122,757 +122,949 @@ const seriesFilterResponse = {
 const seriesChannel = seriesFilterResponse.data.typeList.find((entry) => entry.channelName === "Series");
 
 const DEMO_ITEMS = [
-  // 10 MOVIES
   {
-    subjectId: "fallback-movie-1",
-    title: "Paper Moons",
-    type: "movie",
-    genre: ["drama", "romance"],
-    country: "France",
-    year: 2026,
-    releaseDate: "2026-02-14",
-    rating: 9.1,
-    runtime: "1h 54m",
-    language: "French, English Sub",
-    badge: "Ready",
-    kicker: "Film by Lumen",
-    image: "./assets/paper-moons.svg",
-    gradient: "linear-gradient(145deg, #ffc97a, #5c2c77 50%, #151128)",
-    description: "Two kindred souls meet on the final night train out of Paris, sharing unspoken memories and folding origami confessions beneath an eclipse.",
-    video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+    "subjectId": "movie-inception",
+    "title": "Inception",
+    "category": "movie",
+    "type": "movie",
+    "genre": [
+      "action",
+      "sci-fi",
+      "adventure"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2010,
+    "releaseDate": "2010-07-16",
+    "rating": 8.8,
+    "imdbRatingValue": "8.8",
+    "runtime": "2h 28m",
+    "duration": "2h 28m",
+    "language": "English, Multi Sub",
+    "badge": "Top Rated",
+    "kicker": "Christopher Nolan",
+    "image": "https://image.tmdb.org/t/p/w500/oYuLEt3zVCKq57qu2F8dT7NIa6f.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/oYuLEt3zVCKq57qu2F8dT7NIa6f.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #1e293b, #0f172a 50%, #020617)",
+    "description": "Cobb, a skilled thief who commits corporate espionage by infiltrating the subconscious of his targets, is offered a chance to have his criminal history erased as payment for the implantation of another person's idea into a target's subconscious.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+    },
+    "hasResource": true,
+    "seNum": 0
   },
   {
-    subjectId: "fallback-movie-2",
-    title: "Moonlit Market",
-    type: "movie",
-    genre: ["comedy", "drama", "fantasy", "romance"],
-    country: "Korea",
-    year: 2025,
-    releaseDate: "2025-09-15",
-    rating: 8.6,
-    runtime: "1h 48m",
-    language: "Korean, English Sub",
-    badge: "Ready",
-    kicker: "A New Film",
-    image: "./assets/moonlit-market.svg",
-    gradient: "linear-gradient(145deg, #ffc857, #66395b 50%, #191224)",
-    description: "A hidden midnight bazaar opens only on full moons, selling forgotten dreams, vintage spells, and the warmest street food in Seoul.",
-    video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+    "subjectId": "movie-interstellar",
+    "title": "Interstellar",
+    "category": "movie",
+    "type": "movie",
+    "genre": [
+      "adventure",
+      "drama",
+      "sci-fi"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2014,
+    "releaseDate": "2014-11-07",
+    "rating": 8.7,
+    "imdbRatingValue": "8.7",
+    "runtime": "2h 49m",
+    "duration": "2h 49m",
+    "language": "English, Multi Sub",
+    "badge": "Epic Sci-Fi",
+    "kicker": "Christopher Nolan",
+    "image": "https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #0369a1, #0c4a6e 50%, #082f49)",
+    "description": "When Earth becomes uninhabitable in the future, a farmer and ex-NASA pilot, Joseph Cooper, is tasked to pilot a spacecraft, along with a team of researchers, to find a new planet for humans.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4"
+    },
+    "hasResource": true,
+    "seNum": 0
   },
   {
-    subjectId: "fallback-movie-3",
-    title: "Sintel: Dragon's Path",
-    type: "movie",
-    genre: ["fantasy", "adventure", "animation"],
-    country: "Netherlands",
-    year: 2024,
-    releaseDate: "2024-05-18",
-    rating: 8.4,
-    runtime: "1h 35m",
-    language: "English",
-    badge: "Ready",
-    kicker: "Open Movie",
-    image: "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80",
-    gradient: "linear-gradient(145deg, #e58253, #431f24 50%, #110d13)",
-    description: "A determined wanderer embarks on a dangerous mountain odyssey searching for her companion dragon.",
-    video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+    "subjectId": "movie-dark-knight",
+    "title": "The Dark Knight",
+    "category": "movie",
+    "type": "movie",
+    "genre": [
+      "action",
+      "crime",
+      "drama"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2008,
+    "releaseDate": "2008-07-18",
+    "rating": 9,
+    "imdbRatingValue": "9.0",
+    "runtime": "2h 32m",
+    "duration": "2h 32m",
+    "language": "English, Multi Sub",
+    "badge": "Masterpiece",
+    "kicker": "Legendary",
+    "image": "https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #334155, #1e293b 50%, #0f172a)",
+    "description": "When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest psychological and physical tests of his ability to fight injustice.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+    },
+    "hasResource": true,
+    "seNum": 0
   },
   {
-    subjectId: "fallback-movie-4",
-    title: "Tears of Steel: Neo-Amsterdam",
-    type: "movie",
-    genre: ["sci-fi", "action"],
-    country: "Netherlands",
-    year: 2025,
-    releaseDate: "2025-07-22",
-    rating: 8.7,
-    runtime: "1h 50m",
-    language: "English",
-    badge: "Ready",
-    kicker: "Sci-Fi Epic",
-    image: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80",
-    gradient: "linear-gradient(145deg, #38c8b2, #183e47 50%, #0c181f)",
-    description: "In a dystopian Amsterdam overrun by rogue cyborgs, scientists stage a desperate temporal rescue mission.",
-    video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+    "subjectId": "movie-dune-2",
+    "title": "Dune: Part Two",
+    "category": "movie",
+    "type": "movie",
+    "genre": [
+      "action",
+      "adventure",
+      "sci-fi"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2024,
+    "releaseDate": "2024-03-01",
+    "rating": 8.5,
+    "imdbRatingValue": "8.5",
+    "runtime": "2h 46m",
+    "duration": "2h 46m",
+    "language": "English, Multi Sub",
+    "badge": "Blockbuster",
+    "kicker": "Denis Villeneuve",
+    "image": "https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #d97706, #78350f 50%, #451a03)",
+    "description": "Paul Atreides unites with Chani and the Fremen while seeking revenge against the conspirators who destroyed his family, facing a choice between love and the fate of the universe.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+    },
+    "hasResource": true,
+    "seNum": 0
   },
   {
-    subjectId: "fallback-movie-5",
-    title: "The Zenith Eclipse",
-    type: "movie",
-    genre: ["sci-fi", "mystery", "thriller"],
-    country: "United States",
-    year: 2025,
-    releaseDate: "2025-10-12",
-    rating: 8.9,
-    runtime: "2h 08m",
-    language: "English",
-    badge: "Ready",
-    kicker: "Premiere",
-    image: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=600&auto=format&fit=crop&q=80",
-    gradient: "linear-gradient(145deg, #7c4dff, #24164b 50%, #0d0a19)",
-    description: "An observatory team in the Atacama Desert discovers an artificial megastructure approaching in the solar shadow.",
-    video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    "subjectId": "movie-oppenheimer",
+    "title": "Oppenheimer",
+    "category": "movie",
+    "type": "movie",
+    "genre": [
+      "biography",
+      "drama",
+      "history"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2023,
+    "releaseDate": "2023-07-21",
+    "rating": 8.9,
+    "imdbRatingValue": "8.9",
+    "runtime": "3h 00m",
+    "duration": "3h 00m",
+    "language": "English, Multi Sub",
+    "badge": "Oscar Winner",
+    "kicker": "Christopher Nolan",
+    "image": "https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #ea580c, #7c2d12 50%, #431407)",
+    "description": "The story of American scientist J. Robert Oppenheimer and his role in the Manhattan Project, developing the atomic weapons that ended World War II.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4"
+    },
+    "hasResource": true,
+    "seNum": 0
   },
   {
-    subjectId: "fallback-movie-6",
-    title: "Cyber Noir: Neon Mirage",
-    type: "movie",
-    genre: ["crime", "thriller", "sci-fi"],
-    country: "United Kingdom",
-    year: 2026,
-    releaseDate: "2026-03-01",
-    rating: 8.5,
-    runtime: "1h 58m",
-    language: "English",
-    badge: "Ready",
-    kicker: "Neon Thriller",
-    image: "https://images.unsplash.com/photo-1508739773434-c26b3d09e071?w=600&auto=format&fit=crop&q=80",
-    gradient: "linear-gradient(145deg, #ff2a85, #4d1533 50%, #150912)",
-    description: "A cynical neural detective investigates a disappearance tied to an illicit biometric syndication network.",
-    video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+    "subjectId": "movie-spider-verse",
+    "title": "Spider-Man: Across the Spider-Verse",
+    "category": "movie",
+    "type": "movie",
+    "genre": [
+      "animation",
+      "action",
+      "adventure"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2023,
+    "releaseDate": "2023-06-02",
+    "rating": 8.7,
+    "imdbRatingValue": "8.7",
+    "runtime": "2h 20m",
+    "duration": "2h 20m",
+    "language": "English, Multi Sub",
+    "badge": "Animation Marvel",
+    "kicker": "Sony Pictures",
+    "image": "https://image.tmdb.org/t/p/w500/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #db2777, #831843 50%, #4c0519)",
+    "description": "Miles Morales catapults across the Multiverse, encountering a society of Spider-People charged with protecting its existence when heroes clash on handling a new catastrophic threat.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4"
+    },
+    "hasResource": true,
+    "seNum": 0
   },
   {
-    subjectId: "fallback-movie-7",
-    title: "Cosmos Laundromat",
-    type: "movie",
-    genre: ["comedy", "fantasy", "sci-fi"],
-    country: "France",
-    year: 2024,
-    releaseDate: "2024-11-04",
-    rating: 8.2,
-    runtime: "1h 42m",
-    language: "French, English Sub",
-    badge: "Ready",
-    kicker: "Surreal Indie",
-    image: "https://images.unsplash.com/photo-1516339901601-2e1b62dc0c45?w=600&auto=format&fit=crop&q=80",
-    gradient: "linear-gradient(145deg, #f5a623, #4a3418 50%, #16120b)",
-    description: "A despondent sheep on a lonely cliff meets an eccentric traveler offering voyages through multiverse wash cycles.",
-    video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+    "subjectId": "movie-avengers-endgame",
+    "title": "Avengers: Endgame",
+    "category": "movie",
+    "type": "movie",
+    "genre": [
+      "action",
+      "adventure",
+      "sci-fi"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2019,
+    "releaseDate": "2019-04-26",
+    "rating": 8.4,
+    "imdbRatingValue": "8.4",
+    "runtime": "3h 01m",
+    "duration": "3h 01m",
+    "language": "English, Multi Sub",
+    "badge": "Marvel Epic",
+    "kicker": "Marvel Studios",
+    "image": "https://image.tmdb.org/t/p/w500/or06FN3Dka5tukK1e9sl16pB3iy.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/or06FN3Dka5tukK1e9sl16pB3iy.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #7c3aed, #4c1d95 50%, #2e1065)",
+    "description": "After Thanos wiped out half of all life in the universe, the remaining Avengers assemble once more in a desperate final stand to reverse the devastating catastrophe.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4"
+    },
+    "hasResource": true,
+    "seNum": 0
   },
   {
-    subjectId: "fallback-movie-8",
-    title: "Midnight Boulevard",
-    type: "movie",
-    genre: ["drama", "mystery"],
-    country: "United States",
-    year: 2025,
-    releaseDate: "2025-06-18",
-    rating: 8.8,
-    runtime: "2h 02m",
-    language: "English",
-    badge: "Ready",
-    kicker: "Midnight Drama",
-    image: "https://images.unsplash.com/photo-1514565131-fce0801e5785?w=600&auto=format&fit=crop&q=80",
-    gradient: "linear-gradient(145deg, #4a90e2, #1b3558 50%, #0a1320)",
-    description: "A night-shift taxi driver becomes the only protector of an escaped key witness hunted through Los Angeles.",
-    video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+    "subjectId": "movie-gladiator",
+    "title": "Gladiator",
+    "category": "movie",
+    "type": "movie",
+    "genre": [
+      "action",
+      "adventure",
+      "drama"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2000,
+    "releaseDate": "2000-05-05",
+    "rating": 8.5,
+    "imdbRatingValue": "8.5",
+    "runtime": "2h 35m",
+    "duration": "2h 35m",
+    "language": "English, Multi Sub",
+    "badge": "Classic",
+    "kicker": "Ridley Scott",
+    "image": "https://image.tmdb.org/t/p/w500/ty8TGRuvJLPUmAR1H1nRIsgwvim.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/ty8TGRuvJLPUmAR1H1nRIsgwvim.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #ca8a04, #713f12 50%, #422006)",
+    "description": "A former Roman General sets out to exact vengeance against the corrupt emperor who murdered his family and sent him into slavery.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4"
+    },
+    "hasResource": true,
+    "seNum": 0
   },
   {
-    subjectId: "fallback-movie-9",
-    title: "Solstice Requiem",
-    type: "movie",
-    genre: ["drama", "history"],
-    country: "Germany",
-    year: 2026,
-    releaseDate: "2026-01-20",
-    rating: 9.0,
-    runtime: "2h 15m",
-    language: "German, English Sub",
-    badge: "Ready",
-    kicker: "Period Drama",
-    image: "https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?w=600&auto=format&fit=crop&q=80",
-    gradient: "linear-gradient(145deg, #d0021b, #441118 50%, #15090b)",
-    description: "An orchestral virtuoso uncovers an encoded score hidden inside a historic concert grand piano.",
-    video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
+    "subjectId": "movie-matrix",
+    "title": "The Matrix",
+    "category": "movie",
+    "type": "movie",
+    "genre": [
+      "action",
+      "sci-fi"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 1999,
+    "releaseDate": "1999-03-31",
+    "rating": 8.7,
+    "imdbRatingValue": "8.7",
+    "runtime": "2h 16m",
+    "duration": "2h 16m",
+    "language": "English, Multi Sub",
+    "badge": "Cyberpunk Classic",
+    "kicker": "The Wachowskis",
+    "image": "https://image.tmdb.org/t/p/w500/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #16a34a, #14532d 50%, #052e16)",
+    "description": "When a beautiful stranger leads computer hacker Neo to a forbidding underworld, he discovers the shocking truth--the life he knows is the elaborate deception of an evil cyber-intelligence.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+    },
+    "hasResource": true,
+    "seNum": 0
   },
   {
-    subjectId: "fallback-movie-10",
-    title: "The Velvet Heist",
-    type: "movie",
-    genre: ["action", "comedy", "crime"],
-    country: "United States",
-    year: 2025,
-    releaseDate: "2025-08-30",
-    rating: 8.3,
-    runtime: "1h 46m",
-    language: "English",
-    badge: "Ready",
-    kicker: "Caper",
-    image: "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=600&auto=format&fit=crop&q=80",
-    gradient: "linear-gradient(145deg, #b8e986, #32471e 50%, #0d1607)",
-    description: "A retired master thief is lured into an impossible Monaco diamond extraction amidst an international Grand Prix.",
-    video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-  },
-
-  // 5 SERIES
-  {
-    subjectId: "fallback-series-1",
-    title: "The Quiet Orbit",
-    type: "series",
-    genre: ["drama", "sci-fi", "mystery"],
-    country: "United States",
-    year: 2025,
-    releaseDate: "2025-11-20",
-    rating: 8.9,
-    runtime: "8 Episodes · Mini-series",
-    language: "English",
-    badge: "Ready",
-    kicker: "Limited Series",
-    image: "./assets/quiet-orbit.svg",
-    gradient: "linear-gradient(145deg, #4f62a0, #1c2447 50%, #0d1020)",
-    description: "Deep space research vessel Kepler-9 falls silent after detecting an anomalous resonant signal from Jupiter's shadow.",
-    video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+    "subjectId": "movie-spirited-away",
+    "title": "Spirited Away",
+    "category": "movie",
+    "type": "movie",
+    "genre": [
+      "animation",
+      "adventure",
+      "fantasy"
+    ],
+    "country": "Japan",
+    "countryName": "Japan",
+    "year": 2001,
+    "releaseDate": "2001-07-20",
+    "rating": 8.6,
+    "imdbRatingValue": "8.6",
+    "runtime": "2h 05m",
+    "duration": "2h 05m",
+    "language": "Japanese, English Dub",
+    "badge": "Studio Ghibli",
+    "kicker": "Hayao Miyazaki",
+    "image": "https://image.tmdb.org/t/p/w500/39wmItIWsg5sZMyRUHLkWBcuVCM.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/39wmItIWsg5sZMyRUHLkWBcuVCM.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #0d9488, #115e59 50%, #042f2e)",
+    "description": "During her family's move to the suburbs, a sullen 10-year-old girl wanders into a world ruled by gods, witches, and spirits, where humans are changed into beasts.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4"
+    },
+    "hasResource": true,
+    "seNum": 0
   },
   {
-    subjectId: "fallback-series-2",
-    title: "Zero Hour Club",
-    type: "series",
-    genre: ["drama", "mystery", "action"],
-    country: "United Kingdom",
-    year: 2026,
-    releaseDate: "2026-01-05",
-    rating: 9.0,
-    runtime: "2 Seasons · 16 Episodes",
-    language: "English",
-    badge: "Ready",
-    kicker: "Top 10 Series",
-    image: "./assets/zero-hour-club.svg",
-    gradient: "linear-gradient(145deg, #ff6b4a, #4a1e35 50%, #120e1d)",
-    description: "A clandestine syndicate of cryptographers coordinate high-stakes exposes against an authoritarian surveillance network.",
-    video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
+    "subjectId": "series-breaking-bad",
+    "title": "Breaking Bad",
+    "category": "tv",
+    "type": "series",
+    "genre": [
+      "crime",
+      "drama",
+      "thriller"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2008,
+    "releaseDate": "2008-01-20",
+    "rating": 9.5,
+    "imdbRatingValue": "9.5",
+    "runtime": "5 Seasons · 62 Episodes",
+    "duration": "5 Seasons",
+    "language": "English, Multi Sub",
+    "badge": "All-Time Top #1",
+    "kicker": "Vince Gilligan",
+    "image": "https://image.tmdb.org/t/p/w500/anFx9aTOOYqgS3v7x3R84Kz67ly.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/anFx9aTOOYqgS3v7x3R84Kz67ly.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #15803d, #14532d 50%, #052e16)",
+    "description": "A high school chemistry teacher diagnosed with inoperable lung cancer turns to manufacturing and selling methamphetamine in order to secure his family's financial future.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+    },
+    "hasResource": true,
+    "seNum": 5
   },
   {
-    subjectId: "fallback-series-3",
-    title: "Blue Static",
-    type: "series",
-    genre: ["drama", "mystery", "sci-fi"],
-    country: "United States",
-    year: 2024,
-    releaseDate: "2024-10-31",
-    rating: 8.7,
-    runtime: "1 Season · 10 Episodes",
-    language: "English",
-    badge: "Ready",
-    kicker: "Cinewave Series",
-    image: "./assets/blue-static.svg",
-    gradient: "linear-gradient(145deg, #4da4ff, #20356c 50%, #0a1124)",
-    description: "An analog radio host in a coastal town picks up broadcast frequencies that predict local occurrences before they happen.",
-    video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+    "subjectId": "series-stranger-things",
+    "title": "Stranger Things",
+    "category": "tv",
+    "type": "series",
+    "genre": [
+      "drama",
+      "fantasy",
+      "horror",
+      "sci-fi"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2016,
+    "releaseDate": "2016-07-15",
+    "rating": 8.7,
+    "imdbRatingValue": "8.7",
+    "runtime": "4 Seasons · 34 Episodes",
+    "duration": "4 Seasons",
+    "language": "English, Multi Sub",
+    "badge": "Global Phenomenon",
+    "kicker": "Duffer Brothers",
+    "image": "https://image.tmdb.org/t/p/w500/49WJfeN0moxb9IPfGn8AIqMGskD.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/49WJfeN0moxb9IPfGn8AIqMGskD.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #b91c1c, #7f1d1d 50%, #450a0a)",
+    "description": "When a young boy vanishes, a small Indiana town uncovers a mystery involving secret government experiments, terrifying supernatural forces, and one strange little girl.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+    },
+    "hasResource": true,
+    "seNum": 4
   },
   {
-    subjectId: "fallback-series-4",
-    title: "Silicon Deep",
-    type: "series",
-    genre: ["drama", "sci-fi"],
-    country: "United States",
-    year: 2025,
-    releaseDate: "2025-04-14",
-    rating: 8.8,
-    runtime: "3 Seasons · 24 Episodes",
-    language: "English",
-    badge: "Ready",
-    kicker: "Original",
-    image: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600&auto=format&fit=crop&q=80",
-    gradient: "linear-gradient(145deg, #50e3c2, #16493d 50%, #091a16)",
-    description: "Subsea server hubs power global autonomous economies until a rogue submarine cuts the Atlantic deep-water trunk cable.",
-    video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    "subjectId": "series-last-of-us",
+    "title": "The Last of Us",
+    "category": "tv",
+    "type": "series",
+    "genre": [
+      "action",
+      "adventure",
+      "drama",
+      "sci-fi"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2023,
+    "releaseDate": "2023-01-15",
+    "rating": 8.8,
+    "imdbRatingValue": "8.8",
+    "runtime": "1 Season · 9 Episodes",
+    "duration": "1 Season",
+    "language": "English, Multi Sub",
+    "badge": "HBO Original",
+    "kicker": "Craig Mazin & Neil Druckmann",
+    "image": "https://image.tmdb.org/t/p/w500/dmo6TYuuJgaYinXBPjrgG9mB5od.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/dmo6TYuuJgaYinXBPjrgG9mB5od.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #4d7c0f, #365314 50%, #1a2e05)",
+    "description": "Twenty years after modern civilization was destroyed, Joel is hired to smuggle Ellie, a 14-year-old girl, out of an oppressive quarantine zone across a ravaged America.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4"
+    },
+    "hasResource": true,
+    "seNum": 1
   },
   {
-    subjectId: "fallback-series-5",
-    title: "Sovereign Protocol",
-    type: "series",
-    genre: ["action", "drama"],
-    country: "Germany",
-    year: 2026,
-    releaseDate: "2026-02-28",
-    rating: 9.2,
-    runtime: "1 Season · 8 Episodes",
-    language: "German, English Sub",
-    badge: "Ready",
-    kicker: "Thriller",
-    image: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600&auto=format&fit=crop&q=80",
-    gradient: "linear-gradient(145deg, #bd10e0, #40094e 50%, #15051a)",
-    description: "An elite cybersecurity unit is dispatched across Europe when automated diplomatic systems issue conflicting state ultimatums.",
-    video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-  },
-
-  // 5 ANIME
-  {
-    subjectId: "fallback-anime-1",
-    title: "Neon Yokai",
-    type: "anime",
-    genre: ["anime", "action", "sci-fi"],
-    country: "Japan",
-    year: 2026,
-    releaseDate: "2026-04-10",
-    rating: 9.4,
-    runtime: "24m · 12 Episodes",
-    language: "Japanese, English Dub",
-    badge: "Ready",
-    kicker: "Cinewave Original",
-    image: "./assets/neon-yokai.svg",
-    gradient: "linear-gradient(145deg, #f15ca0, #4c1e68 52%, #11172f)",
-    description: "In a rain-soaked neo-Tokyo, a rogue cyber-exorcist hunts rogue AI spirits glitching across the power grid.",
-    video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    "subjectId": "series-game-of-thrones",
+    "title": "Game of Thrones",
+    "category": "tv",
+    "type": "series",
+    "genre": [
+      "action",
+      "adventure",
+      "drama",
+      "fantasy"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2011,
+    "releaseDate": "2011-04-17",
+    "rating": 9.2,
+    "imdbRatingValue": "9.2",
+    "runtime": "8 Seasons · 73 Episodes",
+    "duration": "8 Seasons",
+    "language": "English, Multi Sub",
+    "badge": "Epic Fantasy",
+    "kicker": "HBO Series",
+    "image": "https://image.tmdb.org/t/p/w500/1XS1oqL89opfnbLl8WnZY1O1uJx.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/1XS1oqL89opfnbLl8WnZY1O1uJx.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #475569, #334155 50%, #0f172a)",
+    "description": "Nine noble families fight for control over the Iron Throne of Westeros, while an ancient enemy returns after being dormant for millennia beyond the northern Wall.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+    },
+    "hasResource": true,
+    "seNum": 8
   },
   {
-    subjectId: "fallback-anime-2",
-    title: "Byte Knights",
-    type: "anime",
-    genre: ["anime", "action", "sci-fi"],
-    country: "Japan",
-    year: 2025,
-    releaseDate: "2025-08-18",
-    rating: 8.5,
-    runtime: "24 Episodes",
-    language: "Japanese, English Dub",
-    badge: "Ready",
-    kicker: "System Online",
-    image: "./assets/byte-knights.svg",
-    gradient: "linear-gradient(145deg, #1bd3a2, #184e68 50%, #081a24)",
-    description: "Elite neural gladiators compete in subterranean cyber tournaments where virtual defeats trigger real consequences.",
-    video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+    "subjectId": "series-severance",
+    "title": "Severance",
+    "category": "tv",
+    "type": "series",
+    "genre": [
+      "drama",
+      "mystery",
+      "sci-fi",
+      "thriller"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2022,
+    "releaseDate": "2022-02-18",
+    "rating": 8.7,
+    "imdbRatingValue": "8.7",
+    "runtime": "2 Seasons · 19 Episodes",
+    "duration": "2 Seasons",
+    "language": "English, Multi Sub",
+    "badge": "Mind-Bending",
+    "kicker": "Ben Stiller",
+    "image": "https://image.tmdb.org/t/p/w500/pPHpeI2X1qEd1CS1SeyrdhZ4qnT.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/pPHpeI2X1qEd1CS1SeyrdhZ4qnT.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #0284c7, #0369a1 50%, #075985)",
+    "description": "Mark Scout leads a team at Lumon Industries whose employees undergo a severance procedure separating work memories from personal life memories.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+    },
+    "hasResource": true,
+    "seNum": 2
   },
   {
-    subjectId: "fallback-anime-3",
-    title: "Skybound Runners",
-    type: "anime",
-    genre: ["anime", "action", "comedy"],
-    country: "Japan",
-    year: 2026,
-    releaseDate: "2026-03-12",
-    rating: 8.8,
-    runtime: "Season 2 · 12 Episodes",
-    language: "Japanese, English Sub",
-    badge: "Ready",
-    kicker: "Season Two",
-    image: "./assets/skybound-runners.svg",
-    gradient: "linear-gradient(145deg, #51a5ff, #1d3368 50%, #0c162d)",
-    description: "Daredevil sky-sailors navigate treacherous cloud currents and ancient floating ruins in pursuit of the Zenith Horizon.",
-    video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+    "subjectId": "anime-attack-on-titan",
+    "title": "Attack on Titan",
+    "category": "anime",
+    "type": "anime",
+    "genre": [
+      "anime",
+      "action",
+      "adventure",
+      "fantasy"
+    ],
+    "country": "Japan",
+    "countryName": "Japan",
+    "year": 2013,
+    "releaseDate": "2013-04-07",
+    "rating": 9.1,
+    "imdbRatingValue": "9.1",
+    "runtime": "4 Seasons · 87 Episodes",
+    "duration": "4 Seasons",
+    "language": "Japanese, English Dub",
+    "badge": "Anime Masterpiece",
+    "kicker": "WIT Studio & MAPPA",
+    "image": "https://image.tmdb.org/t/p/w500/hTP1DtLGFamjfu8WqjnuQdP1n4i.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/hTP1DtLGFamjfu8WqjnuQdP1n4i.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #b45309, #78350f 50%, #451a03)",
+    "description": "After his hometown is destroyed and his mother is killed, young Eren Jaeger vows to cleanse the earth of the giant humanoid Titans that have pushed humanity behind giant concentric walls.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4"
+    },
+    "hasResource": true,
+    "seNum": 4
   },
   {
-    subjectId: "fallback-anime-4",
-    title: "Chrono Blade: Zero",
-    type: "anime",
-    genre: ["anime", "action", "fantasy"],
-    country: "Japan",
-    year: 2025,
-    releaseDate: "2025-05-19",
-    rating: 9.1,
-    runtime: "26 Episodes",
-    language: "Japanese, English Dub",
-    badge: "Ready",
-    kicker: "Top Rated",
-    image: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=600&auto=format&fit=crop&q=80",
-    gradient: "linear-gradient(145deg, #ff9900, #543303 50%, #170e01)",
-    description: "A master swordsman bound by an ancient temporal curse relives the final battle of the empire to break the calamity.",
-    video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+    "subjectId": "anime-demon-slayer",
+    "title": "Demon Slayer: Kimetsu no Yaiba",
+    "category": "anime",
+    "type": "anime",
+    "genre": [
+      "anime",
+      "action",
+      "fantasy"
+    ],
+    "country": "Japan",
+    "countryName": "Japan",
+    "year": 2019,
+    "releaseDate": "2019-04-06",
+    "rating": 8.6,
+    "imdbRatingValue": "8.6",
+    "runtime": "4 Seasons · 55 Episodes",
+    "duration": "4 Seasons",
+    "language": "Japanese, English Dub",
+    "badge": "Ufotable Masterwork",
+    "kicker": "Koyoharu Gotouge",
+    "image": "https://image.tmdb.org/t/p/w500/xUfRZu2mi8jH6SzQEJGP6tjBuYj.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/xUfRZu2mi8jH6SzQEJGP6tjBuYj.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #0284c7, #0f766e 50%, #134e4a)",
+    "description": "A kindhearted young boy whose family was slaughtered by demons joins the Demon Slayer Corps to find a cure for his sister Nezuko, who was turned into a demon.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4"
+    },
+    "hasResource": true,
+    "seNum": 4
   },
   {
-    subjectId: "fallback-anime-5",
-    title: "Ghost Horizon",
-    type: "anime",
-    genre: ["anime", "sci-fi", "drama"],
-    country: "Japan",
-    year: 2026,
-    releaseDate: "2026-02-11",
-    rating: 8.9,
-    runtime: "12 Episodes",
-    language: "Japanese, English Sub",
-    badge: "Ready",
-    kicker: "Psychological",
-    image: "https://images.unsplash.com/photo-1563089145-599997674d42?w=600&auto=format&fit=crop&q=80",
-    gradient: "linear-gradient(145deg, #00d2ff, #0a4066 50%, #041724)",
-    description: "Pilots stationed at the edge of known space begin experiencing shared apparitions transmitting warnings from beyond the void.",
-    video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+    "subjectId": "anime-jujutsu-kaisen",
+    "title": "Jujutsu Kaisen",
+    "category": "anime",
+    "type": "anime",
+    "genre": [
+      "anime",
+      "action",
+      "fantasy",
+      "supernatural"
+    ],
+    "country": "Japan",
+    "countryName": "Japan",
+    "year": 2020,
+    "releaseDate": "2020-10-03",
+    "rating": 8.5,
+    "imdbRatingValue": "8.5",
+    "runtime": "2 Seasons · 47 Episodes",
+    "duration": "2 Seasons",
+    "language": "Japanese, English Dub",
+    "badge": "Fan Favorite",
+    "kicker": "MAPPA",
+    "image": "https://image.tmdb.org/t/p/w500/6qQzMJG27XOJsyAEEIisoJB45j2.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/6qQzMJG27XOJsyAEEIisoJB45j2.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #4338ca, #312e81 50%, #1e1b4b)",
+    "description": "Yuji Itadori swallows a cursed finger to save his friends, sharing his body with the ancient Curse King Ryomen Sukuna, entering Tokyo Jujutsu High to exorcise deadly spirits.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4"
+    },
+    "hasResource": true,
+    "seNum": 2
   },
+  {
+    "subjectId": "anime-death-note",
+    "title": "Death Note",
+    "category": "anime",
+    "type": "anime",
+    "genre": [
+      "anime",
+      "crime",
+      "drama",
+      "mystery",
+      "thriller"
+    ],
+    "country": "Japan",
+    "countryName": "Japan",
+    "year": 2006,
+    "releaseDate": "2006-10-04",
+    "rating": 9,
+    "imdbRatingValue": "9.0",
+    "runtime": "1 Season · 37 Episodes",
+    "duration": "1 Season",
+    "language": "Japanese, English Dub",
+    "badge": "Psychological Classic",
+    "kicker": "Madhouse",
+    "image": "https://image.tmdb.org/t/p/w500/tCZFfYTIwrR7n94J6G14Y4hAFU6.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/tCZFfYTIwrR7n94J6G14Y4hAFU6.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #18181b, #09090b 50%, #000000)",
+    "description": "A brilliant high school student discovers a supernatural notebook that grants the ability to kill anyone whose name and face are known, engaging in a battle of wits with the enigmatic detective L.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+    },
+    "hasResource": true,
+    "seNum": 1
+  },
+  {
+    "subjectId": "anime-fma-brotherhood",
+    "title": "Fullmetal Alchemist: Brotherhood",
+    "category": "anime",
+    "type": "anime",
+    "genre": [
+      "anime",
+      "action",
+      "adventure",
+      "fantasy"
+    ],
+    "country": "Japan",
+    "countryName": "Japan",
+    "year": 2009,
+    "releaseDate": "2009-04-05",
+    "rating": 9.1,
+    "imdbRatingValue": "9.1",
+    "runtime": "1 Season · 64 Episodes",
+    "duration": "1 Season",
+    "language": "Japanese, English Dub",
+    "badge": "Top Rated Anime",
+    "kicker": "Bones Studio",
+    "image": "https://image.tmdb.org/t/p/w500/5ZFUEOULaVml7pQuXxhpR2SmVUw.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/5ZFUEOULaVml7pQuXxhpR2SmVUw.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #b91c1c, #991b1b 50%, #450a0a)",
+    "description": "Two alchemist brothers embark on an arduous journey to seek the legendary Philosopher's Stone to restore their bodies after a forbidden human transmutation ritual went disastrously wrong.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+    },
+    "hasResource": true,
+    "seNum": 1
+  }
 ];
 
-let catalog = [...DEMO_ITEMS];
-let recommendations = DEMO_ITEMS.slice(0, 6);
-let featured = DEMO_ITEMS[0];
-
-function loadContinuation() {
-  try {
-    const raw = localStorage.getItem("ustream-continuation");
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
+const EPISODE_MAP = {
+  "series-breaking-bad": [
+    {
+      "ep": 1,
+      "season": 1,
+      "name": "Pilot",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 2,
+      "season": 1,
+      "name": "Cat's in the Bag...",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 3,
+      "season": 1,
+      "name": "...And the Bag's in the River",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 4,
+      "season": 1,
+      "name": "Cancer Man",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 5,
+      "season": 1,
+      "name": "Gray Matter",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+      "resolution": 1080
     }
-  } catch {}
-  return [];
-}
-
-const continuation = loadContinuation();
-
-function getFilterChannel() {
-  return state?.section === "series" ? seriesChannel : animeChannel;
-}
-
-function makeFilterDefaults(channel) {
-  return Object.fromEntries(channel.items.map((item) => {
-    if (item.filterType === "rate") return ["rateMin", 0];
-    return [item.filterType, item.filterValsV2[0]?.id || "All"];
-  }).concat([["rateMax", 10]]));
-}
-
-const state = {
-  section: "home",
-  genre: "all",
-  search: "",
-  view: "grid",
-  filters: makeFilterDefaults(animeChannel),
-  watchlist: new Set(loadWatchlist()),
-  activeModal: null,
-  player: {
-    requestId: 0,
-    item: null,
-    details: null,
-    subjectId: "",
-    languageOptions: [],
-    selectedLanguage: null,
-    subtitleOptions: [],
-    selectedSubtitle: "off",
-    subtitleSubjectId: "",
-    qualityOptions: [],
-    selectedQuality: null,
-    resolution: null,
-    seasons: [],
-    selectedSeason: null,
-    selectedEpisode: null,
-    isSeries: false,
-    autoplayNext: false,
-  },
+  ],
+  "series-stranger-things": [
+    {
+      "ep": 1,
+      "season": 1,
+      "name": "Chapter One: The Vanishing of Will Byers",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 2,
+      "season": 1,
+      "name": "Chapter Two: The Weirdo on Maple Street",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 3,
+      "season": 1,
+      "name": "Chapter Three: Holly, Jolly",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 4,
+      "season": 1,
+      "name": "Chapter Four: The Body",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+      "resolution": 1080
+    }
+  ],
+  "series-last-of-us": [
+    {
+      "ep": 1,
+      "season": 1,
+      "name": "When You're Lost in the Darkness",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 2,
+      "season": 1,
+      "name": "Infected",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 3,
+      "season": 1,
+      "name": "Long, Long Time",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+      "resolution": 1080
+    }
+  ],
+  "series-game-of-thrones": [
+    {
+      "ep": 1,
+      "season": 1,
+      "name": "Winter Is Coming",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 2,
+      "season": 1,
+      "name": "The Kingsroad",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 3,
+      "season": 1,
+      "name": "Lord Snow",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+      "resolution": 1080
+    }
+  ],
+  "series-severance": [
+    {
+      "ep": 1,
+      "season": 1,
+      "name": "Good News About Hell",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 2,
+      "season": 1,
+      "name": "Half Loop",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 3,
+      "season": 1,
+      "name": "In Perpetuity",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+      "resolution": 1080
+    }
+  ],
+  "anime-attack-on-titan": [
+    {
+      "ep": 1,
+      "season": 1,
+      "name": "To You, in 2,000 Years: The Fall of Shiganshina, Part 1",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 2,
+      "season": 1,
+      "name": "That Day: The Fall of Shiganshina, Part 2",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 3,
+      "season": 1,
+      "name": "A Dim Light Amid Despair",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+      "resolution": 1080
+    }
+  ],
+  "anime-demon-slayer": [
+    {
+      "ep": 1,
+      "season": 1,
+      "name": "Cruelty",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 2,
+      "season": 1,
+      "name": "Trainer Sakonji Urokodaki",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 3,
+      "season": 1,
+      "name": "Sabito and Makomo",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+      "resolution": 1080
+    }
+  ],
+  "anime-jujutsu-kaisen": [
+    {
+      "ep": 1,
+      "season": 1,
+      "name": "Ryomen Sukuna",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 2,
+      "season": 1,
+      "name": "For Myself",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 3,
+      "season": 1,
+      "name": "Girl of Steel",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+      "resolution": 1080
+    }
+  ],
+  "anime-death-note": [
+    {
+      "ep": 1,
+      "season": 1,
+      "name": "Rebirth",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 2,
+      "season": 1,
+      "name": "Confrontation",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 3,
+      "season": 1,
+      "name": "Dealings",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+      "resolution": 1080
+    }
+  ],
+  "anime-fma-brotherhood": [
+    {
+      "ep": 1,
+      "season": 1,
+      "name": "Fullmetal Alchemist",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 2,
+      "season": 1,
+      "name": "The First Day",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+      "resolution": 1080
+    },
+    {
+      "ep": 3,
+      "season": 1,
+      "name": "City of Heresy",
+      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+      "resolution": 1080
+    }
+  ]
 };
-let searchTimer;
-let searchRequestId = 0;
-
-const parseApiRating = (value) => {
-  const rating = Number.parseFloat(value);
-  return Number.isFinite(rating) ? rating : 0;
-};
-
-const normalizeApiItem = (item, category) => {
-  const genres = String(item.genre || "")
-    .split(",")
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean);
-  const type = category === "tv" ? "series" : category;
-  const label = category === "tv" ? "Series" : category === "anime" ? "Anime" : "Movie";
-  if (type === "anime" && !genres.includes("anime")) genres.unshift("anime");
-  const year = Number.parseInt(String(item.releaseDate || "").slice(0, 4), 10);
-  return {
-    title: item.title || "Untitled",
-    type,
-    genre: genres.length ? genres : [type],
-    country: item.countryName || "Other",
-    year: Number.isFinite(year) ? year : new Date().getFullYear(),
-    releaseDate: item.releaseDate || "",
-    updatedAt: item.updatedAt || item.updateTime || item.resourceDetectors?.[0]?.uploadTime || "",
-    rating: parseApiRating(item.imdbRatingValue),
-    runtime: item.duration || (item.seNum ? `${item.seNum} season${item.seNum === 1 ? "" : "s"}` : "Live title"),
-    language: item.language || item.corner || "",
-    badge: item.hasResource ? "Ready" : "Info",
-    kicker: `Ustream · ${label}`,
-    image: item.cover?.url || "",
-    gradient: "linear-gradient(145deg, #293569, #111827 58%, #080a12)",
-    subjectId: item.subjectId,
-    description: item.description || "Stream this title in high definition on Ustream.",
-    video: item.playUrl?.url || item.playUrl?.playUrl || "",
-  };
-};
-
-const normalizeSearchItem = (item) => {
-  const category = String(item.genre || "").toLowerCase().includes("anime") ? "anime" : "tv";
-  return normalizeApiItem(item, category);
-};
-
-function updateStatusBadge(isLive, count) {
-  const dot = $("#status-dot");
-  const label = $("#status-label");
-  const settingsDot = $("#settings-status-dot");
-  const settingsTitle = $("#settings-status-title");
-  const settingsInfo = $("#settings-status-info");
-
-  if (dot) dot.classList.toggle("live", !!isLive);
-  if (label) label.textContent = isLive ? "Live" : "Showcase";
-
-  if (settingsDot) settingsDot.classList.toggle("live", !!isLive);
-  if (settingsTitle) settingsTitle.textContent = isLive ? "Live Streaming Active" : "Showcase Catalog";
-  if (settingsInfo) {
-    settingsInfo.textContent = isLive
-      ? `Connected to live streaming service · ${count || "multiple"} titles available.`
-      : "Curated original streaming collection with multi-resolution playback and episodic support.";
-  }
-}
-
-function renderSkeletons() {
-  const grid = $("#card-grid");
-  if (grid) {
-    grid.innerHTML = Array.from({ length: 8 }).map(() => `
-      <div class="skeleton-card" aria-hidden="true">
-        <div class="skeleton-poster"></div>
-        <div class="skeleton-info">
-          <div class="skeleton-line medium"></div>
-          <div class="skeleton-line short"></div>
-        </div>
-      </div>
-    `).join("");
-  }
-  const emptyBox = $("#empty-state");
-  if (emptyBox) emptyBox.hidden = true;
-  const errorBox = $("#error-state");
-  if (errorBox) errorBox.hidden = true;
-
-  const recRow = $("#recommendation-row");
-  if (recRow) {
-    const recSection = $("#recommendations-section");
-    if (recSection) recSection.hidden = false;
-    recRow.innerHTML = Array.from({ length: 6 }).map(() => `
-      <div class="skeleton-card" aria-hidden="true">
-        <div class="skeleton-poster"></div>
-        <div class="skeleton-info">
-          <div class="skeleton-line medium"></div>
-          <div class="skeleton-line short"></div>
-        </div>
-      </div>
-    `).join("");
-  }
-}
-
-function showErrorState(title, message, errorDetails = null) {
-  state.hasError = true;
-  const errorBox = $("#error-state");
-  const emptyBox = $("#empty-state");
-  const errorTitle = $("#error-title");
-  const errorMsg = $("#error-message");
-  const detailsBox = $("#error-details-box");
-  const detailsText = $("#error-details-text");
-
-  if (emptyBox) emptyBox.hidden = true;
-  if (errorTitle && title) errorTitle.textContent = title;
-  if (errorMsg && message) errorMsg.textContent = message;
-
-  if (errorDetails && detailsBox && detailsText) {
-    detailsBox.hidden = false;
-    detailsText.textContent = typeof errorDetails === "string" ? errorDetails : JSON.stringify(errorDetails, null, 2);
-  } else if (detailsBox) {
-    detailsBox.hidden = true;
-  }
-
-  if (errorBox) errorBox.hidden = false;
-  $("#card-grid").innerHTML = "";
-}
-
-function clearErrorState() {
-  state.hasError = false;
-  const errorBox = $("#error-state");
-  if (errorBox) errorBox.hidden = true;
-}
-
-function loadShowcaseCatalog() {
-  clearErrorState();
-  catalog = [...DEMO_ITEMS];
-  recommendations = DEMO_ITEMS.slice(0, 6);
-  setFeatured(DEMO_ITEMS[0]);
-  updateStatusBadge(false, DEMO_ITEMS.length);
-  render();
-  showToast(`Loaded ${DEMO_ITEMS.length} showcase titles (10 Movies, 5 Series, 5 Anime)`);
-}
-
-async function retryCatalog() {
-  clearErrorState();
-  await loadLiveCatalog(true);
-  await loadNewestRecommendations();
-}
-
-const API_BASE = typeof window !== "undefined" && window.location.hostname.includes("netlify.app")
-  ? "/.netlify/functions/api"
-  : "/api";
-
-function buildApiUrl(action, params = {}) {
-  const searchParams = new URLSearchParams();
-  for (const [key, val] of Object.entries(params)) {
-    if (val !== undefined && val !== null && val !== "") {
-      searchParams.set(key, String(val));
-    }
-  }
-
-  if (API_BASE.startsWith("/.netlify")) {
-    searchParams.set("endpoint", action);
-    return `${API_BASE}?${searchParams.toString()}`;
-  }
-
-  // Path-based proxy /api/{action} or /api/details/:id
-  if (action === "details" && params.id) {
-    return `${API_BASE}/details/${encodeURIComponent(params.id)}`;
-  }
-  if (action === "episodes" && params.id) {
-    const id = params.id;
-    const copy = new URLSearchParams(searchParams);
-    copy.delete("id");
-    const qs = copy.toString();
-    return `${API_BASE}/episodes/${encodeURIComponent(id)}${qs ? `?${qs}` : ""}`;
-  }
-
-  const qs = searchParams.toString();
-  return `${API_BASE}/${action}${qs ? `?${qs}` : ""}`;
-}
-
-async function loadLiveCatalog(isRetry = false) {
-  clearErrorState();
-  renderSkeletons();
-  if (isRetry) showToast("Connecting to live catalog...");
-
-  try {
-    const configUrl = buildApiUrl("config");
-    const configRes = await fetch(configUrl).catch(() => null);
-    const config = configRes?.ok ? await configRes.json() : null;
-
-    const urls = [
-      { cat: "movie", url: buildApiUrl("catalog", { category: "movie", page: 1, sort: "ForYou" }) },
-      { cat: "tv", url: buildApiUrl("catalog", { category: "tv", page: 1, sort: "ForYou" }) },
-      { cat: "anime", url: buildApiUrl("catalog", { category: "anime", page: 1, sort: "ForYou" }) },
-    ];
-
-    const results = await Promise.all(urls.map(async ({ cat, url }) => {
-      try {
-        const response = await fetch(url);
-        if (!response.ok) {
-          const bodyText = await response.text().catch(() => "");
-          console.error(`[Ustream API Call Failed] Category: ${cat}, Status: ${response.status}, StatusText: ${response.statusText}, Endpoint: ${url}, Body:`, bodyText);
-          return { ok: false, status: response.status, statusText: response.statusText, body: bodyText, cat, url };
-        }
-        const data = await response.json();
-        return { ok: true, data, cat };
-      } catch (networkErr) {
-        console.error(`[Ustream Network Error] Category: ${cat}, Endpoint: ${url}:`, networkErr);
-        return { ok: false, error: networkErr.message, cat, url };
-      }
-    }));
-
-    const failed = results.filter((r) => !r.ok);
-    if (failed.length === results.length) {
-      console.warn("[Ustream API unavailable - activating showcase catalog with 20 curated titles]");
-      loadShowcaseCatalog();
-      return;
-    }
-
-    const moviePayload = results.find((r) => r.cat === "movie")?.data;
-    const seriesPayload = results.find((r) => r.cat === "tv")?.data;
-    const animePayload = results.find((r) => r.cat === "anime")?.data;
-
-    const isDemo = results.some((r) => r.data?.demo);
-
-    const liveMovies = (moviePayload?.data?.items || []).map((item) => normalizeApiItem(item, "movie"));
-    const liveSeries = (seriesPayload?.data?.items || []).map((item) => normalizeApiItem(item, "tv"));
-    const liveAnime = (animePayload?.data?.items || []).map((item) => normalizeApiItem(item, "anime"));
-    const liveCatalog = [...liveMovies, ...liveSeries, ...liveAnime];
-
-    if (liveCatalog.length) {
-      catalog = liveCatalog;
-      setFeatured(liveCatalog[0]);
-      updateStatusBadge(!isDemo, liveCatalog.length);
-      clearErrorState();
-      render();
-      if (!isDemo) showToast(`Loaded ${liveCatalog.length} trending titles`);
-    } else {
-      catalog = [...DEMO_ITEMS];
-      setFeatured(DEMO_ITEMS[0]);
-      updateStatusBadge(false, DEMO_ITEMS.length);
-      clearErrorState();
-      render();
-    }
-  } catch (error) {
-    console.error("[Ustream Unhandled Catalog Error]", error);
-    loadShowcaseCatalog();
-  }
-}
-
-async function loadNewestRecommendations() {
-  try {
-    const urls = [
-      { cat: "movie", url: buildApiUrl("catalog", { category: "movie", page: 1, sort: "Latest" }) },
-      { cat: "tv", url: buildApiUrl("catalog", { category: "tv", page: 1, sort: "Latest" }) },
-      { cat: "anime", url: buildApiUrl("catalog", { category: "anime", page: 1, sort: "Latest" }) },
-    ];
-
-    const responses = await Promise.allSettled(urls.map(async ({ cat, url }) => {
-      const res = await fetch(url);
-      if (!res.ok) {
-        const bodyText = await res.text().catch(() => "");
-        console.error(`[Ustream Recommendations Call Failed] Category: ${cat}, Status: ${res.status}, Body:`, bodyText);
-        throw new Error(`HTTP ${res.status}`);
-      }
-      return { cat, data: await res.json() };
-    }));
-
-    const latest = [];
-    for (const result of responses) {
-      if (result.status !== "fulfilled") continue;
-      const { cat, data } = result.value;
-      latest.push(...(data.data?.items || []).map((item) => normalizeApiItem(item, cat)));
-    }
-
-    if (latest.length) {
-      recommendations = [...new Map(latest.map((item) => [item.subjectId || item.title, item])).values()].slice(0, 12);
-    } else {
-      recommendations = DEMO_ITEMS.slice(0, 6);
-    }
-    renderRecommendations();
-  } catch (error) {
-    console.warn("[Ustream Recommendations] Unavailable, falling back to showcase:", error);
-    recommendations = DEMO_ITEMS.slice(0, 6);
-    renderRecommendations();
-  }
-}
-
-function setFeatured(item) {
-  if (!item) return;
-  featured = item;
-  const words = item.title.split(" ");
-  const firstWord = words[0];
-  const restWords = words.slice(1).join(" ");
-  $("#hero-title").innerHTML = restWords ? `${firstWord}<br /><em>${restWords}</em>` : firstWord;
-  $("#hero-description").textContent = item.description || `Stream ${item.title} from the catalog.`;
-  $("#hero-meta").innerHTML = `<span>${item.year}</span><span class="rating">★ ${item.rating ? item.rating.toFixed(1) : "—"}</span><span>${item.runtime || "Live title"}</span><span>${item.type === "anime" ? "Anime" : item.type === "series" ? "Series" : "Movie"}</span>`;
-  $("#hero-credit").innerHTML = `<span>${item.kicker || "Featured"}</span> · ${item.country || "Catalog"}`;
-  $("#hero-play").dataset.title = item.title;
-  $("#hero-details").dataset.title = item.title;
-}
-
-async function loadSearchResults(query) {
-  const requestId = ++searchRequestId;
-  const trimmed = query.trim();
-  if (!trimmed) {
-    await loadLiveCatalog();
-    return;
-  }
-  try {
-    const url = buildApiUrl("search", { query: trimmed, page: 1, tabId: "TV" });
-    const response = await fetch(url);
-    if (!response.ok) {
-      const errText = await response.text().catch(() => "");
-      console.error(`[Ustream Search Failed] Status: ${response.status}, URL: ${url}, Body:`, errText);
-      throw new Error(`HTTP ${response.status}`);
-    }
-    const payload = await response.json();
-    if (requestId !== searchRequestId) return;
-    const subjects = (payload.data?.results || []).flatMap((group) => group.subjects || []).concat(payload.data?.items || []);
-    const unique = [...new Map(subjects.map((item) => [item.subjectId, item])).values()];
-    catalog = unique.map(normalizeSearchItem);
-    render();
-    showToast(`Found ${unique.length} live results for “${trimmed}”`);
-  } catch (error) {
-    if (requestId !== searchRequestId) return;
-    showToast("Live search unavailable · try again");
-    console.warn(error);
-  }
-}
-
-const $ = (selector) => document.querySelector(selector);
-const $$ = (selector) => [...document.querySelectorAll(selector)];
 
 function loadWatchlist() {
   try {
