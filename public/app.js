@@ -687,7 +687,7 @@ async function retryCatalog() {
   await loadNewestRecommendations();
 }
 
-const API_BASE = window.location.hostname.includes("netlify.app")
+const API_BASE = typeof window !== "undefined" && window.location.hostname.includes("netlify.app")
   ? "/.netlify/functions/api"
   : "/api";
 
@@ -2198,6 +2198,7 @@ function closeDrawer() {
   $("#filter-drawer").setAttribute("aria-hidden", "true");
 }
 
+if (typeof window !== "undefined" && typeof document !== "undefined") {
 document.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button) return;
@@ -2439,3 +2440,4 @@ function initRouter() {
 initRouter();
 void loadLiveCatalog();
 void loadNewestRecommendations();
+}
