@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b0b11" />
+    <title>Ustream — watch what moves you</title>
+    <meta property="og:title" content="Ustream — Watch What Moves You" />
+    <meta property="og:description" content="Stream the latest movies, series, and anime in ultra high definition." />
+    <meta property="og:image" content="./assets/brand-banner.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="./assets/brand-banner.jpg" />
+    <link rel="stylesheet" href="./styles.css?v=20261023-player-fix" />
+    <script src="https://unpkg.com/lucide@latest"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#top" aria-label="Ustream home">
+          <span class="brand-mark"><span></span><span></span><span></span></span>
+          <span>U<span>stream</span></span>
+        </a>
+
+        <nav class="desktop-nav" aria-label="Primary navigation">
+          <button class="nav-link active" data-section="home">Home</button>
+          <button class="nav-link" data-section="movies">Movies</button>
+          <button class="nav-link" data-section="series">Series</button>
+          <button class="nav-link" data-section="anime">Anime</button>
+          <button class="nav-link" data-section="my-list">My List</button>
+          <button class="nav-link" data-section="profile">Profile</button>
+        </nav>
+
+        <div class="topbar-actions">
+          <button class="status-pill" id="status-pill" type="button" aria-label="Server status">
+            <span class="status-dot" id="status-dot"></span>
+            <span id="status-label">Demo Active</span>
+          </button>
+          <div class="search-box" id="search-box" aria-label="Search titles">
+            <button class="search-trigger" id="search-trigger" aria-label="Open search"><span class="search-glyph" aria-hidden="true"></span></button>
+            <input id="search-input" type="search" placeholder="Search titles, genres..." />
+            <kbd>/</kbd>
+          </div>
+          <button class="icon-button" id="notifications-button" aria-label="Notifications" title="Notifications">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+          </button>
+          <button class="avatar" id="profile-button" aria-label="Account Profile" title="Account Profile (CW)">CW</button>
+        </div>
+      </header>
+
+      <main id="top">
+        <section class="hero" aria-labelledby="hero-title">
+          <div class="hero-backdrop"></div>
+          <div class="hero-content">
+            <div class="eyebrow"><span class="live-dot"></span> Featured premiere</div>
+            <h1 id="hero-title">Live<br /><em>catalog</em></h1>
+            <div class="hero-meta" id="hero-meta"><span class="rating">★ 9.4</span><span>Movies · Series · Anime</span><span>Ultra HD</span></div>
+            <p id="hero-description">Stream the latest movies, series, and anime in high definition.</p>
+            <div class="hero-actions">
+              <button class="primary-button" id="hero-play" data-action="play" data-title=""><svg class="icon icon-sm icon-play icon-filled" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg> <span>Play now</span></button>
+              <button class="secondary-button" id="hero-details" data-action="details" data-title=""><svg class="icon icon-sm icon-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg> <span>More info</span></button>
+            </div>
+            <div class="hero-credit" id="hero-credit"><span>Featured Premiere</span> · Updated today</div>
+          </div>
+          <div class="hero-art" aria-hidden="true">
+            <div class="orb orb-one"></div>
+            <div class="orb orb-two"></div>
+            <div class="signal-lines"></div>
+            <span class="hero-number">01</span>
+          </div>
+          <div class="hero-progress"><span></span></div>
+        </section>
+
+        <section class="content-section quick-picks">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">Curated for you</p>
+              <h2>Pick up where you left off</h2>
+            </div>
+            <button class="text-button" data-section="my-list">View all <svg class="icon icon-sm icon-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+          </div>
+          <div class="continue-row" id="continue-row"></div>
+        </section>
+
+        <section class="content-section recommendations-section" id="recommendations-section" hidden>
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">Fresh from the latest update</p>
+              <h2>New on Ustream</h2>
+            </div>
+            <span class="recommendation-update" id="recommendation-update">Updated today</span>
+          </div>
+          <div class="recommendation-row" id="recommendation-row"></div>
+        </section>
+
+        <section class="content-section catalog-section" id="catalog">
+          <div class="section-heading catalog-heading">
+            <div>
+              <p class="section-kicker" id="catalog-kicker">Explore the collection</p>
+              <h2 id="catalog-title">Trending now</h2>
+            </div>
+            <div class="catalog-tools">
+              <div class="view-toggle" aria-label="View options">
+                <button class="view-button active" data-view="grid" aria-label="Grid view"><svg class="icon icon-md icon-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg></button>
+                <button class="view-button" data-view="compact" aria-label="Compact view"><svg class="icon icon-md icon-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/><path d="M14 4h7"/><path d="M14 9h7"/><path d="M14 15h7"/><path d="M14 20h7"/></svg></button>
+              </div>
+              <button class="filter-button" id="filter-button"><svg class="icon icon-sm icon-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg> <span>Filters</span><b id="filter-count">0</b></button>
+            </div>
+          </div>
+
+          <div class="genre-tabs" id="genre-tabs" role="tablist" aria-label="Browse categories">
+            <button class="genre-tab active" data-genre="all">For you</button>
+            <button class="genre-tab" data-genre="action">Action</button>
+            <button class="genre-tab" data-genre="drama">Drama</button>
+            <button class="genre-tab" data-genre="sci-fi">Sci-fi</button>
+            <button class="genre-tab" data-genre="comedy">Comedy</button>
+            <button class="genre-tab" data-genre="anime">Anime</button>
+          </div>
+
+          <div class="active-filters" id="active-filters" aria-live="polite"></div>
+          <div class="card-grid" id="card-grid"></div>
+          <div class="empty-state" id="empty-state" hidden>
+            <div class="empty-icon" aria-hidden="true"><svg class="icon icon-lg icon-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div>
+            <h3>No titles found</h3>
+            <p>Try another search or clear your filters.</p>
+            <button class="secondary-button" id="clear-filters">Clear filters</button>
+          </div>
+          <div class="error-state" id="error-state" hidden>
+            <div class="error-icon" aria-hidden="true">⚠️</div>
+            <h3 id="error-title">Unable to load titles</h3>
+            <p id="error-message">Unable to connect to the streaming service. Please check your internet connection.</p>
+            <div class="error-details-box" id="error-details-box" hidden>
+              <code id="error-details-text"></code>
+            </div>
+            <div class="error-actions">
+              <button class="primary-button" id="retry-button" type="button"><svg class="icon icon-sm icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg> <span>Retry connection</span></button>
+              <button class="secondary-button" id="load-fallback-button" type="button"><span>Load showcase catalog</span></button>
+            </div>
+          </div>
+        </section>
+
+        <section class="content-section profile-section" id="profile-section" hidden>
+          <div class="profile-container">
+            <div class="profile-card profile-hero-card">
+              <div class="profile-avatar-wrap">
+                <div class="profile-avatar-large">CW</div>
+                <span class="profile-badge-vip">VIP Member</span>
+              </div>
+              <div class="profile-details">
+                <div class="profile-heading-row">
+                  <div>
+                    <h2 class="profile-name">Chris Williams</h2>
+                    <p class="profile-email">chris.williams@ustream.tv</p>
+                  </div>
+                  <span class="profile-plan-pill">Ultra HD · 4K Plan</span>
+                </div>
+                <div class="profile-stats-row">
+                  <div class="profile-stat">
+                    <span class="profile-stat-number" id="profile-watch-count">0</span>
+                    <span class="profile-stat-label">In Continue Queue</span>
+                  </div>
+                  <div class="profile-stat">
+                    <span class="profile-stat-number" id="profile-list-count">0</span>
+                    <span class="profile-stat-label">Saved to My List</span>
+                  </div>
+                  <div class="profile-stat">
+                    <span class="profile-stat-number">1080p</span>
+                    <span class="profile-stat-label">Streaming Quality</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="profile-grid">
+              <div class="profile-card">
+                <h3 class="profile-card-title">Playback Preferences</h3>
+                <p class="profile-card-desc">Customize your default streaming quality and playback controls.</p>
+                <div class="profile-form-group">
+                  <label for="profile-quality-select">Default Streaming Quality</label>
+                  <select id="profile-quality-select" class="player-select">
+                    <option value="1080" selected>1080p Ultra HD (Recommended)</option>
+                    <option value="720">720p High Definition</option>
+                    <option value="480">480p Standard</option>
+                    <option value="auto">Auto (Adaptive)</option>
+                  </select>
+                </div>
+                <div class="profile-form-group">
+                  <label for="profile-language-pref">Preferred Audio Language</label>
+                  <select id="profile-language-pref" class="player-select">
+                    <option value="original" selected>Original Audio</option>
+                    <option value="english">English</option>
+                    <option value="hindi">Hindi</option>
+                    <option value="spanish">Spanish</option>
+                  </select>
+                </div>
+                <div class="profile-toggle-row">
+                  <div>
+                    <strong>Autoplay Next Episode</strong>
+                    <p>Automatically play the next episode when the current one finishes.</p>
+                  </div>
+                  <button class="profile-toggle-btn active" id="profile-autoplay-toggle" type="button" aria-pressed="true">ON</button>
+                </div>
+              </div>
+
+              <div class="profile-card">
+                <h3 class="profile-card-title">Account &amp; Security</h3>
+                <p class="profile-card-desc">Manage your subscription, security, and session settings.</p>
+                <div class="profile-info-row">
+                  <span>Membership</span>
+                  <strong>Annual Ultra HD (Active)</strong>
+                </div>
+                <div class="profile-info-row">
+                  <span>Next Billing Date</span>
+                  <strong>November 25, 2026</strong>
+                </div>
+                <div class="profile-info-row">
+                  <span>Registered Devices</span>
+                  <strong>3 Devices Active</strong>
+                </div>
+                <div class="profile-actions-box">
+                  <button class="secondary-button" id="profile-save-btn" type="button"><span>Save Preferences</span></button>
+                  <button class="sign-out-button" id="profile-signout-btn" type="button"><span>Sign out</span></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <div class="footer-brand"><span class="brand-mark small"><span></span><span></span><span></span></span> Ustream</div>
+        <span>Original stories. One beautiful stream.</span>
+        <span class="footer-note">© 2026 Ustream. All rights reserved.</span>
+      </footer>
+
+      <nav class="mobile-nav" aria-label="Mobile navigation">
+        <button class="mobile-nav-item active" data-section="home"><svg class="icon icon-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><small>Home</small></button>
+        <button class="mobile-nav-item" data-section="movies"><svg class="icon icon-movies" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18"/><path d="M3 7.5h4"/><path d="M3 12h18"/><path d="M3 16.5h4"/><path d="M17 3v18"/><path d="M17 7.5h4"/><path d="M17 16.5h4"/></svg><small>Movies</small></button>
+        <button class="mobile-nav-item" data-section="series"><svg class="icon icon-series" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="15" x="2" y="7" rx="2"/><polyline points="17 2 12 7 7 2"/></svg><small>Series</small></button>
+        <button class="mobile-nav-item" data-section="anime"><svg class="icon icon-anime" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg><small>Anime</small></button>
+        <button class="mobile-nav-item" data-section="my-list"><svg class="icon icon-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg><small>My List</small></button>
+        <button class="mobile-nav-item" data-section="profile"><svg class="icon icon-profile" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><small>Profile</small></button>
+      </nav>
+    </div>
+
+    <aside class="filter-drawer" id="filter-drawer" aria-hidden="true">
+      <div class="drawer-scrim" id="drawer-scrim"></div>
+      <div class="drawer-panel">
+        <div class="drawer-head">
+          <div><p class="section-kicker" id="filter-channel-kicker">Anime Collection</p><h2>Filter titles</h2></div>
+          <button class="close-button" id="close-drawer" aria-label="Close filters"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        <div id="filter-groups" class="filter-groups"></div>
+        <div class="drawer-foot">
+          <button class="text-button" id="reset-filters">Reset all</button>
+          <button class="primary-button" id="apply-filters">Show titles <span id="result-count">12</span></button>
+        </div>
+      </div>
+    </aside>
+
+    <div class="modal-backdrop" id="modal-backdrop" hidden>
+      <article class="detail-modal" id="detail-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <button class="close-button modal-close" id="close-modal" aria-label="Close details"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        <div class="modal-art" id="modal-art"></div>
+        <div class="modal-copy">
+          <p class="section-kicker">Now streaming</p>
+          <h2 id="modal-title">Title</h2>
+          <div class="hero-meta" id="modal-meta"></div>
+          <p id="modal-description"></p>
+          <div class="hero-actions"><button class="primary-button" id="modal-play"><svg class="icon icon-sm icon-play icon-filled" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg> <span>Play now</span></button><button class="secondary-button" id="modal-list"><svg class="icon icon-sm icon-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg> <span>Add to list</span></button></div>
+        </div>
+      </article>
+    </div>
+
+    <div class="player-backdrop" id="player-backdrop" hidden>
+      <section class="player-modal" role="dialog" aria-modal="true" aria-labelledby="player-title">
+        <div class="player-head">
+          <div>
+            <p class="section-kicker">Ustream player</p>
+            <h2 id="player-title">Now playing</h2>
+          </div>
+          <span class="player-live-label" id="player-live-label" hidden><span class="live-dot"></span> <span id="player-live-text">Ready to watch</span></span>
+          <button class="close-button" id="close-player" aria-label="Close player"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        <video id="video-player" controls playsinline preload="metadata"></video>
+        <div class="player-action-bar" aria-label="Player actions">
+          <button class="player-action player-action-primary" id="start-player" type="button" disabled><svg class="icon icon-sm icon-play icon-filled" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg> <span>Start playback</span></button>
+          <button class="player-action player-action-primary player-action-retry" id="player-retry-button" type="button" hidden><svg class="icon icon-sm icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg> <span>Retry playback</span></button>
+          <span class="player-action-divider" aria-hidden="true"></span>
+          <button class="player-action" id="player-prev" type="button" aria-label="Play previous episode"><svg class="icon icon-sm icon-prev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" x2="5" y1="19" y2="5"/></svg><span>Previous</span></button>
+          <button class="player-action" id="player-next" type="button" aria-label="Play next episode"><svg class="icon icon-sm icon-next" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" x2="19" y1="5" y2="19"/></svg><span>Next</span></button>
+          <button class="player-action" id="player-autoplay" type="button" aria-pressed="false" aria-label="Toggle autoplay"><svg class="icon icon-sm icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg><span>Autoplay</span></button>
+          <details class="player-settings-disclosure" id="player-settings">
+            <summary class="player-action" id="player-settings-toggle" aria-controls="player-options" aria-label="Toggle playback settings"><svg class="icon icon-sm icon-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg><span>Settings</span></summary>
+            <section class="player-options" id="player-options" data-player-options aria-labelledby="player-options-title">
+              <div class="player-options-heading">
+                <div>
+                  <p class="section-kicker">Playback options</p>
+                  <h3 id="player-options-title">Choose how to watch</h3>
+                </div>
+                <span class="player-option-hint" id="player-options-hint">Options apply to the current title.</span>
+              </div>
+              <div class="player-option-grid">
+                <div class="player-field">
+                  <label for="player-language-select">Language</label>
+                  <select id="player-language-select" class="player-select" data-player-control="language" aria-describedby="player-language-help">
+                    <option value="auto">Auto</option>
+                    <option value="original">Original</option>
+                    <option value="english">English</option>
+                    <option value="spanish">Spanish</option>
+                  </select>
+                  <span class="player-field-help" id="player-language-help">Choose an available audio language.</span>
+                </div>
+                <div class="player-field">
+                  <label for="player-subtitle-select">Subtitles</label>
+                  <select id="player-subtitle-select" class="player-select" data-player-control="subtitle" aria-describedby="player-subtitle-help">
+                    <option value="off">Off</option>
+                  </select>
+                  <span class="player-field-help" id="player-subtitle-help">Language options vary by title.</span>
+                </div>
+                <div class="player-field">
+                  <label for="player-quality-select">Quality</label>
+                  <select id="player-quality-select" class="player-select" data-player-control="quality" aria-describedby="player-quality-help">
+                    <option value="">Auto</option>
+                  </select>
+                  <span class="player-field-help" id="player-quality-help">Choose the available video resolution.</span>
+                </div>
+                <div class="player-field" id="player-season-field" data-player-season-field hidden>
+                  <label for="player-season-select">Season</label>
+                  <select id="player-season-select" class="player-select" data-player-control="season" aria-describedby="player-season-help">
+                    <option value="">Select a season</option>
+                  </select>
+                  <span class="player-field-help" id="player-season-help">Select a season to update the episodes.</span>
+                </div>
+                <div class="player-field" id="player-episode-field" data-player-episode-field hidden>
+                  <label for="player-episode-select">Episode</label>
+                  <select id="player-episode-select" class="player-select" data-player-control="episode" aria-describedby="player-episode-help">
+                    <option value="">Select an episode</option>
+                  </select>
+                  <span class="player-field-help" id="player-episode-help">Episodes will appear when available.</span>
+                </div>
+              </div>
+            </section>
+          </details>
+        </div>
+        <details class="player-up-next" id="player-up-next" open>
+          <summary class="player-up-next-heading">
+            <span><span class="section-kicker">Coming up</span><strong>Up next</strong></span>
+            <span class="player-up-next-chevron" aria-hidden="true"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+          </summary>
+          <div class="player-up-next-content" id="player-up-next-content">
+            <div class="player-up-next-art" id="player-up-next-art" aria-hidden="true"><svg class="icon icon-md icon-play icon-filled" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg></div>
+             <div class="player-up-next-copy">
+               <span class="player-up-next-label" id="player-up-next-label">Up next</span>
+               <h3 id="player-up-next-title">Start watching to build your queue</h3>
+               <p id="player-up-next-description">Select any title to begin streaming.</p>
+            </div>
+            <button class="secondary-button player-up-next-button" id="player-up-next-button" type="button"><span>Play next</span><svg class="icon icon-sm icon-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+          </div>
+        </details>
+        <div class="player-controls-row">
+          <div class="player-status-region" id="player-status-region" data-player-status-region role="status" aria-live="polite" aria-atomic="true" aria-busy="false">
+            <div class="player-status" id="player-status" data-player-status>Choose a title to start watching</div>
+            <div class="player-loading" id="player-loading" data-player-loading hidden>
+              <span class="player-loading-indicator" aria-hidden="true"></span>
+              <span id="player-loading-text" data-player-loading-label>Loading stream…</span>
+            </div>
+            <div class="player-error" id="player-error-indicator" hidden>
+              <span class="player-error-text" id="player-error-text">Playback failed</span>
+              <button class="player-inline-retry" id="player-inline-retry" type="button"><svg class="icon icon-sm icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg> <span>Retry</span></button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="settings-backdrop" hidden>
+      <section class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <div class="settings-head">
+          <div>
+            <p class="section-kicker">Preferences</p>
+            <h2 id="settings-title">Service Settings</h2>
+          </div>
+          <button class="close-button" id="close-settings" aria-label="Close settings"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        <div class="settings-content">
+          <div class="settings-card">
+            <div class="settings-card-header">
+              <span class="status-dot large" id="settings-status-dot"></span>
+              <div>
+                <h3 id="settings-status-title">Showcase Catalog</h3>
+                <p id="settings-status-info">Curated original streaming collection with multi-resolution playback and episodic support.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <span class="section-kicker">Catalog &amp; Playback</span>
+            <p class="field-hint">Manage your streaming preferences, connection mode, and saved watchlist.</p>
+            <div class="settings-actions-row">
+              <button class="primary-button" id="refresh-catalog-btn" type="button"><svg class="icon icon-sm icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg> <span>Refresh Live Catalog</span></button>
+              <button class="secondary-button" id="revert-demo-btn" type="button"><span>Showcase Mode</span></button>
+              <button class="secondary-button" id="clear-watchlist-btn" type="button"><span>Clear Watchlist</span></button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="toast" id="toast" role="status"></div>
+    <script type="module" src="./app.js?v=20261024-quality-subtitles"></script>
+  </body>
+</html>

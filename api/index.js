@@ -1,5 +1,5 @@
-import server from "../server.mjs";
+import handler from "../server.mjs";
 
-export default function handler(req, res) {
-  server.emit("request", req, res);
+export default async function (req, res) {
+  return await handler(req, res);
 }

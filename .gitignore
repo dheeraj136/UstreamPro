@@ -2,5 +2,4 @@
 *.log
 *.err
 node_modules/
-public/
 nul

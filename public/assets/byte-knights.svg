@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 880">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#63f1c7"/><stop offset=".47" stop-color="#174856"/><stop offset="1" stop-color="#0b1624"/></linearGradient></defs>
+  <rect width="600" height="880" fill="url(#g)"/><path d="M35 110h530M35 160h530M35 210h530M35 260h530" stroke="#baffee" stroke-width="2" opacity=".18"/><path d="M85 680 300 300l215 380" fill="none" stroke="#e7ff51" stroke-width="7"/><circle cx="300" cy="300" r="75" fill="#d7fff4" opacity=".35"/><circle cx="300" cy="300" r="28" fill="#e7ff51"/><text x="42" y="104" fill="#e7ff51" font-family="Arial" font-size="22" font-weight="700" letter-spacing="7">SYSTEM ONLINE</text><text x="42" y="770" fill="white" font-family="Arial" font-size="61" font-weight="900" letter-spacing="-4">BYTE</text><text x="42" y="828" fill="white" font-family="Arial" font-size="61" font-weight="900" letter-spacing="-4">KNIGHTS</text>
+</svg>

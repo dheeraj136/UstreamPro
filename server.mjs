@@ -490,25 +490,37 @@ const serveStatic = async (req, res, pathname) => {
     decoded = pathname;
   }
   const requested = decoded === "/" ? "/index.html" : decoded;
-  const file = resolve(ROOT, `.${requested}`);
-  const rel = relative(ROOT, file);
-  if (rel.startsWith("..") || isAbsolute(rel)) {
-    return json(res, 403, { error: "Forbidden" }, req);
+  const candidates = [
+    resolve(ROOT, `.${requested}`),
+    resolve(ROOT, `public`, `.${requested}`),
+    resolve(process.cwd(), `.${requested}`),
+    resolve(process.cwd(), `public`, `.${requested}`)
+  ];
+
+  let contents = null;
+  let foundFile = null;
+  for (const candidate of candidates) {
+    try {
+      contents = await readFile(candidate);
+      foundFile = candidate;
+      break;
+    } catch {
+      // try next candidate
+    }
   }
-  try {
-    const contents = await readFile(file);
-    res.writeHead(200, {
-      "content-type": MIME_TYPES[extname(file).toLowerCase()] || "application/octet-stream",
-      "content-length": contents.length,
-      "cache-control": "no-cache",
-      "access-control-allow-origin": "*",
-    });
-    if (req.method === "HEAD") return res.end();
-    res.end(contents);
-  } catch (error) {
-    if (error.code === "ENOENT") return json(res, 404, { error: "Not found" }, req);
-    return json(res, 500, { error: "Unable to read static asset" }, req);
+
+  if (!contents || !foundFile) {
+    return json(res, 404, { error: "Not found" }, req);
   }
+
+  res.writeHead(200, {
+    "content-type": MIME_TYPES[extname(foundFile).toLowerCase()] || "application/octet-stream",
+    "content-length": contents.length,
+    "cache-control": "no-cache",
+    "access-control-allow-origin": "*",
+  });
+  if (req.method === "HEAD") return res.end();
+  res.end(contents);
 };
 
 const readRequestBody = (req) =>
@@ -527,7 +539,7 @@ const readRequestBody = (req) =>
     });
   });
 
-const server = createServer(async (req, res) => {
+export const handler = async (req, res) => {
   const requestUrl = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
   
   if (req.method === "OPTIONS") {
@@ -671,9 +683,11 @@ const server = createServer(async (req, res) => {
     console.error(`[Server Request Error] Status: ${status}, Message:`, error.message, error.rawBody || "");
     return json(res, status, { error: error.message || "RapidAPI request failed", details: error.payload?.message || error.rawBody || undefined }, req);
   }
-});
+};
 
-export default server;
+const server = createServer(handler);
+
+export default handler;
 
 const isDirectRun = process.argv[1] && (
   process.argv[1].endsWith("server.mjs") ||
