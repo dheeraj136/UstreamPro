@@ -548,9 +548,13 @@ const readRequestBody = (req) =>
   });
 
 export const handler = async (req, res) => {
-  const requestUrl = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+  let rawPath = req.headers["x-matched-path"] || req.headers["x-vercel-original-url"] || req.url || "/";
+  if (req.url && req.url.startsWith("/api/") && !req.url.startsWith("/api/index")) {
+    rawPath = req.url;
+  }
+  const requestUrl = new URL(rawPath, `http://${req.headers.host || "localhost"}`);
   
-  if (requestUrl.pathname === "/api" || requestUrl.pathname === "/api/") {
+  if (requestUrl.pathname === "/api" || requestUrl.pathname === "/api/" || requestUrl.pathname === "/api/index.js") {
     const endpoint = requestUrl.searchParams.get("endpoint") || requestUrl.searchParams.get("path");
     if (endpoint) {
       requestUrl.pathname = endpoint.startsWith("/") ? `/api${endpoint}` : `/api/${endpoint}`;
@@ -705,7 +709,7 @@ export const handler = async (req, res) => {
       return await proxyMedia(req, res, mediaUrl);
     }
 
-    return serveStatic(req, res, requestUrl.pathname);
+    return json(res, 404, { error: "API endpoint not found", path: requestUrl.pathname }, req);
   } catch (error) {
     const status = Number(error.statusCode) || 502;
     console.error(`[Server Request Error] Status: ${status}, Message:`, error.message, error.rawBody || "");
