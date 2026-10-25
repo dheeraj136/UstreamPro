@@ -16,6 +16,10 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
+.player-action[hidden] { display: none !important; }
+#start-player[hidden] { display: none !important; }
+#player-retry-button[hidden] { display: none !important; }
 html { scroll-behavior: smooth; }
 body { margin: 0; background: var(--bg); color: var(--text); min-width: 320px; }
 button, input, select { font: inherit; }
