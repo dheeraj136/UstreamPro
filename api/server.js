@@ -1063,6 +1063,7 @@ const rapidFetch = async (path) => {
       "x-api-key": rapidApiKey,
       accept: "application/json",
     },
+    signal: AbortSignal.timeout(3500),
   });
   const body = await response.text();
   let payload;
@@ -1188,9 +1189,12 @@ const readRequestBody = (req) =>
 export const handler = async (req, res) => {
   try {
     const headers = req.headers || {};
-    let rawPath = headers["x-matched-path"] || headers["x-vercel-original-url"] || req.url || "/";
-    if (req.url && (req.url.startsWith("/api/") || req.url.startsWith("/catalog") || req.url.startsWith("/search") || req.url.startsWith("/details") || req.url.startsWith("/episodes") || req.url.startsWith("/config"))) {
-      rawPath = req.url;
+    let rawPath = headers["x-vercel-original-url"] || req.url || headers["x-matched-path"] || "/";
+    if (rawPath.startsWith("/api/index") || rawPath.startsWith("/api/server")) {
+      const orig = headers["x-vercel-original-url"] || req.url;
+      if (orig && !orig.startsWith("/api/index") && !orig.startsWith("/api/server")) {
+        rawPath = orig;
+      }
     }
     const host = headers.host || "localhost";
     const requestUrl = new URL(rawPath, `http://${host}`);
@@ -1204,7 +1208,7 @@ export const handler = async (req, res) => {
     }
     requestUrl.pathname = requestUrl.pathname.replace(/\.js$/, "");
 
-    if (requestUrl.pathname === "/api" || requestUrl.pathname === "/api/") {
+    if (requestUrl.pathname === "/api" || requestUrl.pathname === "/api/" || requestUrl.pathname === "/api/index") {
       const endpoint = requestUrl.searchParams.get("endpoint") || requestUrl.searchParams.get("path");
       if (endpoint) {
         requestUrl.pathname = endpoint.startsWith("/") ? `/api${endpoint}` : `/api/${endpoint}`;
