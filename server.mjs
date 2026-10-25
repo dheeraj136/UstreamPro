@@ -673,7 +673,16 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`Ustream running at http://${HOST}:${PORT}`);
-  console.log(`Content mode: ${rapidApiKey ? "RapidAPI Live" : "Demo Catalog Active (RapidAPI key not configured)"}`);
-});
+export default server;
+
+const isDirectRun = process.argv[1] && (
+  process.argv[1].endsWith("server.mjs") ||
+  fileURLToPath(import.meta.url) === resolve(process.argv[1])
+);
+
+if (isDirectRun && !process.env.VERCEL && !process.env.VERCEL_ENV) {
+  server.listen(PORT, HOST, () => {
+    console.log(`Ustream running at http://${HOST}:${PORT}`);
+    console.log(`Content mode: ${rapidApiKey ? "RapidAPI Live" : "Demo Catalog Active (RapidAPI key not configured)"}`);
+  });
+}
