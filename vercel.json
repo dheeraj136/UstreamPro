@@ -1,9 +1,11 @@
 {
   "buildCommand": "node scripts/build.mjs",
   "outputDirectory": "public",
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/server.js" },
-    { "source": "/healthz", "destination": "/api/server.js" },
-    { "source": "/.netlify/functions/api", "destination": "/api/server.js" }
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/index.html",
+      "permanent": false
+    }
   ]
 }
