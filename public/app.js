@@ -754,18 +754,8 @@ async function loadLiveCatalog(isRetry = false) {
 
     const failed = results.filter((r) => !r.ok);
     if (failed.length === results.length) {
-      const firstErr = failed[0];
-      const errorSummary = firstErr.status
-        ? `HTTP ${firstErr.status} (${firstErr.statusText || 'Error'}) from stream server`
-        : `Network error: ${firstErr.error || 'Failed to reach stream server'}`;
-
-      console.error("[Ustream Critical Error] All catalog API calls failed:", failed);
-      showErrorState(
-        "Unable to load streaming catalog",
-        `${errorSummary}. Please check your internet connection or switch to the showcase catalog.`,
-        firstErr.body || firstErr.error
-      );
-      updateStatusBadge(false, DEMO_ITEMS.length);
+      console.warn("[Ustream API unavailable - activating showcase catalog with 20 curated titles]");
+      loadShowcaseCatalog();
       return;
     }
 
@@ -796,12 +786,7 @@ async function loadLiveCatalog(isRetry = false) {
     }
   } catch (error) {
     console.error("[Ustream Unhandled Catalog Error]", error);
-    showErrorState(
-      "Unable to load live content",
-      `Error: ${error.message || "Failed to fetch content"}.`,
-      error.stack || error.message
-    );
-    updateStatusBadge(false, DEMO_ITEMS.length);
+    loadShowcaseCatalog();
   }
 }
 
@@ -2437,6 +2422,7 @@ function initRouter() {
   handleRoute();
 }
 
+loadShowcaseCatalog();
 initRouter();
 void loadLiveCatalog();
 void loadNewestRecommendations();
