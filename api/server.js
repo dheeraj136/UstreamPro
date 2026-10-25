@@ -518,32 +518,33 @@ const readRequestBody = (req) =>
   });
 
 export const handler = async (req, res) => {
-  let rawPath = req.headers["x-matched-path"] || req.headers["x-vercel-original-url"] || req.url || "/";
-  if (req.url && req.url.startsWith("/api/") && !req.url.startsWith("/api/index")) {
-    rawPath = req.url;
-  }
-  const requestUrl = new URL(rawPath, `http://${req.headers.host || "localhost"}`);
-  
-  if (requestUrl.pathname === "/api" || requestUrl.pathname === "/api/" || requestUrl.pathname === "/api/index.js") {
-    const endpoint = requestUrl.searchParams.get("endpoint") || requestUrl.searchParams.get("path");
-    if (endpoint) {
-      requestUrl.pathname = endpoint.startsWith("/") ? `/api${endpoint}` : `/api/${endpoint}`;
-    }
-  }
-  if (requestUrl.pathname.startsWith("/api/api/")) {
-    requestUrl.pathname = requestUrl.pathname.replace(/^\/api\/api\//, "/api/");
-  }
-
-  if (req.method === "OPTIONS") {
-    res.writeHead(204, {
-      "access-control-allow-origin": "*",
-      "access-control-allow-headers": "content-type",
-      "access-control-allow-methods": "GET, HEAD, POST, OPTIONS",
-    });
-    return res.end();
-  }
-
   try {
+    const headers = req.headers || {};
+    let rawPath = headers["x-matched-path"] || headers["x-vercel-original-url"] || req.url || "/";
+    if (req.url && req.url.startsWith("/api/") && !req.url.startsWith("/api/server") && !req.url.startsWith("/api/index")) {
+      rawPath = req.url;
+    }
+    const host = headers.host || "localhost";
+    const requestUrl = new URL(rawPath, `http://${host}`);
+    
+    if (requestUrl.pathname === "/api" || requestUrl.pathname === "/api/" || requestUrl.pathname === "/api/server.js" || requestUrl.pathname === "/api/index.js") {
+      const endpoint = requestUrl.searchParams.get("endpoint") || requestUrl.searchParams.get("path");
+      if (endpoint) {
+        requestUrl.pathname = endpoint.startsWith("/") ? `/api${endpoint}` : `/api/${endpoint}`;
+      }
+    }
+    if (requestUrl.pathname.startsWith("/api/api/")) {
+      requestUrl.pathname = requestUrl.pathname.replace(/^\/api\/api\//, "/api/");
+    }
+
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, {
+        "access-control-allow-origin": "*",
+        "access-control-allow-headers": "content-type",
+        "access-control-allow-methods": "GET, HEAD, POST, OPTIONS",
+      });
+      return res.end();
+    }
     if (req.method === "POST" && requestUrl.pathname === "/api/config") {
       const body = await readRequestBody(req);
       if (typeof body.rapidApiKey === "string") {
