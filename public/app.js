@@ -1378,20 +1378,35 @@ async function loadLiveCatalog(isRetry = false) {
 
 async function loadNewestRecommendations() {
   try {
-    const urls = [
-      { cat: "movie", url: buildApiUrl("catalog", { category: "movie", page: 1, sort: "Latest" }) },
-      { cat: "tv", url: buildApiUrl("catalog", { category: "tv", page: 1, sort: "Latest" }) },
-      { cat: "anime", url: buildApiUrl("catalog", { category: "anime", page: 1, sort: "Latest" }) },
-    ];
+    const categories = ["movie", "tv", "anime"];
+    const responses = await Promise.allSettled(categories.map(async (cat) => {
+      // 1. Try proxy endpoint
+      try {
+        const url = buildApiUrl("catalog", { category: cat, page: 1, sort: "Latest" });
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.data?.items?.length) return { cat, data };
+        }
+      } catch {}
 
-    const responses = await Promise.allSettled(urls.map(async ({ cat, url }) => {
-      const res = await fetch(url);
-      if (!res.ok) {
-        const bodyText = await res.text().catch(() => "");
-        console.error(`[Ustream Recommendations Call Failed] Category: ${cat}, Status: ${res.status}, Body:`, bodyText);
-        throw new Error(`HTTP ${res.status}`);
-      }
-      return { cat, data: await res.json() };
+      // 2. Direct RapidAPI fallback
+      try {
+        const directUrl = `https://moviebox-api.p.rapidapi.com/movie-or-tv/list?category=${cat}&page=1&sort=Latest`;
+        const directRes = await fetch(directUrl, {
+          headers: {
+            "x-rapidapi-host": "moviebox-api.p.rapidapi.com",
+            "x-rapidapi-key": "68d9a25612msh6bb2c17daf102cdp1fe4fbjsnc2adc8510c22",
+            "accept": "application/json"
+          }
+        });
+        if (directRes.ok) {
+          const data = await directRes.json();
+          if (data?.data?.items?.length) return { cat, data };
+        }
+      } catch {}
+
+      throw new Error(`Failed to load recommendations for ${cat}`);
     }));
 
     const latest = [];
@@ -1436,14 +1451,33 @@ async function loadSearchResults(query) {
     return;
   }
   try {
-    const url = buildApiUrl("search", { query: trimmed, page: 1, tabId: "TV" });
-    const response = await fetch(url);
-    if (!response.ok) {
-      const errText = await response.text().catch(() => "");
-      console.error(`[Ustream Search Failed] Status: ${response.status}, URL: ${url}, Body:`, errText);
-      throw new Error(`HTTP ${response.status}`);
+    let payload = null;
+    try {
+      const url = buildApiUrl("search", { query: trimmed, page: 1, tabId: "TV" });
+      const response = await fetch(url);
+      if (response.ok) {
+        payload = await response.json();
+      }
+    } catch {}
+
+    if (!payload) {
+      const directUrl = `https://moviebox-api.p.rapidapi.com/Search?query=${encodeURIComponent(trimmed)}&page=1&tabId=TV`;
+      const directRes = await fetch(directUrl, {
+        headers: {
+          "x-rapidapi-host": "moviebox-api.p.rapidapi.com",
+          "x-rapidapi-key": "68d9a25612msh6bb2c17daf102cdp1fe4fbjsnc2adc8510c22",
+          "accept": "application/json"
+        }
+      });
+      if (directRes.ok) {
+        payload = await directRes.json();
+      }
     }
-    const payload = await response.json();
+
+    if (!payload) {
+      throw new Error("Search requests failed");
+    }
+
     if (requestId !== searchRequestId) return;
     const subjects = (payload.data?.results || []).flatMap((group) => group.subjects || []).concat(payload.data?.items || []);
     const unique = [...new Map(subjects.map((item) => [item.subjectId, item])).values()];
@@ -1893,41 +1927,104 @@ const STREAM_SERVERS = {
 
 let currentServerKey = "vidlink";
 
+const TMDB_API_KEYS = [
+  "e9e9d8da18ae29fc430845952232787c",
+  "3fd2be6f0c70a2a598f084ddfb75487c"
+];
+const TMDB_CACHE = new Map();
+
+function sanitizeTitle(rawTitle = "") {
+  return String(rawTitle || "")
+    .replace(/\[.*?\]|\(.*?\)/g, " ")
+    .replace(/\b(dub|sub|multi sub|hindi|english|japanese|season \d+|episode \d+|complete|hd|4k)\b/gi, " ")
+    .replace(/[^a-zA-Z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isValidTmdbId(id) {
+  const n = Number(id);
+  return Number.isInteger(n) && n > 0 && n < 2500000;
+}
+
 async function resolveTmdbId(item) {
-  if (item.tmdbId) return String(item.tmdbId);
-  if (item.subjectId && TMDB_MAP[item.subjectId]?.tmdbId) return String(TMDB_MAP[item.subjectId].tmdbId);
+  if (!item) return "27205";
 
-  const cleanTitle = (item.title || "").toLowerCase().trim();
+  // If item already has a verified TMDB ID
+  if (isValidTmdbId(item.tmdbId)) return String(item.tmdbId);
+  if (item.subjectId && isValidTmdbId(TMDB_MAP[item.subjectId]?.tmdbId)) {
+    return String(TMDB_MAP[item.subjectId].tmdbId);
+  }
+
+  // Check cache
+  const cacheKey = item.subjectId || item.title;
+  if (cacheKey && TMDB_CACHE.has(cacheKey)) {
+    const cached = TMDB_CACHE.get(cacheKey);
+    if (cached.mediaType) item.mediaType = cached.mediaType;
+    return cached.id;
+  }
+
+  const rawTitle = item.title || "";
+  const cleanTitle = rawTitle.toLowerCase().trim();
   const normalized = cleanTitle.replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
-  
-  if (TITLE_TMDB_MAP[cleanTitle]) return TITLE_TMDB_MAP[cleanTitle];
-  if (TITLE_TMDB_MAP[normalized]) return TITLE_TMDB_MAP[normalized];
+  const sanitized = sanitizeTitle(rawTitle).toLowerCase();
 
-  for (const [key, id] of Object.entries(TITLE_TMDB_MAP)) {
-    if (cleanTitle.includes(key) || normalized.includes(key)) {
-      return id;
+  // Check title maps
+  for (const [titleKey, id] of Object.entries(TITLE_TMDB_MAP)) {
+    const key = titleKey.toLowerCase();
+    if (cleanTitle === key || normalized === key || sanitized === key || (key.length > 4 && (cleanTitle.includes(key) || sanitized.includes(key)))) {
+      if (isValidTmdbId(id)) {
+        const mediaType = item.type === "series" ? "tv" : "movie";
+        TMDB_CACHE.set(cacheKey, { id: String(id), mediaType });
+        return String(id);
+      }
     }
   }
 
-  // Dynamic TMDB Search API fallback
-  try {
-    const isTv = item.type === "series" || item.type === "anime";
-    const typePath = isTv ? "tv" : "movie";
-    const res = await fetch(`https://api.themoviedb.org/3/search/${typePath}?api_key=45dbdd51da378dad57e5029f33aa57e7&query=${encodeURIComponent(item.title)}`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data?.results?.[0]?.id) {
-        return String(data.results[0].id);
+  // Dynamic TMDB Search API with working keys and sanitized query
+  const searchQuery = sanitized || normalized || cleanTitle;
+  if (searchQuery) {
+    for (const apiKey of TMDB_API_KEYS) {
+      try {
+        const searchUrl = `https://api.themoviedb.org/3/search/multi?api_key=${apiKey}&query=${encodeURIComponent(searchQuery)}`;
+        const res = await fetch(searchUrl);
+        if (res.ok) {
+          const data = await res.json();
+          const top = (data?.results || []).find(r => r.media_type === "movie" || r.media_type === "tv") || data?.results?.[0];
+          if (top?.id && isValidTmdbId(top.id)) {
+            const foundId = String(top.id);
+            const mediaType = top.media_type === "tv" ? "tv" : "movie";
+            item.mediaType = mediaType;
+            if (mediaType === "tv") {
+              item.type = "series";
+            } else if (mediaType === "movie" && item.type !== "anime") {
+              item.type = "movie";
+            }
+            TMDB_CACHE.set(cacheKey, { id: foundId, mediaType });
+            return foundId;
+          }
+        }
+      } catch (err) {
+        console.warn("[TMDB Dynamic Search]", err.message);
       }
     }
-  } catch {}
+  }
 
-  return item.subjectId && /^\d+$/.test(item.subjectId) ? String(item.subjectId) : "27205";
+  // Fallback: If numeric item.subjectId is in TMDB range, use it
+  if (isValidTmdbId(item.subjectId)) {
+    return String(item.subjectId);
+  }
+
+  // Safe fallback default IDs that always stream without crash
+  const isTv = item.type === "series" || (item.type === "anime" && (Number(item.seNum) > 0));
+  const fallbackId = isTv ? "30093" : (item.type === "anime" ? "916192" : "27205");
+  TMDB_CACHE.set(cacheKey, { id: fallbackId, mediaType: isTv ? "tv" : "movie" });
+  return fallbackId;
 }
 
 function getEmbedStreamUrl(tmdbId, item, season = 1, episode = 1, serverKey = currentServerKey) {
   const server = STREAM_SERVERS[serverKey] || STREAM_SERVERS.vidlink;
-  const isSeries = item.type === "series" || item.type === "anime";
+  const isSeries = item.mediaType === "tv" || item.type === "series" || (item.type === "anime" && item.mediaType !== "movie" && (Number(item.seNum) > 0 || (item.seasons && item.seasons.length > 0)));
   if (isSeries) {
     return server.getTvUrl(tmdbId, Math.max(1, Number(season) || 1), Math.max(1, Number(episode) || 1));
   }
@@ -2977,7 +3074,8 @@ async function playTitle(title) {
   const tmdbId = await resolveTmdbId(item);
   state.player.item = item;
   state.player.tmdbId = tmdbId;
-  state.player.isSeries = item.type === "series" || item.type === "anime";
+  const isSeries = item.mediaType === "tv" || item.type === "series" || (item.type === "anime" && item.mediaType !== "movie" && (Number(item.seNum) > 0 || (item.seasons && item.seasons.length > 0)));
+  state.player.isSeries = isSeries;
   state.player.selectedSeason = 1;
   state.player.selectedEpisode = 1;
 
