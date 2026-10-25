@@ -2,7 +2,7 @@
 
 A modern, responsive live streaming web application with multi-resolution streaming, episodic show queues, curated catalogs, and secure serverless API proxies.
 
-![Ustream Banner](https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?auto=format&fit=crop&w=1200&q=80)
+![UstreamPro Brand Banner](./assets/brand-banner.jpg)
 
 ## ✨ Features
 
