@@ -2,7 +2,8 @@
   "buildCommand": "node scripts/build.mjs",
   "outputDirectory": "public",
   "rewrites": [
-    { "source": "/healthz", "destination": "/api/healthz" },
+    { "source": "/", "destination": "/index.html" },
+    { "source": "/healthz", "destination": "/api" },
     { "source": "/.netlify/functions/api", "destination": "/api" }
   ]
 }
