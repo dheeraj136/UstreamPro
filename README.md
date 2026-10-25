@@ -78,9 +78,9 @@ To test your local instance immediately on your mobile phone or other devices on
    RAPID_API_KEY=your_rapidapi_key_here
    ```
 
-4. Install dependencies (if any) and start the local development server:
+4. Start the local development server:
    ```bash
-   npm start
+   npm run dev
    ```
 
 5. Open [http://localhost:4174](http://localhost:4174) in your browser.
