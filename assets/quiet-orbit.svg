@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 880">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c8b5ff"/><stop offset=".5" stop-color="#3f2e72"/><stop offset="1" stop-color="#101320"/></linearGradient></defs>
+  <rect width="600" height="880" fill="url(#g)"/><circle cx="300" cy="330" r="140" fill="#d9d5ff" opacity=".2"/><circle cx="300" cy="330" r="105" fill="none" stroke="#e7ff51" stroke-width="4"/><circle cx="300" cy="330" r="13" fill="#e7ff51"/><path d="M50 330H550M300 65V580" stroke="#fff" stroke-width="2" opacity=".2"/><text x="43" y="105" fill="white" font-family="Arial" font-size="22" font-weight="700" letter-spacing="7">LIMITED SERIES</text><text x="43" y="770" fill="white" font-family="Arial" font-size="56" font-weight="900" letter-spacing="-3">THE QUIET</text><text x="43" y="828" fill="#e7ff51" font-family="Arial" font-size="60" font-weight="900" letter-spacing="-3">ORBIT</text>
+</svg>

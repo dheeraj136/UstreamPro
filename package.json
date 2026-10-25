@@ -1,0 +1,14 @@
+{
+  "name": "ustream",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ustream live streaming web app",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "node server.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

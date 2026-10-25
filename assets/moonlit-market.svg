@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 880">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffab80"/><stop offset=".55" stop-color="#784646"/><stop offset="1" stop-color="#24162b"/></linearGradient></defs>
+  <rect width="600" height="880" fill="url(#g)"/><circle cx="425" cy="180" r="95" fill="#ffe4a3" opacity=".85"/><path d="M60 520h480M95 520v195M185 520v195M275 520v195M365 520v195M455 520v195" stroke="#e7ff51" stroke-width="7" opacity=".8"/><path d="M45 720h510" stroke="#fff" stroke-width="3" opacity=".45"/><text x="42" y="105" fill="#e7ff51" font-family="Arial" font-size="22" font-weight="700" letter-spacing="7">A NEW SERIES</text><text x="42" y="775" fill="white" font-family="Arial" font-size="57" font-weight="900" letter-spacing="-3">MOONLIT</text><text x="42" y="830" fill="white" font-family="Arial" font-size="57" font-weight="900" letter-spacing="-3">MARKET</text>
+</svg>
