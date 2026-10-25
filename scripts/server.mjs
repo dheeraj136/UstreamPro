@@ -11,7 +11,7 @@ try {
   // .env file not found or not required
 }
 
-const ROOT = resolve(fileURLToPath(new URL(".", import.meta.url)));
+const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const PORT = Number(process.env.PORT || 4174);
 const HOST = process.env.HOST || "0.0.0.0";
 const RAPID_API_BASE = process.env.RAPID_API_BASE || "https://moviebox-api.p.rapidapi.com";
@@ -542,6 +542,16 @@ const readRequestBody = (req) =>
 export const handler = async (req, res) => {
   const requestUrl = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
   
+  if (requestUrl.pathname === "/api" || requestUrl.pathname === "/api/") {
+    const endpoint = requestUrl.searchParams.get("endpoint") || requestUrl.searchParams.get("path");
+    if (endpoint) {
+      requestUrl.pathname = endpoint.startsWith("/") ? `/api${endpoint}` : `/api/${endpoint}`;
+    }
+  }
+  if (requestUrl.pathname.startsWith("/api/api/")) {
+    requestUrl.pathname = requestUrl.pathname.replace(/^\/api\/api\//, "/api/");
+  }
+
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
       "access-control-allow-origin": "*",
@@ -569,7 +579,7 @@ export const handler = async (req, res) => {
       return json(res, 405, { error: "Method not allowed. Only GET, HEAD, and POST are supported" }, req);
     }
 
-    if (requestUrl.pathname === "/healthz") {
+    if (requestUrl.pathname === "/healthz" || requestUrl.pathname === "/api/healthz") {
       return json(res, 200, {
         ok: true,
         service: "ustream",

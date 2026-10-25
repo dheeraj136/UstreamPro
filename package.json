@@ -6,8 +6,8 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "dev": "node server.mjs",
-    "serve": "node server.mjs"
+    "dev": "node scripts/server.mjs",
+    "serve": "node scripts/server.mjs"
   },
   "engines": {
     "node": ">=20"
