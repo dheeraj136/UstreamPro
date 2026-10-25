@@ -1066,6 +1066,400 @@ const EPISODE_MAP = {
   ]
 };
 
+let catalog = [...DEMO_ITEMS];
+let recommendations = DEMO_ITEMS.slice(0, 6);
+let featured = DEMO_ITEMS[0];
+
+function loadContinuation() {
+  try {
+    const raw = localStorage.getItem("ustream-continuation");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return [];
+}
+
+const continuation = loadContinuation();
+
+function getFilterChannel() {
+  return state?.section === "series" ? seriesChannel : animeChannel;
+}
+
+function makeFilterDefaults(channel) {
+  return Object.fromEntries(channel.items.map((item) => {
+    if (item.filterType === "rate") return ["rateMin", 0];
+    return [item.filterType, item.filterValsV2[0]?.id || "All"];
+  }).concat([["rateMax", 10]]));
+}
+
+const state = {
+  section: "home",
+  genre: "all",
+  search: "",
+  view: "grid",
+  filters: makeFilterDefaults(animeChannel),
+  watchlist: new Set(loadWatchlist()),
+  activeModal: null,
+  player: {
+    requestId: 0,
+    item: null,
+    details: null,
+    subjectId: "",
+    languageOptions: [],
+    selectedLanguage: null,
+    subtitleOptions: [],
+    selectedSubtitle: "off",
+    subtitleSubjectId: "",
+    qualityOptions: [],
+    selectedQuality: null,
+    resolution: null,
+    seasons: [],
+    selectedSeason: null,
+    selectedEpisode: null,
+    isSeries: false,
+    autoplayNext: false,
+  },
+};
+let searchTimer;
+let searchRequestId = 0;
+
+const parseApiRating = (value) => {
+  const rating = Number.parseFloat(value);
+  return Number.isFinite(rating) ? rating : 0;
+};
+
+const normalizeApiItem = (item, category) => {
+  const genres = String(item.genre || "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+  const type = category === "tv" ? "series" : category;
+  const label = category === "tv" ? "Series" : category === "anime" ? "Anime" : "Movie";
+  if (type === "anime" && !genres.includes("anime")) genres.unshift("anime");
+  const year = Number.parseInt(String(item.releaseDate || "").slice(0, 4), 10);
+  return {
+    title: item.title || "Untitled",
+    type,
+    genre: genres.length ? genres : [type],
+    country: item.countryName || "Other",
+    year: Number.isFinite(year) ? year : new Date().getFullYear(),
+    releaseDate: item.releaseDate || "",
+    updatedAt: item.updatedAt || item.updateTime || item.resourceDetectors?.[0]?.uploadTime || "",
+    rating: parseApiRating(item.imdbRatingValue),
+    runtime: item.duration || (item.seNum ? `${item.seNum} season${item.seNum === 1 ? "" : "s"}` : "Live title"),
+    language: item.language || item.corner || "",
+    badge: item.hasResource ? "Ready" : "Info",
+    kicker: `Ustream · ${label}`,
+    image: item.cover?.url || "",
+    gradient: "linear-gradient(145deg, #293569, #111827 58%, #080a12)",
+    subjectId: item.subjectId,
+    description: item.description || "Stream this title in high definition on Ustream.",
+    video: item.playUrl?.url || item.playUrl?.playUrl || "",
+  };
+};
+
+const normalizeSearchItem = (item) => {
+  const category = String(item.genre || "").toLowerCase().includes("anime") ? "anime" : "tv";
+  return normalizeApiItem(item, category);
+};
+
+function updateStatusBadge(isLive, count) {
+  const dot = $("#status-dot");
+  const label = $("#status-label");
+  const settingsDot = $("#settings-status-dot");
+  const settingsTitle = $("#settings-status-title");
+  const settingsInfo = $("#settings-status-info");
+
+  if (dot) dot.classList.toggle("live", !!isLive);
+  if (label) label.textContent = isLive ? "Live" : "Curated";
+
+  if (settingsDot) settingsDot.classList.toggle("live", !!isLive);
+  if (settingsTitle) settingsTitle.textContent = isLive ? "Live Streaming Active" : "Curated Catalog";
+  if (settingsInfo) {
+    settingsInfo.textContent = isLive
+      ? `Connected to live streaming service · ${count || "multiple"} titles available.`
+      : "Curated original streaming collection with multi-resolution playback and episodic support.";
+  }
+}
+
+function renderSkeletons() {
+  const grid = $("#card-grid");
+  if (grid) {
+    grid.innerHTML = Array.from({ length: 8 }).map(() => `
+      <div class="skeleton-card" aria-hidden="true">
+        <div class="skeleton-poster"></div>
+        <div class="skeleton-info">
+          <div class="skeleton-line medium"></div>
+          <div class="skeleton-line short"></div>
+        </div>
+      </div>
+    `).join("");
+  }
+  const emptyBox = $("#empty-state");
+  if (emptyBox) emptyBox.hidden = true;
+  const errorBox = $("#error-state");
+  if (errorBox) errorBox.hidden = true;
+
+  const recRow = $("#recommendation-row");
+  if (recRow) {
+    const recSection = $("#recommendations-section");
+    if (recSection) recSection.hidden = false;
+    recRow.innerHTML = Array.from({ length: 6 }).map(() => `
+      <div class="skeleton-card" aria-hidden="true">
+        <div class="skeleton-poster"></div>
+        <div class="skeleton-info">
+          <div class="skeleton-line medium"></div>
+          <div class="skeleton-line short"></div>
+        </div>
+      </div>
+    `).join("");
+  }
+}
+
+function showErrorState(title, message, errorDetails = null) {
+  state.hasError = true;
+  const errorBox = $("#error-state");
+  const emptyBox = $("#empty-state");
+  const errorTitle = $("#error-title");
+  const errorMsg = $("#error-message");
+  const detailsBox = $("#error-details-box");
+  const detailsText = $("#error-details-text");
+
+  if (emptyBox) emptyBox.hidden = true;
+  if (errorTitle && title) errorTitle.textContent = title;
+  if (errorMsg && message) errorMsg.textContent = message;
+
+  if (errorDetails && detailsBox && detailsText) {
+    detailsBox.hidden = false;
+    detailsText.textContent = typeof errorDetails === "string" ? errorDetails : JSON.stringify(errorDetails, null, 2);
+  } else if (detailsBox) {
+    detailsBox.hidden = true;
+  }
+
+  if (errorBox) errorBox.hidden = false;
+  $("#card-grid").innerHTML = "";
+}
+
+function clearErrorState() {
+  state.hasError = false;
+  const errorBox = $("#error-state");
+  if (errorBox) errorBox.hidden = true;
+}
+
+function loadShowcaseCatalog() {
+  clearErrorState();
+  catalog = [...DEMO_ITEMS];
+  recommendations = DEMO_ITEMS.slice(0, 6);
+  setFeatured(DEMO_ITEMS[0]);
+  updateStatusBadge(false, DEMO_ITEMS.length);
+  render();
+  showToast(`Loaded ${DEMO_ITEMS.length} curated titles (10 Movies, 5 Series, 5 Anime)`);
+}
+
+async function retryCatalog() {
+  clearErrorState();
+  await loadLiveCatalog(true);
+  await loadNewestRecommendations();
+}
+
+const API_BASE = typeof window !== "undefined" && window.location.hostname.includes("netlify.app")
+  ? "/.netlify/functions/api"
+  : "/api";
+
+function buildApiUrl(action, params = {}) {
+  const searchParams = new URLSearchParams();
+  for (const [key, val] of Object.entries(params)) {
+    if (val !== undefined && val !== null && val !== "") {
+      searchParams.set(key, String(val));
+    }
+  }
+
+  if (API_BASE.startsWith("/.netlify")) {
+    searchParams.set("endpoint", action);
+    return `${API_BASE}?${searchParams.toString()}`;
+  }
+
+  // Path-based proxy /api/{action} or /api/details/:id
+  if (action === "details" && params.id) {
+    return `${API_BASE}/details/${encodeURIComponent(params.id)}`;
+  }
+  if (action === "episodes" && params.id) {
+    const id = params.id;
+    const copy = new URLSearchParams(searchParams);
+    copy.delete("id");
+    const qs = copy.toString();
+    return `${API_BASE}/episodes/${encodeURIComponent(id)}${qs ? `?${qs}` : ""}`;
+  }
+
+  const qs = searchParams.toString();
+  return `${API_BASE}/${action}${qs ? `?${qs}` : ""}`;
+}
+
+async function loadLiveCatalog(isRetry = false) {
+  clearErrorState();
+  renderSkeletons();
+  if (isRetry) showToast("Connecting to live catalog...");
+
+  try {
+    const configUrl = buildApiUrl("config");
+    const configRes = await fetch(configUrl).catch(() => null);
+    const config = configRes?.ok ? await configRes.json() : null;
+
+    const categories = ["movie", "tv", "anime"];
+    const results = await Promise.all(categories.map(async (cat) => {
+      // 1. Try proxy endpoint
+      try {
+        const proxyUrl = buildApiUrl("catalog", { category: cat, page: 1, sort: "ForYou" });
+        const res = await fetch(proxyUrl);
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.data?.items?.length) return { ok: true, data, cat };
+        }
+      } catch {}
+
+      // 2. Direct RapidAPI fallback with CORS
+      try {
+        const directUrl = `https://moviebox-api.p.rapidapi.com/movie-or-tv/list?category=${cat}&page=1&sort=ForYou`;
+        const directRes = await fetch(directUrl, {
+          headers: {
+            "x-rapidapi-host": "moviebox-api.p.rapidapi.com",
+            "x-rapidapi-key": "68d9a25612msh6bb2c17daf102cdp1fe4fbjsnc2adc8510c22",
+            "accept": "application/json"
+          }
+        });
+        if (directRes.ok) {
+          const data = await directRes.json();
+          if (data?.data?.items?.length) return { ok: true, data, cat };
+        }
+      } catch {}
+
+      return { ok: false, cat };
+    }));
+
+    const failed = results.filter((r) => !r.ok);
+    if (failed.length === results.length) {
+      console.warn("[Ustream API unavailable - activating showcase catalog with 20 curated titles]");
+      loadShowcaseCatalog();
+      return;
+    }
+
+    const moviePayload = results.find((r) => r.cat === "movie")?.data;
+    const seriesPayload = results.find((r) => r.cat === "tv")?.data;
+    const animePayload = results.find((r) => r.cat === "anime")?.data;
+
+    const isDemo = results.some((r) => r.data?.demo);
+
+    const liveMovies = (moviePayload?.data?.items || []).map((item) => normalizeApiItem(item, "movie"));
+    const liveSeries = (seriesPayload?.data?.items || []).map((item) => normalizeApiItem(item, "tv"));
+    const liveAnime = (animePayload?.data?.items || []).map((item) => normalizeApiItem(item, "anime"));
+    const liveCatalog = [...liveMovies, ...liveSeries, ...liveAnime];
+
+    if (liveCatalog.length) {
+      catalog = liveCatalog;
+      setFeatured(liveCatalog[0]);
+      updateStatusBadge(!isDemo, liveCatalog.length);
+      clearErrorState();
+      render();
+      if (!isDemo) showToast(`Loaded ${liveCatalog.length} trending titles`);
+    } else {
+      catalog = [...DEMO_ITEMS];
+      setFeatured(DEMO_ITEMS[0]);
+      updateStatusBadge(false, DEMO_ITEMS.length);
+      clearErrorState();
+      render();
+    }
+  } catch (error) {
+    console.error("[Ustream Unhandled Catalog Error]", error);
+    loadShowcaseCatalog();
+  }
+}
+
+async function loadNewestRecommendations() {
+  try {
+    const urls = [
+      { cat: "movie", url: buildApiUrl("catalog", { category: "movie", page: 1, sort: "Latest" }) },
+      { cat: "tv", url: buildApiUrl("catalog", { category: "tv", page: 1, sort: "Latest" }) },
+      { cat: "anime", url: buildApiUrl("catalog", { category: "anime", page: 1, sort: "Latest" }) },
+    ];
+
+    const responses = await Promise.allSettled(urls.map(async ({ cat, url }) => {
+      const res = await fetch(url);
+      if (!res.ok) {
+        const bodyText = await res.text().catch(() => "");
+        console.error(`[Ustream Recommendations Call Failed] Category: ${cat}, Status: ${res.status}, Body:`, bodyText);
+        throw new Error(`HTTP ${res.status}`);
+      }
+      return { cat, data: await res.json() };
+    }));
+
+    const latest = [];
+    for (const result of responses) {
+      if (result.status !== "fulfilled") continue;
+      const { cat, data } = result.value;
+      latest.push(...(data.data?.items || []).map((item) => normalizeApiItem(item, cat)));
+    }
+
+    if (latest.length) {
+      recommendations = [...new Map(latest.map((item) => [item.subjectId || item.title, item])).values()].slice(0, 12);
+    } else {
+      recommendations = DEMO_ITEMS.slice(0, 6);
+    }
+    renderRecommendations();
+  } catch (error) {
+    console.warn("[Ustream Recommendations] Unavailable, falling back to showcase:", error);
+    recommendations = DEMO_ITEMS.slice(0, 6);
+    renderRecommendations();
+  }
+}
+
+function setFeatured(item) {
+  if (!item) return;
+  featured = item;
+  const words = item.title.split(" ");
+  const firstWord = words[0];
+  const restWords = words.slice(1).join(" ");
+  $("#hero-title").innerHTML = restWords ? `${firstWord}<br /><em>${restWords}</em>` : firstWord;
+  $("#hero-description").textContent = item.description || `Stream ${item.title} from the catalog.`;
+  $("#hero-meta").innerHTML = `<span>${item.year}</span><span class="rating">★ ${item.rating ? item.rating.toFixed(1) : "—"}</span><span>${item.runtime || "Live title"}</span><span>${item.type === "anime" ? "Anime" : item.type === "series" ? "Series" : "Movie"}</span>`;
+  $("#hero-credit").innerHTML = `<span>${item.kicker || "Featured"}</span> · ${item.country || "Catalog"}`;
+  $("#hero-play").dataset.title = item.title;
+  $("#hero-details").dataset.title = item.title;
+}
+
+async function loadSearchResults(query) {
+  const requestId = ++searchRequestId;
+  const trimmed = query.trim();
+  if (!trimmed) {
+    await loadLiveCatalog();
+    return;
+  }
+  try {
+    const url = buildApiUrl("search", { query: trimmed, page: 1, tabId: "TV" });
+    const response = await fetch(url);
+    if (!response.ok) {
+      const errText = await response.text().catch(() => "");
+      console.error(`[Ustream Search Failed] Status: ${response.status}, URL: ${url}, Body:`, errText);
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const payload = await response.json();
+    if (requestId !== searchRequestId) return;
+    const subjects = (payload.data?.results || []).flatMap((group) => group.subjects || []).concat(payload.data?.items || []);
+    const unique = [...new Map(subjects.map((item) => [item.subjectId, item])).values()];
+    catalog = unique.map(normalizeSearchItem);
+    render();
+    showToast(`Found ${unique.length} live results for “${trimmed}”`);
+  } catch (error) {
+    if (requestId !== searchRequestId) return;
+    showToast("Live search unavailable · try again");
+    console.warn(error);
+  }
+}
+
+const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => [...document.querySelectorAll(selector)];
+
 function loadWatchlist() {
   try {
     const savedKey = "ustream-watchlist";
