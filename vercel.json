@@ -1,11 +1,4 @@
 {
   "buildCommand": "node scripts/build.mjs",
-  "outputDirectory": "public",
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/server.js" },
-    { "src": "/healthz", "dest": "/api/server.js" },
-    { "src": "/.netlify/functions/api", "dest": "/api/server.js" },
-    { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "/index.html" }
-  ]
+  "outputDirectory": "public"
 }
