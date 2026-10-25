@@ -3,23 +3,45 @@ const RAPID_API_HOST = process.env.RAPID_API_HOST || "moviebox-api.p.rapidapi.co
 let rapidApiKey = (process.env.RAPIDAPI_KEY || process.env.RAPID_API_KEY || "").trim();
 
 const json = (res, status, payload, req = null) => {
-  if (typeof res.status === "function" && typeof res.json === "function") {
+  if (typeof res.setHeader === "function") {
     res.setHeader("access-control-allow-origin", "*");
     res.setHeader("access-control-allow-headers", "content-type");
     res.setHeader("access-control-allow-methods", "GET, HEAD, POST, OPTIONS");
+    res.setHeader("content-type", "application/json; charset=utf-8");
     res.setHeader("cache-control", "no-store");
-    if (req?.method === "HEAD") return res.status(status).end();
-    return res.status(status).json(payload);
   }
-  res.writeHead(status, {
-    "content-type": "application/json; charset=utf-8",
-    "cache-control": "no-store",
-    "access-control-allow-origin": "*",
-    "access-control-allow-headers": "content-type",
-    "access-control-allow-methods": "GET, HEAD, POST, OPTIONS",
-  });
-  if (req?.method === "HEAD") return res.end();
-  res.end(JSON.stringify(payload));
+
+  // Vercel / Express helper
+  if (typeof res.status === "function") {
+    const s = res.status(status);
+    if (s && typeof s.json === "function") {
+      if (req?.method === "HEAD" && typeof s.end === "function") return s.end();
+      return s.json(payload);
+    }
+  }
+
+  if (typeof res.json === "function") {
+    if (typeof res.statusCode !== "undefined") res.statusCode = status;
+    return res.json(payload);
+  }
+
+  // Node native http.ServerResponse
+  if (typeof res.writeHead === "function") {
+    res.writeHead(status, {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+      "access-control-allow-origin": "*",
+      "access-control-allow-headers": "content-type",
+      "access-control-allow-methods": "GET, HEAD, POST, OPTIONS",
+    });
+    if (req?.method === "HEAD") return res.end();
+    return res.end(JSON.stringify(payload));
+  }
+
+  if (typeof res.statusCode !== "undefined") res.statusCode = status;
+  if (req?.method === "HEAD" && typeof res.end === "function") return res.end();
+  if (typeof res.end === "function") return res.end(JSON.stringify(payload));
+  if (typeof res.send === "function") return res.send(JSON.stringify(payload));
 };
 
 export const DEMO_ITEMS = [
@@ -538,12 +560,24 @@ export const handler = async (req, res) => {
     }
 
     if (req.method === "OPTIONS") {
-      res.writeHead(204, {
-        "access-control-allow-origin": "*",
-        "access-control-allow-headers": "content-type",
-        "access-control-allow-methods": "GET, HEAD, POST, OPTIONS",
-      });
-      return res.end();
+      if (typeof res.setHeader === "function") {
+        res.setHeader("access-control-allow-origin", "*");
+        res.setHeader("access-control-allow-headers", "content-type");
+        res.setHeader("access-control-allow-methods", "GET, HEAD, POST, OPTIONS");
+      }
+      if (typeof res.status === "function") {
+        const s = res.status(204);
+        if (s && typeof s.end === "function") return s.end();
+      }
+      if (typeof res.writeHead === "function") {
+        res.writeHead(204, {
+          "access-control-allow-origin": "*",
+          "access-control-allow-headers": "content-type",
+          "access-control-allow-methods": "GET, HEAD, POST, OPTIONS",
+        });
+      }
+      if (typeof res.end === "function") return res.end();
+      return;
     }
     if (req.method === "POST" && requestUrl.pathname === "/api/config") {
       const body = await readRequestBody(req);
