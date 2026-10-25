@@ -1927,11 +1927,81 @@ const STREAM_SERVERS = {
 
 let currentServerKey = "vidlink";
 
+const LANGUAGE_LABELS = {
+  en: "English",
+  hi: "Hindi",
+  ja: "Japanese",
+  es: "Spanish",
+  fr: "French",
+  de: "German",
+  auto: "Original Audio"
+};
+
+let currentLanguageKey = "en";
+try {
+  currentLanguageKey = localStorage.getItem("ustream-language") || "en";
+} catch {}
+
+function escapeHtml(str) {
+  return String(str || "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[c]));
+}
+
 const TMDB_API_KEYS = [
   "e9e9d8da18ae29fc430845952232787c",
   "3fd2be6f0c70a2a598f084ddfb75487c"
 ];
 const TMDB_CACHE = new Map();
+
+async function fetchTmdbSeriesSeasons(tmdbId) {
+  if (!isValidTmdbId(tmdbId)) return null;
+  for (const apiKey of TMDB_API_KEYS) {
+    try {
+      const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${apiKey}`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (!data.seasons || !Array.isArray(data.seasons)) continue;
+      const validSeasons = data.seasons.filter((s) => s.season_number > 0 && s.episode_count > 0);
+      if (!validSeasons.length) continue;
+      return validSeasons.map((s) => ({
+        season: s.season_number,
+        title: s.name || `Season ${s.season_number}`,
+        episodes: Array.from({ length: s.episode_count }, (_, i) => ({
+          season: s.season_number,
+          episode: i + 1,
+          title: `Episode ${i + 1}`,
+          resourceLink: ""
+        }))
+      }));
+    } catch {}
+  }
+  return null;
+}
+
+async function fetchTmdbSeasonEpisodes(tmdbId, seasonNumber) {
+  if (!isValidTmdbId(tmdbId)) return null;
+  for (const apiKey of TMDB_API_KEYS) {
+    try {
+      const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}/season/${seasonNumber}?api_key=${apiKey}`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data.episodes && Array.isArray(data.episodes) && data.episodes.length > 0) {
+        return data.episodes.map((ep) => ({
+          season: seasonNumber,
+          episode: ep.episode_number,
+          title: ep.name || `Episode ${ep.episode_number}`,
+          resourceLink: ""
+        }));
+      }
+    } catch {}
+  }
+  return null;
+}
 
 function sanitizeTitle(rawTitle = "") {
   return String(rawTitle || "")
@@ -2025,10 +2095,14 @@ async function resolveTmdbId(item) {
 function getEmbedStreamUrl(tmdbId, item, season = 1, episode = 1, serverKey = currentServerKey) {
   const server = STREAM_SERVERS[serverKey] || STREAM_SERVERS.vidlink;
   const isSeries = item.mediaType === "tv" || item.type === "series" || (item.type === "anime" && item.mediaType !== "movie" && (Number(item.seNum) > 0 || (item.seasons && item.seasons.length > 0)));
-  if (isSeries) {
-    return server.getTvUrl(tmdbId, Math.max(1, Number(season) || 1), Math.max(1, Number(episode) || 1));
+  let url = isSeries
+    ? server.getTvUrl(tmdbId, Math.max(1, Number(season) || 1), Math.max(1, Number(episode) || 1))
+    : server.getMovieUrl(tmdbId);
+  if (serverKey === "vidlink" && currentLanguageKey && currentLanguageKey !== "auto") {
+    const langLabel = LANGUAGE_LABELS[currentLanguageKey] || "English";
+    url += `&sub_label=${encodeURIComponent(langLabel)}`;
   }
-  return server.getMovieUrl(tmdbId);
+  return url;
 }
 
 const HIGH_DEF_STREAMS = [
@@ -2591,47 +2665,121 @@ function setSelectOptions(select, options, selectedValue, emptyLabel) {
 }
 
 function updatePlayerSelectionUI(message = "") {
-  const panel = ensurePlayerSelectionUI();
-  if (!panel) return;
   const player = state.player;
   const isEpisodic = Boolean(player.isSeries && player.seasons && player.seasons.length > 0);
-  const hasControls = player.languageOptions.length > 1 || player.subtitleOptions.length > 1 || player.qualityOptions.length > 1 || isEpisodic;
-  panel.hidden = !hasControls;
-  const languageSelect = $("#player-language-select");
-  const subtitleSelect = $("#player-subtitle-select");
-  const qualitySelect = $("#player-quality-select");
-  const seasonSelect = $("#player-season-select");
-  const episodeSelect = $("#player-episode-select");
-  const seasonField = $("#player-season-field");
-  const episodeField = $("#player-episode-field");
-  const optionsHint = $("#player-options-hint");
 
-  setSelectOptions(languageSelect, player.languageOptions.map((entry) => ({ value: entry.subjectId, label: entry.label })), player.selectedLanguage?.subjectId, "No alternate languages");
-  setSelectOptions(subtitleSelect, player.subtitleOptions.map((entry) => ({ value: entry.value, label: entry.label })), player.selectedSubtitle, "No subtitles available");
-  setSelectOptions(qualitySelect, player.qualityOptions.map((entry) => ({ value: entry.value, label: entry.label })), player.selectedQuality, "Auto");
+  // 1. Language selector in player bar
+  const languageBarSelect = $("#player-language-bar-select");
+  if (languageBarSelect) {
+    languageBarSelect.value = currentLanguageKey;
+  }
+
+  // 2. Action bar season and episode selectors
+  const seasonBarField = $("#player-season-bar-field");
+  const seasonBarSelect = $("#player-season-bar-select");
+  const episodeBarField = $("#player-episode-bar-field");
+  const episodeBarSelect = $("#player-episode-bar-select");
+  const episodesSection = $("#player-episodes-section");
 
   if (!isEpisodic) {
-    if (seasonField) seasonField.hidden = true;
-    if (episodeField) episodeField.hidden = true;
+    if (seasonBarField) seasonBarField.hidden = true;
+    if (episodeBarField) episodeBarField.hidden = true;
+    if (episodesSection) episodesSection.hidden = true;
   } else {
-    const seasons = player.seasons.map((entry) => ({ value: entry.season, label: `Season ${entry.season}` }));
-    setSelectOptions(seasonSelect, seasons, player.selectedSeason, "Select season");
+    if (seasonBarField) seasonBarField.hidden = false;
+    if (episodeBarField) episodeBarField.hidden = false;
+
+    const seasons = player.seasons.map((entry) => ({
+      value: entry.season,
+      label: entry.title || `Season ${entry.season}`
+    }));
+    setSelectOptions(seasonBarSelect, seasons, player.selectedSeason, "Select season");
+
     const selectedSeason = player.seasons.find((entry) => entry.season === player.selectedSeason) || player.seasons[0];
     const episodes = selectedSeason?.episodes || [];
     setSelectOptions(
-      episodeSelect,
+      episodeBarSelect,
       episodes.map((entry) => ({
         value: entry.episode,
-        label: `Episode ${entry.episode}${entry.title && entry.title !== `Episode ${entry.episode}` ? ` · ${entry.title}` : ""}`,
+        label: `Ep ${entry.episode}${entry.title && entry.title !== `Episode ${entry.episode}` ? `: ${entry.title}` : ""}`,
       })),
       player.selectedEpisode,
       "Select episode"
     );
-    if (seasonField) seasonField.hidden = seasons.length <= 1;
-    if (episodeField) episodeField.hidden = episodes.length === 0;
+
+    // 3. Episodes Section with Season Pills and Episode Grid
+    if (episodesSection) {
+      episodesSection.hidden = false;
+      const seasonTitleEl = $("#player-episodes-season-title");
+      if (seasonTitleEl) {
+        seasonTitleEl.textContent = selectedSeason?.title || `Season ${player.selectedSeason || 1}`;
+      }
+
+      const seasonPillsContainer = $("#player-season-pills");
+      if (seasonPillsContainer) {
+        seasonPillsContainer.innerHTML = player.seasons.map((s) => {
+          const isActive = s.season === player.selectedSeason;
+          return `<button class="season-pill${isActive ? " active" : ""}" type="button" data-season="${s.season}">
+            ${escapeHtml(s.title || `Season ${s.season}`)}
+          </button>`;
+        }).join("");
+      }
+
+      const episodesGrid = $("#player-episodes-grid");
+      if (episodesGrid) {
+        episodesGrid.innerHTML = episodes.map((ep) => {
+          const isCurrent = ep.episode === player.selectedEpisode;
+          return `<button class="episode-pill${isCurrent ? " active" : ""}" type="button" data-season="${selectedSeason?.season || 1}" data-episode="${ep.episode}">
+            <span class="ep-num">E${ep.episode}</span>
+            <span class="ep-title">${escapeHtml(ep.title || `Episode ${ep.episode}`)}</span>
+          </button>`;
+        }).join("");
+      }
+    }
   }
 
-  if (optionsHint) optionsHint.textContent = isEpisodic ? "Choose audio, subtitles, quality, season, or episode." : "Choose audio, subtitles, or quality before playback.";
+  // 4. Drawer options
+  const panel = ensurePlayerSelectionUI();
+  if (panel) {
+    const hasControls = player.languageOptions.length > 1 || player.subtitleOptions.length > 1 || player.qualityOptions.length > 1 || isEpisodic;
+    panel.hidden = !hasControls;
+    const languageSelect = $("#player-language-select");
+    const subtitleSelect = $("#player-subtitle-select");
+    const qualitySelect = $("#player-quality-select");
+    const seasonSelect = $("#player-season-select");
+    const episodeSelect = $("#player-episode-select");
+    const seasonField = $("#player-season-field");
+    const episodeField = $("#player-episode-field");
+    const optionsHint = $("#player-options-hint");
+
+    setSelectOptions(languageSelect, player.languageOptions.map((entry) => ({ value: entry.subjectId, label: entry.label })), player.selectedLanguage?.subjectId, "No alternate languages");
+    setSelectOptions(subtitleSelect, player.subtitleOptions.map((entry) => ({ value: entry.value, label: entry.label })), player.selectedSubtitle, "No subtitles available");
+    setSelectOptions(qualitySelect, player.qualityOptions.map((entry) => ({ value: entry.value, label: entry.label })), player.selectedQuality, "Auto");
+
+    if (!isEpisodic) {
+      if (seasonField) seasonField.hidden = true;
+      if (episodeField) episodeField.hidden = true;
+    } else {
+      const seasons = player.seasons.map((entry) => ({ value: entry.season, label: `Season ${entry.season}` }));
+      setSelectOptions(seasonSelect, seasons, player.selectedSeason, "Select season");
+      const selectedSeason = player.seasons.find((entry) => entry.season === player.selectedSeason) || player.seasons[0];
+      const episodes = selectedSeason?.episodes || [];
+      setSelectOptions(
+        episodeSelect,
+        episodes.map((entry) => ({
+          value: entry.episode,
+          label: `Episode ${entry.episode}${entry.title && entry.title !== `Episode ${entry.episode}` ? ` · ${entry.title}` : ""}`,
+        })),
+        player.selectedEpisode,
+        "Select episode"
+      );
+      if (seasonField) seasonField.hidden = seasons.length <= 1;
+      if (episodeField) episodeField.hidden = episodes.length === 0;
+    }
+
+    if (optionsHint) optionsHint.textContent = isEpisodic ? "Choose audio, subtitles, quality, season, or episode." : "Choose audio, subtitles, or quality before playback.";
+  }
+
   updatePlayerEpisodeFlow();
 }
 
@@ -2652,6 +2800,15 @@ async function fetchEpisodeList(subjectId, preferredResolution = null) {
     });
     const seasons = [...seasonsMap.entries()].map(([season, episodes]) => ({ season, episodes }));
     return { seasons, resolution: preferredResolution || 1080 };
+  }
+
+  // 2. Fetch real seasons from TMDB if tmdbId is available
+  const tmdbTargetId = (state.player?.tmdbId && isValidTmdbId(state.player.tmdbId)) ? state.player.tmdbId : (isValidTmdbId(subjectId) ? subjectId : null);
+  if (tmdbTargetId) {
+    const tmdbSeasons = await fetchTmdbSeriesSeasons(tmdbTargetId);
+    if (tmdbSeasons && tmdbSeasons.length > 0) {
+      return { seasons: tmdbSeasons, resolution: preferredResolution || 1080 };
+    }
   }
 
   const mergeSeasons = (target, incoming) => {
@@ -2981,7 +3138,9 @@ function reloadCurrentEmbed() {
   const popout = $("#player-popout-btn");
   if (popout) popout.href = url;
   const server = STREAM_SERVERS[currentServerKey];
-  setPlayerState(PLAYER_STATE.PLAYING, `${item.title} · ${server?.name || "HD Stream"}`);
+  const langLabel = currentLanguageKey !== "auto" ? ` · ${LANGUAGE_LABELS[currentLanguageKey] || currentLanguageKey.toUpperCase()}` : "";
+  const seasonEpLabel = player.isSeries ? ` · S${season}:E${episode}` : "";
+  setPlayerState(PLAYER_STATE.PLAYING, `${item.title}${seasonEpLabel} · ${server?.name || "HD Stream"}${langLabel}`);
   const liveLabel = $("#player-live-label");
   if (liveLabel) liveLabel.hidden = false;
   const liveText = $("#player-live-text");
@@ -2990,26 +3149,40 @@ function reloadCurrentEmbed() {
 }
 
 async function changePlayerSeason(seasonNumber) {
-  const season = state.player.seasons.find((entry) => entry.season === Number(seasonNumber));
+  const num = Number(seasonNumber);
+  const season = state.player.seasons.find((entry) => entry.season === num);
   if (!season) return;
   const selection = chooseEpisode([season], season.season, null);
   state.player.selectedSeason = selection.season;
   state.player.selectedEpisode = selection.episode;
   state.player.requestId += 1;
-  setPlayerLoading(`Loading Season ${season.season}...`);
-  updatePlayerSelectionUI(`Loading Season ${season.season}...`);
+  const seasonTitle = season.title || `Season ${season.season}`;
+  setPlayerLoading(`Loading ${seasonTitle}...`);
+  updatePlayerSelectionUI(`Loading ${seasonTitle}...`);
   reloadCurrentEmbed();
+
+  // Asynchronously fetch real episode names for this season from TMDB if available and not yet loaded
+  if (state.player.tmdbId && isValidTmdbId(state.player.tmdbId) && season.episodes?.length > 0 && season.episodes[0].title === "Episode 1") {
+    fetchTmdbSeasonEpisodes(state.player.tmdbId, season.season).then((realEps) => {
+      if (realEps && realEps.length > 0) {
+        season.episodes = realEps;
+        updatePlayerSelectionUI();
+      }
+    });
+  }
 }
 
 async function changePlayerEpisode(episodeNumber) {
+  const num = Number(episodeNumber);
   const season = state.player.seasons.find((entry) => entry.season === state.player.selectedSeason);
-  const episode = season?.episodes.find((entry) => entry.episode === Number(episodeNumber)) || state.player.seasons.flatMap((entry) => entry.episodes).find((entry) => entry.episode === Number(episodeNumber));
+  const episode = season?.episodes.find((entry) => entry.episode === num) || state.player.seasons.flatMap((entry) => entry.episodes).find((entry) => entry.episode === num);
   if (!episode) return;
   state.player.selectedSeason = episode.season;
   state.player.selectedEpisode = episode.episode;
   state.player.requestId += 1;
-  setPlayerLoading(`Loading Episode ${episode.episode}...`);
-  updatePlayerSelectionUI(`Loading Episode ${episode.episode}...`);
+  const epLabel = `Episode ${episode.episode}${episode.title && episode.title !== `Episode ${episode.episode}` ? `: ${episode.title}` : ""}`;
+  setPlayerLoading(`Loading ${epLabel}...`);
+  updatePlayerSelectionUI(`Loading ${epLabel}...`);
   reloadCurrentEmbed();
 }
 
@@ -3081,6 +3254,21 @@ async function playTitle(title) {
 
   if (state.player.isSeries) {
     await loadEpisodeState(item.subjectId || item.title, 1, 1, ++state.player.requestId);
+
+    // Asynchronously fetch episode titles for Season 1 from TMDB
+    if (state.player.tmdbId && isValidTmdbId(state.player.tmdbId)) {
+      const firstSeason = state.player.seasons.find((s) => s.season === 1) || state.player.seasons[0];
+      if (firstSeason && firstSeason.episodes?.length > 0 && firstSeason.episodes[0].title === "Episode 1") {
+        fetchTmdbSeasonEpisodes(state.player.tmdbId, firstSeason.season).then((realEps) => {
+          if (realEps && realEps.length > 0) {
+            firstSeason.episodes = realEps;
+            updatePlayerSelectionUI();
+          }
+        });
+      }
+    }
+  } else {
+    updatePlayerSelectionUI();
   }
 
   // Load embed player with actual content!
@@ -3093,7 +3281,9 @@ async function playTitle(title) {
   if (popout) popout.href = streamUrl;
 
   const server = STREAM_SERVERS[currentServerKey];
-  setPlayerState(PLAYER_STATE.PLAYING, `${item.title} · ${server?.name || "HD Stream"}`);
+  const langLabel = currentLanguageKey !== "auto" ? ` · ${LANGUAGE_LABELS[currentLanguageKey] || currentLanguageKey.toUpperCase()}` : "";
+  const seasonEpLabel = isSeries ? ` · S${state.player.selectedSeason || 1}:E${state.player.selectedEpisode || 1}` : "";
+  setPlayerState(PLAYER_STATE.PLAYING, `${item.title}${seasonEpLabel} · ${server?.name || "HD Stream"}${langLabel}`);
   const liveLabel = $("#player-live-label");
   if (liveLabel) liveLabel.hidden = false;
   const liveText = $("#player-live-text");
@@ -3155,6 +3345,12 @@ function closePlayer() {
     video.load();
     video.hidden = true;
   }
+  const episodesSection = $("#player-episodes-section");
+  if (episodesSection) episodesSection.hidden = true;
+  const seasonBarField = $("#player-season-bar-field");
+  if (seasonBarField) seasonBarField.hidden = true;
+  const episodeBarField = $("#player-episode-bar-field");
+  if (episodeBarField) episodeBarField.hidden = true;
   $("#player-backdrop").hidden = true;
   setPlayerState(PLAYER_STATE.IDLE);
 }
@@ -3227,6 +3423,14 @@ document.addEventListener("click", (event) => {
   if (button.id === "start-player") return startPlayer();
   if (button.id === "player-retry-button" || button.id === "player-inline-retry") return void retryPlayback();
   if (button.id === "player-settings-toggle") return togglePlayerSettings();
+  if (button.classList.contains("season-pill") && button.dataset.season) {
+    void changePlayerSeason(button.dataset.season);
+    return;
+  }
+  if (button.classList.contains("episode-pill") && button.dataset.episode) {
+    void changePlayerEpisode(button.dataset.episode);
+    return;
+  }
   if (button.id === "player-prev") { void previousEpisode(); return; }
   if (button.id === "player-next") { void nextEpisode({ autoplay: true }); return; }
   if (button.id === "player-up-next-button") {
@@ -3326,6 +3530,23 @@ document.addEventListener("change", (event) => {
     currentServerKey = event.target.value;
     reloadCurrentEmbed();
     showToast(`Switched to ${STREAM_SERVERS[currentServerKey]?.name || "HD Server"}`);
+    return;
+  }
+  if (event.target.id === "player-language-bar-select") {
+    currentLanguageKey = event.target.value;
+    try {
+      localStorage.setItem("ustream-language", currentLanguageKey);
+    } catch {}
+    showToast(`Language set to ${LANGUAGE_LABELS[currentLanguageKey] || currentLanguageKey.toUpperCase()}`);
+    reloadCurrentEmbed();
+    return;
+  }
+  if (event.target.id === "player-season-bar-select") {
+    void changePlayerSeason(event.target.value);
+    return;
+  }
+  if (event.target.id === "player-episode-bar-select") {
+    void changePlayerEpisode(event.target.value);
     return;
   }
   if (event.target.id === "player-language-select") {
