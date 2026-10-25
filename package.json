@@ -8,11 +8,5 @@
     "build": "node scripts/build.mjs",
     "dev": "node scripts/server.mjs",
     "serve": "node scripts/server.mjs"
-  },
-  "engines": {
-    "node": "20.x"
-  },
-  "dependencies": {
-    "@vercel/node": "^3.2.0"
   }
 }
