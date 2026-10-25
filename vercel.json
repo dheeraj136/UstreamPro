@@ -1,12 +1,6 @@
 {
   "buildCommand": "node scripts/build.mjs",
   "outputDirectory": "public",
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api"
-    }
-  ],
   "redirects": [
     {
       "source": "/",
