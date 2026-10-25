@@ -1,36 +1,6 @@
-import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
-import { extname, join, normalize, relative, resolve, isAbsolute } from "node:path";
-import { fileURLToPath } from "node:url";
-
-try {
-  if (typeof process.loadEnvFile === "function") {
-    process.loadEnvFile();
-  }
-} catch {
-  // .env file not found or not required
-}
-
-const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const PORT = Number(process.env.PORT || 4174);
-const HOST = process.env.HOST || "0.0.0.0";
 const RAPID_API_BASE = process.env.RAPID_API_BASE || "https://moviebox-api.p.rapidapi.com";
 const RAPID_API_HOST = process.env.RAPID_API_HOST || "moviebox-api.p.rapidapi.com";
 let rapidApiKey = (process.env.RAPIDAPI_KEY || process.env.RAPID_API_KEY || "").trim();
-
-const MIME_TYPES = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".json": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".webp": "image/webp",
-  ".mp4": "video/mp4",
-  ".vtt": "text/vtt; charset=utf-8",
-};
 
 const json = (res, status, payload, req = null) => {
   if (typeof res.status === "function" && typeof res.json === "function") {
