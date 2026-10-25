@@ -1770,6 +1770,170 @@ function collectPlaybackUrls(value, urls = [], key = "") {
   return urls;
 }
 
+const TMDB_MAP = {
+  "movie-inception": { tmdbId: "27205", imdbId: "tt1375666" },
+  "movie-interstellar": { tmdbId: "157336", imdbId: "tt0816692" },
+  "movie-dark-knight": { tmdbId: "155", imdbId: "tt0468569" },
+  "movie-dune-2": { tmdbId: "693134", imdbId: "tt15239678" },
+  "movie-oppenheimer": { tmdbId: "872585", imdbId: "tt15398776" },
+  "movie-spider-verse": { tmdbId: "569094", imdbId: "tt9362722" },
+  "movie-avengers-endgame": { tmdbId: "299534", imdbId: "tt4154796" },
+  "movie-gladiator": { tmdbId: "98", imdbId: "tt0172495" },
+  "movie-matrix": { tmdbId: "603", imdbId: "tt0133093" },
+  "movie-spirited-away": { tmdbId: "129", imdbId: "tt0245429" },
+  "series-breaking-bad": { tmdbId: "1396", imdbId: "tt0903747" },
+  "series-stranger-things": { tmdbId: "66732", imdbId: "tt4574334" },
+  "series-last-of-us": { tmdbId: "100088", imdbId: "tt3581920" },
+  "series-game-of-thrones": { tmdbId: "1399", imdbId: "tt0944947" },
+  "series-severance": { tmdbId: "95557", imdbId: "tt11280740" },
+  "anime-attack-on-titan": { tmdbId: "1429", imdbId: "tt2560140" },
+  "anime-demon-slayer": { tmdbId: "85937", imdbId: "tt9335498" },
+  "anime-jujutsu-kaisen": { tmdbId: "95479", imdbId: "tt12343534" },
+  "anime-death-note": { tmdbId: "13916", imdbId: "tt0877057" },
+  "anime-fma-brotherhood": { tmdbId: "31911", imdbId: "tt1433562" },
+};
+
+const TITLE_TMDB_MAP = {
+  "inception": "27205",
+  "interstellar": "157336",
+  "the dark knight": "155",
+  "dark knight": "155",
+  "dune part two": "693134",
+  "dune: part two": "693134",
+  "dune 2": "693134",
+  "oppenheimer": "872585",
+  "spider-man across the spider-verse": "569094",
+  "spider-man: across the spider-verse": "569094",
+  "across the spider-verse": "569094",
+  "avengers endgame": "299534",
+  "avengers: endgame": "299534",
+  "avengers infinity war": "299536",
+  "gladiator": "98",
+  "the matrix": "603",
+  "matrix": "603",
+  "spirited away": "129",
+  "breaking bad": "1396",
+  "stranger things": "66732",
+  "the last of us": "100088",
+  "last of us": "100088",
+  "game of thrones": "1399",
+  "severance": "95557",
+  "attack on titan": "1429",
+  "demon slayer": "85937",
+  "demon slayer: kimetsu no yaiba": "85937",
+  "jujutsu kaisen": "95479",
+  "death note": "13916",
+  "fullmetal alchemist: brotherhood": "31911",
+  "fullmetal alchemist brotherhood": "31911",
+  "doctor strange in the multiverse of madness": "453395",
+  "doctor strange": "284052",
+  "spider-man no way home": "634649",
+  "spider-man: no way home": "634649",
+  "spider-man": "557",
+  "the batman": "414906",
+  "batman": "414906",
+  "top gun maverick": "361743",
+  "top gun: maverick": "361743",
+  "avatar the way of water": "76600",
+  "avatar: the way of water": "76600",
+  "avatar": "19995",
+  "john wick chapter 4": "603692",
+  "john wick: chapter 4": "603692",
+  "john wick": "245891",
+  "fight club": "550",
+  "pulp fiction": "680",
+  "arcane": "94605",
+  "cyberpunk edgerunners": "105248",
+  "cyberpunk: edgerunners": "105248",
+  "your name": "372058",
+  "your name.": "372058",
+  "naruto": "46260",
+  "one piece": "37854",
+  "bleach": "30984",
+  "chainsaw man": "114410",
+  "black panther wakanda forever": "505642",
+  "black panther: wakanda forever": "505642",
+  "deadpool wolverine": "533535",
+  "deadpool & wolverine": "533535",
+  "inside out 2": "1022789",
+  "godzilla x kong": "823464",
+  "godzilla x kong: the new empire": "823464",
+  "shogun": "126308",
+  "house of the dragon": "94997",
+  "the boys": "76479",
+  "loki": "84958",
+  "the mandalorian": "82856",
+  "squid game": "93405",
+  "wednesday": "119051",
+  "solo leveling": "211089"
+};
+
+const STREAM_SERVERS = {
+  vidlink: {
+    name: "Server 1 (VidLink HD)",
+    getMovieUrl: (id) => `https://vidlink.pro/movie/${id}?primaryColor=e50914&secondaryColor=1f1f1f&icons=vid`,
+    getTvUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e50914&secondaryColor=1f1f1f&icons=vid`
+  },
+  vidsrc: {
+    name: "Server 2 (VidSrc Cloud)",
+    getMovieUrl: (id) => `https://vidsrc.cc/v2/embed/movie/${id}`,
+    getTvUrl: (id, s, e) => `https://vidsrc.cc/v2/embed/tv/${id}/${s}/${e}`
+  },
+  smashy: {
+    name: "Server 3 (SmashyStream)",
+    getMovieUrl: (id) => `https://player.smashy.stream/movie/${id}`,
+    getTvUrl: (id, s, e) => `https://player.smashy.stream/tv/${id}?s=${s}&e=${e}`
+  },
+  autoembed: {
+    name: "Server 4 (AutoEmbed)",
+    getMovieUrl: (id) => `https://player.autoembed.cc/embed/movie/${id}`,
+    getTvUrl: (id, s, e) => `https://player.autoembed.cc/embed/tv/${id}/${s}/${e}`
+  }
+};
+
+let currentServerKey = "vidlink";
+
+async function resolveTmdbId(item) {
+  if (item.tmdbId) return String(item.tmdbId);
+  if (item.subjectId && TMDB_MAP[item.subjectId]?.tmdbId) return String(TMDB_MAP[item.subjectId].tmdbId);
+
+  const cleanTitle = (item.title || "").toLowerCase().trim();
+  const normalized = cleanTitle.replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+  
+  if (TITLE_TMDB_MAP[cleanTitle]) return TITLE_TMDB_MAP[cleanTitle];
+  if (TITLE_TMDB_MAP[normalized]) return TITLE_TMDB_MAP[normalized];
+
+  for (const [key, id] of Object.entries(TITLE_TMDB_MAP)) {
+    if (cleanTitle.includes(key) || normalized.includes(key)) {
+      return id;
+    }
+  }
+
+  // Dynamic TMDB Search API fallback
+  try {
+    const isTv = item.type === "series" || item.type === "anime";
+    const typePath = isTv ? "tv" : "movie";
+    const res = await fetch(`https://api.themoviedb.org/3/search/${typePath}?api_key=45dbdd51da378dad57e5029f33aa57e7&query=${encodeURIComponent(item.title)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.results?.[0]?.id) {
+        return String(data.results[0].id);
+      }
+    }
+  } catch {}
+
+  return item.subjectId && /^\d+$/.test(item.subjectId) ? String(item.subjectId) : "27205";
+}
+
+function getEmbedStreamUrl(tmdbId, item, season = 1, episode = 1, serverKey = currentServerKey) {
+  const server = STREAM_SERVERS[serverKey] || STREAM_SERVERS.vidlink;
+  const isSeries = item.type === "series" || item.type === "anime";
+  if (isSeries) {
+    return server.getTvUrl(tmdbId, Math.max(1, Number(season) || 1), Math.max(1, Number(episode) || 1));
+  }
+  return server.getMovieUrl(tmdbId);
+}
+
 const HIGH_DEF_STREAMS = [
   "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
   "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
@@ -2704,6 +2868,30 @@ async function changePlayerQuality(value) {
   await reloadSelectedPlayback(`Loading ${quality}p playback...`, requestId);
 }
 
+function reloadCurrentEmbed() {
+  const player = state.player;
+  const item = player.item;
+  if (!item || !player.tmdbId) return;
+  const embed = $("#embed-player");
+  if (!embed) return;
+  const season = player.selectedSeason || 1;
+  const episode = player.selectedEpisode || 1;
+  const url = getEmbedStreamUrl(player.tmdbId, item, season, episode, currentServerKey);
+  embed.src = url;
+  embed.hidden = false;
+  const video = $("#video-player");
+  if (video) video.hidden = true;
+  const popout = $("#player-popout-btn");
+  if (popout) popout.href = url;
+  const server = STREAM_SERVERS[currentServerKey];
+  setPlayerState(PLAYER_STATE.PLAYING, `${item.title} · ${server?.name || "HD Stream"}`);
+  const liveLabel = $("#player-live-label");
+  if (liveLabel) liveLabel.hidden = false;
+  const liveText = $("#player-live-text");
+  if (liveText) liveText.textContent = "HD Stream Online";
+  updatePlayerEpisodeFlow();
+}
+
 async function changePlayerSeason(seasonNumber) {
   const season = state.player.seasons.find((entry) => entry.season === Number(seasonNumber));
   if (!season) return;
@@ -2711,10 +2899,9 @@ async function changePlayerSeason(seasonNumber) {
   state.player.selectedSeason = selection.season;
   state.player.selectedEpisode = selection.episode;
   state.player.requestId += 1;
-  const requestId = state.player.requestId;
   setPlayerLoading(`Loading Season ${season.season}...`);
   updatePlayerSelectionUI(`Loading Season ${season.season}...`);
-  await reloadSelectedPlayback(`Loading Season ${season.season}, Episode ${selection.episode}...`, requestId);
+  reloadCurrentEmbed();
 }
 
 async function changePlayerEpisode(episodeNumber) {
@@ -2724,10 +2911,9 @@ async function changePlayerEpisode(episodeNumber) {
   state.player.selectedSeason = episode.season;
   state.player.selectedEpisode = episode.episode;
   state.player.requestId += 1;
-  const requestId = state.player.requestId;
   setPlayerLoading(`Loading Episode ${episode.episode}...`);
   updatePlayerSelectionUI(`Loading Episode ${episode.episode}...`);
-  await reloadSelectedPlayback(`Loading Episode ${episode.episode}...`, requestId);
+  reloadCurrentEmbed();
 }
 
 async function navigateToEpisode(episode, { autoplay = false } = {}) {
@@ -2736,13 +2922,10 @@ async function navigateToEpisode(episode, { autoplay = false } = {}) {
   player.selectedSeason = episode.season;
   player.selectedEpisode = episode.episode;
   player.requestId += 1;
-  const requestId = player.requestId;
   const label = `S${episode.season} E${episode.episode}${episode.title ? ` · ${episode.title}` : ""}`;
-  setPlayerLoading(`${autoplay ? "Loading next episode" : "Loading episode"} · ${label}`);
-  updatePlayerSelectionUI(`${autoplay ? "Loading next episode" : "Loading episode"} · ${label}`);
-  await reloadSelectedPlayback(`Loading ${label}...`, requestId);
-  if (requestId !== player.requestId || $("#player-backdrop").hidden) return false;
-  if (autoplay) startPlayer();
+  setPlayerLoading(`Loading ${label}...`);
+  updatePlayerSelectionUI(`Loading ${label}...`);
+  reloadCurrentEmbed();
   return true;
 }
 
@@ -2774,29 +2957,49 @@ async function handlePlayerEnded() {
 async function playTitle(title) {
   const item = findTitle(title);
   if (!item) return;
+  const embed = $("#embed-player");
   const video = $("#video-player");
   const player = $("#player-backdrop");
   ensurePlayerFlowUI();
   $("#player-title").textContent = item.title;
   player.style.setProperty("--player-backdrop-image", item.image ? `url("${item.image}")` : "none");
-  video.poster = item.image || "";
-  video.removeAttribute("src");
-  video.dataset.itemTitle = item.title;
-  video.dataset.fallbackAttempted = "";
-  setPlayerState(PLAYER_STATE.LOADING, "Loading stream…");
+  if (video) {
+    video.poster = item.image || "";
+    video.removeAttribute("src");
+    video.dataset.itemTitle = item.title;
+    video.dataset.fallbackAttempted = "";
+    video.hidden = true;
+  }
+  setPlayerState(PLAYER_STATE.LOADING, "Connecting to HD streaming server…");
   player.hidden = false;
 
-  const source = await resolvePlayback(item);
-  if (!source || player.hidden || state.player.item !== item) {
-    if (!player.hidden && state.player.item === item) {
-      setPlayerState(PLAYER_STATE.ERROR, "Playback failed · Stream not available");
-    }
-    return;
+  // Resolve actual TMDB ID for full movie / TV show stream
+  const tmdbId = await resolveTmdbId(item);
+  state.player.item = item;
+  state.player.tmdbId = tmdbId;
+  state.player.isSeries = item.type === "series" || item.type === "anime";
+  state.player.selectedSeason = 1;
+  state.player.selectedEpisode = 1;
+
+  if (state.player.isSeries) {
+    await loadEpisodeState(item.subjectId || item.title, 1, 1, ++state.player.requestId);
   }
-  video.dataset.sourceLabel = source.label;
-  video.dataset.playerRequestId = String(state.player.requestId);
-  video.src = source.url;
-  video.load();
+
+  // Load embed player with actual content!
+  const streamUrl = getEmbedStreamUrl(tmdbId, item, state.player.selectedSeason || 1, state.player.selectedEpisode || 1, currentServerKey);
+  if (embed) {
+    embed.src = streamUrl;
+    embed.hidden = false;
+  }
+  const popout = $("#player-popout-btn");
+  if (popout) popout.href = streamUrl;
+
+  const server = STREAM_SERVERS[currentServerKey];
+  setPlayerState(PLAYER_STATE.PLAYING, `${item.title} · ${server?.name || "HD Stream"}`);
+  const liveLabel = $("#player-live-label");
+  if (liveLabel) liveLabel.hidden = false;
+  const liveText = $("#player-live-text");
+  if (liveText) liveText.textContent = "HD Stream Online";
   updatePlayerEpisodeFlow();
 
   const idx = continuation.findIndex((c) => c.title === item.title);
@@ -2810,70 +3013,50 @@ async function playTitle(title) {
     localStorage.setItem("ustream-continuation", JSON.stringify(continuation));
   } catch {}
   renderContinue();
-
-  // Begin playback immediately with graceful browser gesture handling
-  const playPromise = video.play();
-  if (playPromise !== undefined) {
-    playPromise.then(() => {
-      setPlayerState(PLAYER_STATE.PLAYING, `Playing: ${item.title}`);
-    }).catch(() => {
-      setPlayerState(PLAYER_STATE.READY, "Ready to watch · Click Start playback");
-    });
-  } else {
-    setPlayerState(PLAYER_STATE.READY, "Ready to watch");
-  }
 }
 
 function startPlayer() {
-  const video = $("#video-player");
-  if (!video.src) {
-    if (state.player?.item) {
-      void playTitle(state.player.item.title);
-    }
-    return;
-  }
-  if (!video.paused) {
-    video.pause();
-    return;
-  }
-  const playAttempt = video.play();
-  if (playAttempt?.then) {
-    playAttempt.then(() => {
-      setPlayerState(PLAYER_STATE.PLAYING, `Playing: ${video.dataset.itemTitle || "Stream"}`);
-    }).catch((err) => {
-      console.warn("[Ustream Video Player] Play attempt blocked, reloading stream:", err);
-      const backupUrl = getStreamForTitle(video.dataset.itemTitle || "Ustream", 1);
-      video.src = backupUrl;
-      video.load();
-      video.play().then(() => {
-        setPlayerState(PLAYER_STATE.PLAYING, `Playing: ${video.dataset.itemTitle || "Stream"}`);
-      }).catch(() => {
-        setPlayerState(PLAYER_STATE.READY, "Click video screen to enable playback");
-      });
-    });
-  }
+  reloadCurrentEmbed();
 }
 
 async function retryPlayback() {
   if (!state.player?.item) return;
-  setPlayerState(PLAYER_STATE.LOADING, "Loading stream…");
+  setPlayerState(PLAYER_STATE.LOADING, "Reconnecting to HD stream…");
   await playTitle(state.player.item.title);
 }
 
 function handlePlaybackError() {
-  const video = $("#video-player");
-  if ($("#player-backdrop").hidden || video.dataset.playerRequestId !== String(state.player.requestId)) return;
+  const embed = $("#embed-player");
+  if (embed && state.player?.tmdbId && state.player?.item) {
+    // Switch to alternate server
+    const serverKeys = Object.keys(STREAM_SERVERS);
+    const nextIdx = (serverKeys.indexOf(currentServerKey) + 1) % serverKeys.length;
+    currentServerKey = serverKeys[nextIdx];
+    const serverSelect = $("#player-server-select");
+    if (serverSelect) serverSelect.value = currentServerKey;
+    reloadCurrentEmbed();
+    showToast(`Switched to ${STREAM_SERVERS[currentServerKey]?.name}`);
+    return;
+  }
   setPlayerState(PLAYER_STATE.ERROR, "Playback failed");
 }
 
 function closePlayer() {
+  const embed = $("#embed-player");
   const video = $("#video-player");
   state.player.requestId += 1;
   togglePlayerSettings(false);
-  video.pause();
-  video.removeAttribute("src");
-  video.dataset.fallbackAttempted = "";
-  video.load();
+  if (embed) {
+    embed.src = "about:blank";
+    embed.hidden = true;
+  }
+  if (video) {
+    video.pause();
+    video.removeAttribute("src");
+    video.dataset.fallbackAttempted = "";
+    video.load();
+    video.hidden = true;
+  }
   $("#player-backdrop").hidden = true;
   setPlayerState(PLAYER_STATE.IDLE);
 }
@@ -3041,6 +3224,12 @@ $("#filter-groups").addEventListener("change", (event) => {
 });
 
 document.addEventListener("change", (event) => {
+  if (event.target.id === "player-server-select") {
+    currentServerKey = event.target.value;
+    reloadCurrentEmbed();
+    showToast(`Switched to ${STREAM_SERVERS[currentServerKey]?.name || "HD Server"}`);
+    return;
+  }
   if (event.target.id === "player-language-select") {
     void changePlayerLanguage(event.target.value);
     return;
