@@ -1670,8 +1670,8 @@ function renderContinue() {
 
   section.hidden = false;
   row.innerHTML = continuation.map((item) => `
-    <button class="continue-card" style="--card-gradient:${item.gradient}" data-action="details" data-title="${item.title}">
-      <span class="card-label">Continue watching</span><strong>${item.title}</strong>
+    <button class="continue-card" style="--card-gradient:${item.gradient}" data-action="details" data-title="${escapeHtml(item.title)}" aria-label="Continue watching ${escapeHtml(item.title)}">
+      <span class="card-label">Continue watching</span><strong>${escapeHtml(item.title)}</strong>
       <span class="watch-progress"><span style="width:${item.progress}%"></span></span>
     </button>
   `).join("");
@@ -1689,17 +1689,18 @@ function renderRecommendations() {
 
 function renderCard(card) {
   const saved = state.watchlist.has(card.title);
+  const cleanTitle = escapeHtml(card.title);
   return `
-    <article class="media-card" data-title="${card.title}">
+    <article class="media-card" data-title="${cleanTitle}">
       <div class="poster" style="--poster-gradient:${card.gradient}">
-        ${card.image ? `<img class="poster-image" src="${card.image}" alt="${card.title} poster" loading="lazy" />` : ""}
-        <span class="poster-kicker">${card.kicker}</span>
-        ${card.badge ? `<span class="card-badge">${card.badge}</span>` : ""}
-        <span class="poster-title">${card.title}</span>
-        <button class="list-toggle ${saved ? "saved" : ""}" data-action="toggle-list" data-title="${card.title}" aria-label="${saved ? "Remove" : "Add"} ${card.title} ${saved ? "from" : "to"} my list">${saved ? renderIcon("heartFilled", "icon-sm") : renderIcon("plus", "icon-sm")}</button>
-        <button class="card-hover" data-action="play" data-title="${card.title}" aria-label="Play ${card.title}"><span class="play-circle">${renderIcon("play", "icon-md")}</span></button>
+        ${card.image ? `<img class="poster-image" src="${card.image}" alt="${cleanTitle} poster" loading="lazy" />` : ""}
+        <span class="poster-kicker">${escapeHtml(card.kicker)}</span>
+        ${card.badge ? `<span class="card-badge">${escapeHtml(card.badge)}</span>` : ""}
+        <span class="poster-title">${cleanTitle}</span>
+        <button class="list-toggle ${saved ? "saved" : ""}" data-action="toggle-list" data-title="${cleanTitle}" aria-label="${saved ? "Remove" : "Add"} ${cleanTitle} ${saved ? "from" : "to"} my list">${saved ? renderIcon("heartFilled", "icon-sm") : renderIcon("plus", "icon-sm")}</button>
+        <button class="card-hover" data-action="play" data-title="${cleanTitle}" aria-label="Play ${cleanTitle}"><span class="play-circle">${renderIcon("play", "icon-md")}</span></button>
       </div>
-      <div class="card-info"><h3>${card.title}</h3><div class="card-meta"><span>${card.year}</span><span>${card.runtime}</span><span class="score">★ ${card.rating.toFixed(1)}</span></div></div>
+      <div class="card-info"><h3>${cleanTitle}</h3><div class="card-meta"><span>${card.year}</span><span>${card.runtime}</span><span class="score">★ ${card.rating.toFixed(1)}</span></div></div>
     </article>
   `;
 }
@@ -1731,6 +1732,16 @@ function render() {
   }
   const resultCount = $("#result-count");
   if (resultCount) resultCount.textContent = visible.length;
+
+  const catalogStatus = $("#catalog-live-status");
+  if (catalogStatus) {
+    if (visible.length === 0) {
+      catalogStatus.textContent = state.section === "my-list" ? "Your list is empty." : "No titles found matching your criteria.";
+    } else {
+      catalogStatus.textContent = `Showing ${visible.length} title${visible.length === 1 ? "" : "s"}.`;
+    }
+  }
+
   renderActiveFilters();
 }
 
@@ -1746,9 +1757,23 @@ function renderActiveFilters() {
     const value = state.filters[item.filterType];
     if (value && value !== defaults[item.filterType]) chips.push({ key: item.filterType, label: `${item.title}: ${value}` });
   });
-  $("#active-filters").innerHTML = chips.map(({ label, key }) => `<span class="filter-chip">${label}<button data-clear-filter="${key}" aria-label="Remove ${label}">${renderIcon("close", "icon-sm")}</button></span>`).join("");
-  $("#filter-count").textContent = chips.length;
-  $("#filter-count").hidden = chips.length === 0;
+  $("#active-filters").innerHTML = chips.map(({ label, key }) => `<span class="filter-chip">${escapeHtml(label)}<button data-clear-filter="${key}" aria-label="Remove ${escapeHtml(label)} filter">${renderIcon("close", "icon-sm")}</button></span>`).join("");
+  
+  const filterCountEl = $("#filter-count");
+  const filterBtn = $("#filter-button");
+  if (filterCountEl) {
+    const count = chips.length;
+    filterCountEl.textContent = count;
+    if (count === 0) {
+      filterCountEl.hidden = true;
+      filterCountEl.classList.add("is-hidden");
+      if (filterBtn) filterBtn.setAttribute("aria-label", "Filter titles");
+    } else {
+      filterCountEl.hidden = false;
+      filterCountEl.classList.remove("is-hidden");
+      if (filterBtn) filterBtn.setAttribute("aria-label", `Filter titles (${count} active)`);
+    }
+  }
   renderFilterGroups();
 }
 
@@ -2382,7 +2407,7 @@ function updatePlayerEpisodeFlow() {
     }
     if (upNextArt) {
       upNextArt.innerHTML = player.item?.image
-        ? `<img src="${player.item.image}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" />`
+        ? `<img src="${player.item.image}" alt="${escapeHtml(player.item.title || "Next episode")} preview" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" />`
         : `<span class="player-art-icon">${renderIcon("play", "icon-md")}</span>`;
     }
   } else if (episodic && !next) {
@@ -2408,7 +2433,7 @@ function updatePlayerEpisodeFlow() {
     }
     if (upNextArt) {
       upNextArt.innerHTML = related?.image
-        ? `<img src="${related.image}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" />`
+        ? `<img src="${related.image}" alt="${escapeHtml(related.title || "Recommended title")} preview" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" />`
         : `<span class="player-art-icon">${renderIcon("anime", "icon-md")}</span>`;
     }
   } else {
@@ -2428,7 +2453,7 @@ function updatePlayerEpisodeFlow() {
       }
       if (upNextArt) {
         upNextArt.innerHTML = related.image
-          ? `<img src="${related.image}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" />`
+          ? `<img src="${related.image}" alt="${escapeHtml(related.title || "Recommended title")} preview" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" />`
           : `<span class="player-art-icon">${renderIcon("play", "icon-md")}</span>`;
       }
     } else {
@@ -2719,8 +2744,9 @@ function updatePlayerSelectionUI(message = "") {
       if (seasonPillsContainer) {
         seasonPillsContainer.innerHTML = player.seasons.map((s) => {
           const isActive = s.season === player.selectedSeason;
-          return `<button class="season-pill${isActive ? " active" : ""}" type="button" data-season="${s.season}">
-            ${escapeHtml(s.title || `Season ${s.season}`)}
+          const sTitle = escapeHtml(s.title || `Season ${s.season}`);
+          return `<button class="season-pill${isActive ? " active" : ""}" type="button" data-season="${s.season}" aria-label="${sTitle}">
+            ${sTitle}
           </button>`;
         }).join("");
       }
@@ -2729,9 +2755,10 @@ function updatePlayerSelectionUI(message = "") {
       if (episodesGrid) {
         episodesGrid.innerHTML = episodes.map((ep) => {
           const isCurrent = ep.episode === player.selectedEpisode;
-          return `<button class="episode-pill${isCurrent ? " active" : ""}" type="button" data-season="${selectedSeason?.season || 1}" data-episode="${ep.episode}">
+          const epTitle = escapeHtml(ep.title || `Episode ${ep.episode}`);
+          return `<button class="episode-pill${isCurrent ? " active" : ""}" type="button" data-season="${selectedSeason?.season || 1}" data-episode="${ep.episode}" aria-label="Play Season ${selectedSeason?.season || 1} Episode ${ep.episode}: ${epTitle}">
             <span class="ep-num">E${ep.episode}</span>
-            <span class="ep-title">${escapeHtml(ep.title || `Episode ${ep.episode}`)}</span>
+            <span class="ep-title">${epTitle}</span>
           </button>`;
         }).join("");
       }

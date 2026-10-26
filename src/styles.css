@@ -22,7 +22,53 @@ html { scroll-behavior: smooth; }
 body { margin: 0; background: var(--bg); color: var(--text); min-width: 320px; }
 button, input, select { font: inherit; }
 button { cursor: pointer; border: 0; color: inherit; }
-button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+/* Accessibility: Skip to Content link */
+.skip-to-content {
+  position: absolute;
+  top: -100px;
+  left: 16px;
+  background: var(--accent);
+  color: #11120a;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 13px;
+  z-index: 99999;
+  text-decoration: none;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  transition: top 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.skip-to-content:focus {
+  top: 16px;
+  outline: 3px solid #ffffff !important;
+  outline-offset: 2px !important;
+}
+
+/* Accessibility: Screen reader only utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Universal visible keyboard focus indicators */
+:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 3px !important;
+}
 a { color: inherit; text-decoration: none; }
 
 .app-shell { min-height: 100vh; overflow: hidden; }
@@ -141,6 +187,7 @@ a { color: inherit; text-decoration: none; }
 .filter-button:hover { color: var(--text); border-color: rgba(231,255,81,.4); background: var(--surface-3); transform: translateY(-1px); }
 .filter-button:active { transform: scale(0.96); }
 .filter-button b { display: grid; place-items: center; width: 16px; height: 16px; background: var(--accent); color: #11120a; border-radius: 50%; font-size: 10px; }
+.filter-button b[hidden], .filter-button b.is-hidden { display: none !important; }
 .genre-tabs { display: flex; gap: 11px; overflow-x: auto; padding-bottom: 5px; margin-bottom: 19px; scrollbar-width: none; }
 .genre-tabs::-webkit-scrollbar { display: none; }
 .genre-tab { flex: 0 0 auto; border-radius: 30px; padding: 10px 17px; background: var(--surface); color: var(--muted); border: 1px solid var(--line); font-size: 11px; cursor: pointer; transition: all .18s ease; }
