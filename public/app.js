@@ -1102,6 +1102,15 @@ const state = {
   filters: makeFilterDefaults(animeChannel),
   watchlist: new Set(loadWatchlist()),
   activeModal: null,
+  auth: {
+    user: null,
+    profiles: [],
+    activeProfile: null,
+    session: null,
+    isManagingProfiles: false,
+    pendingProfileForPin: null,
+    returnUrl: null,
+  },
   player: {
     requestId: 0,
     item: null,
@@ -1635,6 +1644,16 @@ function getVisibleCards() {
     const matchesCountry = state.filters.country === "All" || card.country === state.filters.country;
     const matchesYear = state.filters.year === "All" || matchesYearFilter(card.year, state.filters.year);
     const matchesRating = card.rating >= state.filters.rateMin && card.rating <= state.filters.rateMax;
+    
+    // Kids Mode & Maturity Rating Restrictions
+    if (state.auth?.activeProfile?.isKids) {
+      const matureGenres = ["horror", "crime", "thriller", "war", "erotic"];
+      if (card.genre.some((g) => matureGenres.includes(String(g).toLowerCase()))) return false;
+    }
+    const maturity = state.auth?.activeProfile?.maturityRating;
+    if (maturity === "G" && card.rating > 7.5) return false;
+    if (maturity === "PG" && card.genre.some((g) => ["horror", "erotic"].includes(String(g).toLowerCase()))) return false;
+
     return matchesSection && matchesList && matchesGenre && matchesApiGenre && matchesLanguage && matchesQuery && matchesCountry && matchesYear && matchesRating;
   });
 
@@ -3388,6 +3407,7 @@ function closeDetails() {
 }
 
 function toggleList(title) {
+  const item = catalog.find((c) => c.title === title) || featured;
   if (state.watchlist.has(title)) {
     state.watchlist.delete(title);
     showToast(`${title} removed from My List`);
@@ -3396,6 +3416,14 @@ function toggleList(title) {
     showToast(`${title} added to My List`);
   }
   persistWatchlist();
+  if (state.auth?.user) {
+    void fetch("/api/profile/watchlist/toggle", {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title, itemData: item })
+    }).catch(() => {});
+  }
   if (state.activeModal?.title === title) $("#modal-list").innerHTML = state.watchlist.has(title) ? `${renderIcon("heartFilled", "icon-sm")} <span>In my list</span>` : `${renderIcon("plus", "icon-sm")} <span>Add to list</span>`;
   render();
 }
@@ -3682,15 +3710,926 @@ document.addEventListener("keydown", (event) => {
     closeDrawer();
     closePlayer();
     closeSettings();
+    closeAuthModal();
+    closeProfilesModal();
+    closeProfileEditModal();
+    closePinPrompt();
+    $("#profile-dropdown")?.setAttribute("hidden", "true");
     $("#search-box").classList.remove("mobile-open");
   }
 });
 
+// ==========================================================================
+// Authentication, Viewer Profiles & Security State Controller
+// ==========================================================================
+
+async function authApi(endpoint, method = "GET", body = null) {
+  const options = {
+    method,
+    credentials: "include",
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json"
+    }
+  };
+  if (body) options.body = JSON.stringify(body);
+  try {
+    const res = await fetch(endpoint, options);
+    const data = await res.json().catch(() => ({ ok: false, error: "Network response error" }));
+    return { ok: res.ok && data.ok !== false, status: res.status, data };
+  } catch (err) {
+    return { ok: false, status: 0, data: { ok: false, error: err.message || "Network error" } };
+  }
+}
+
+async function initAuth() {
+  const res = await authApi("/api/auth/me");
+  if (res.ok && res.data.user) {
+    state.auth.user = res.data.user;
+    state.auth.profiles = res.data.profiles || [];
+    state.auth.activeProfile = res.data.activeProfile || state.auth.profiles[0] || null;
+    state.auth.session = res.data.session || null;
+
+    // Synchronize active profile's remote watchlist
+    try {
+      const wlRes = await authApi("/api/profile/watchlist");
+      if (wlRes.ok && Array.isArray(wlRes.data.watchlist)) {
+        wlRes.data.watchlist.forEach((item) => state.watchlist.add(item.title));
+        persistWatchlist();
+      }
+    } catch {}
+
+    // Synchronize playback history
+    try {
+      const histRes = await authApi("/api/profile/history");
+      if (histRes.ok && Array.isArray(histRes.data.history) && histRes.data.history.length > 0) {
+        // Merge into continuation
+        histRes.data.history.forEach((h) => {
+          if (!continuation.some((c) => c.title === h.title)) {
+            continuation.unshift({
+              title: h.title,
+              season: h.season,
+              episode: h.episode,
+              progress: Math.round((h.progressSeconds / (h.durationSeconds || 1)) * 100),
+              image: h.itemData?.image || h.itemData?.cover?.url || ""
+            });
+          }
+        });
+      }
+    } catch {}
+  } else {
+    state.auth.user = null;
+    state.auth.profiles = [];
+    state.auth.activeProfile = null;
+    state.auth.session = null;
+  }
+
+  updateAuthUI();
+  render();
+  renderContinue();
+  updateProfileStats();
+}
+
+function updateAuthUI() {
+  const topbarLoginBtn = $("#topbar-login-btn");
+  const profileMenuWrap = $("#profile-menu-wrap");
+  const profileBtn = $("#profile-button");
+  const authStateSec = $("#profile-auth-state");
+  const guestStateSec = $("#profile-guest-state");
+
+  if (state.auth.user && state.auth.activeProfile) {
+    if (topbarLoginBtn) topbarLoginBtn.hidden = true;
+    if (profileMenuWrap) profileMenuWrap.hidden = false;
+    if (profileBtn) {
+      profileBtn.textContent = state.auth.activeProfile.avatar || state.auth.activeProfile.name.charAt(0).toUpperCase();
+      profileBtn.title = `${state.auth.activeProfile.name} (${state.auth.user.email})`;
+    }
+
+    // Topbar Dropdown
+    const dropAvatar = $("#dropdown-active-avatar");
+    const dropName = $("#dropdown-active-name");
+    const dropEmail = $("#dropdown-active-email");
+    const dropKids = $("#dropdown-kids-tag");
+    if (dropAvatar) dropAvatar.textContent = state.auth.activeProfile.avatar || "👤";
+    if (dropName) dropName.textContent = state.auth.activeProfile.name;
+    if (dropEmail) dropEmail.textContent = state.auth.user.email;
+    if (dropKids) dropKids.hidden = !state.auth.activeProfile.isKids;
+
+    // Dropdown switch list
+    const dropList = $("#dropdown-profiles-list");
+    if (dropList) {
+      dropList.innerHTML = state.auth.profiles.map((p) => {
+        const isActive = p.id === state.auth.activeProfile.id;
+        return `
+          <button class="profile-dropdown-item ${isActive ? "active-profile" : ""}" data-switch-profile="${p.id}" type="button">
+            <span>${p.avatar || "👤"}</span>
+            <span>${escapeHtml(p.name)}</span>
+            ${p.hasPin ? '<span title="PIN Protected" style="font-size:11px;">🔒</span>' : ''}
+            ${p.isKids ? '<span class="kids-badge" style="font-size:8px; padding:0 4px;">KIDS</span>' : ''}
+            ${isActive ? '<span style="margin-left:auto; font-size:10px;">✓</span>' : ''}
+          </button>
+        `;
+      }).join("");
+    }
+
+    // Account & Profile Section
+    if (authStateSec) authStateSec.hidden = false;
+    if (guestStateSec) guestStateSec.hidden = true;
+
+    const heroAvatar = $("#profile-hero-avatar");
+    const heroName = $("#profile-hero-name");
+    const heroEmail = $("#profile-hero-email");
+    const heroBadge = $("#profile-hero-badge");
+    const verifyBadge = $("#profile-verify-badge");
+    const resendBtn = $("#profile-resend-verify-btn");
+
+    if (heroAvatar) heroAvatar.textContent = state.auth.activeProfile.avatar || "👤";
+    if (heroName) heroName.textContent = state.auth.activeProfile.name;
+    if (heroEmail) heroEmail.textContent = state.auth.user.email;
+    if (heroBadge) heroBadge.textContent = state.auth.activeProfile.isKids ? "Kids Profile" : (state.auth.activeProfile.isPrimary ? "Primary Profile" : "Viewer Profile");
+
+    if (verifyBadge) {
+      if (state.auth.user.isEmailVerified) {
+        verifyBadge.textContent = "✓ Verified";
+        verifyBadge.className = "email-verify-badge verified";
+        if (resendBtn) resendBtn.hidden = true;
+      } else {
+        verifyBadge.textContent = "⚠ Unverified Email";
+        verifyBadge.className = "email-verify-badge unverified";
+        if (resendBtn) resendBtn.hidden = false;
+      }
+    }
+
+    // Inline profiles row
+    const inlineList = $("#profiles-inline-list");
+    if (inlineList) {
+      inlineList.innerHTML = state.auth.profiles.map((p) => {
+        const isActive = p.id === state.auth.activeProfile.id;
+        return `
+          <div class="profile-inline-item ${isActive ? "active" : ""}" data-switch-profile="${p.id}">
+            <span class="profile-inline-avatar">${p.avatar || "👤"}</span>
+            <span class="profile-inline-name">${escapeHtml(p.name)}</span>
+            ${p.hasPin ? '<span>🔒</span>' : ''}
+            ${p.isKids ? '<span class="kids-badge" style="font-size:8px;">KIDS</span>' : ''}
+          </div>
+        `;
+      }).join("");
+    }
+
+    // Load active sessions
+    void loadSessions();
+  } else {
+    // Guest State
+    if (topbarLoginBtn) topbarLoginBtn.hidden = false;
+    if (profileMenuWrap) profileMenuWrap.hidden = true;
+    if (authStateSec) authStateSec.hidden = true;
+    if (guestStateSec) guestStateSec.hidden = false;
+  }
+}
+
+async function loadSessions() {
+  const container = $("#sessions-list");
+  if (!container || !state.auth.user) return;
+  const res = await authApi("/api/auth/sessions");
+  if (!res.ok || !Array.isArray(res.data.sessions)) {
+    container.innerHTML = '<div class="session-meta">Could not load active sessions.</div>';
+    return;
+  }
+
+  container.innerHTML = res.data.sessions.map((s) => {
+    const isCurrent = s.isCurrent;
+    const date = new Date(s.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    const shortUa = s.userAgent ? s.userAgent.split(" ")[0].slice(0, 30) : "Browser";
+    return `
+      <div class="session-row">
+        <div class="session-info">
+          <span class="session-device">${escapeHtml(shortUa)} ${isCurrent ? '<span class="session-badge-current">This Device</span>' : ''}</span>
+          <span class="session-meta">IP: ${escapeHtml(s.ipAddress || "Unknown")} · Signed in ${date}</span>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function openAuthModal(tab = "signin", returnUrl = null) {
+  state.auth.returnUrl = returnUrl || window.location.hash || "#/home";
+  const backdrop = $("#auth-backdrop");
+  if (!backdrop) return;
+  backdrop.hidden = false;
+  switchAuthTab(tab);
+}
+
+function closeAuthModal() {
+  const backdrop = $("#auth-backdrop");
+  if (backdrop) backdrop.hidden = true;
+  clearAuthFeedbacks();
+}
+
+function clearAuthFeedbacks() {
+  ["#signin-feedback", "#signup-feedback", "#forgot-feedback", "#reset-feedback", "#change-password-feedback", "#profile-edit-feedback", "#pin-prompt-feedback"].forEach((id) => {
+    const el = $(id);
+    if (el) {
+      el.hidden = true;
+      el.textContent = "";
+      el.className = "form-feedback";
+    }
+  });
+}
+
+function setFeedback(selector, message, isError = true) {
+  const el = $(selector);
+  if (!el) return;
+  el.textContent = message;
+  el.className = `form-feedback ${isError ? "error" : "success"}`;
+  el.hidden = false;
+}
+
+function switchAuthTab(tab) {
+  clearAuthFeedbacks();
+  const tabs = $("#auth-tabs");
+  const tabSignin = $("#tab-signin");
+  const tabSignup = $("#tab-signup");
+  const formSignin = $("#form-signin");
+  const formSignup = $("#form-signup");
+  const formForgot = $("#form-forgot");
+  const formReset = $("#form-reset");
+
+  if (tabs) tabs.hidden = (tab === "forgot" || tab === "reset");
+
+  if (tab === "signin") {
+    tabSignin?.classList.add("active");
+    tabSignup?.classList.remove("active");
+    if (formSignin) formSignin.hidden = false;
+    if (formSignup) formSignup.hidden = true;
+    if (formForgot) formForgot.hidden = true;
+    if (formReset) formReset.hidden = true;
+    $("#signin-email")?.focus();
+  } else if (tab === "signup") {
+    tabSignin?.classList.remove("active");
+    tabSignup?.classList.add("active");
+    if (formSignin) formSignin.hidden = true;
+    if (formSignup) formSignup.hidden = false;
+    if (formForgot) formForgot.hidden = true;
+    if (formReset) formReset.hidden = true;
+    $("#signup-name")?.focus();
+  } else if (tab === "forgot") {
+    if (formSignin) formSignin.hidden = true;
+    if (formSignup) formSignup.hidden = true;
+    if (formForgot) formForgot.hidden = false;
+    if (formReset) formReset.hidden = true;
+    $("#forgot-email")?.focus();
+  } else if (tab === "reset") {
+    if (formSignin) formSignin.hidden = true;
+    if (formSignup) formSignup.hidden = true;
+    if (formForgot) formForgot.hidden = true;
+    if (formReset) formReset.hidden = false;
+    $("#reset-new-password")?.focus();
+  }
+}
+
+function openProfilesModal() {
+  if (!state.auth.user) {
+    openAuthModal("signin", "#/profiles");
+    return;
+  }
+  const backdrop = $("#profiles-backdrop");
+  if (!backdrop) return;
+  backdrop.hidden = false;
+  renderProfilesGrid();
+}
+
+function closeProfilesModal() {
+  const backdrop = $("#profiles-backdrop");
+  if (backdrop) backdrop.hidden = true;
+  state.auth.isManagingProfiles = false;
+  $("#profiles-backdrop")?.classList.remove("managing-profiles");
+  const manageBtn = $("#manage-profiles-toggle-btn");
+  if (manageBtn) manageBtn.innerHTML = "<span>Manage Profiles</span>";
+}
+
+function renderProfilesGrid() {
+  const grid = $("#profiles-grid");
+  if (!grid) return;
+  const isManaging = state.auth.isManagingProfiles;
+
+  let tilesHtml = state.auth.profiles.map((p) => {
+    const isActive = p.id === state.auth.activeProfile?.id;
+    return `
+      <button class="profile-card-tile ${isActive ? "active-profile" : ""}" data-profile-card="${p.id}" type="button" aria-label="${escapeHtml(p.name)}">
+        <div class="profile-card-tile-avatar">
+          <span>${p.avatar || "👤"}</span>
+          ${p.hasPin ? '<span class="tile-badge-lock" title="PIN Protected">🔒</span>' : ''}
+          ${p.isKids ? '<span class="tile-badge-kids">KIDS</span>' : ''}
+          <div class="tile-edit-overlay"><svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></div>
+        </div>
+        <span class="profile-card-tile-name">${escapeHtml(p.name)}</span>
+      </button>
+    `;
+  }).join("");
+
+  if (state.auth.profiles.length < 5) {
+    tilesHtml += `
+      <button class="profile-card-tile add-profile-tile" id="tile-add-profile" type="button" aria-label="Add Profile">
+        <div class="profile-card-tile-avatar">+</div>
+        <span class="profile-card-tile-name">Add Profile</span>
+      </button>
+    `;
+  }
+
+  grid.innerHTML = tilesHtml;
+}
+
+async function selectProfile(profileId) {
+  const target = state.auth.profiles.find((p) => p.id === profileId);
+  if (!target) return;
+
+  // Check if PIN protected and switching to a different profile
+  if (target.hasPin && target.id !== state.auth.activeProfile?.id) {
+    openPinPrompt(target);
+    return;
+  }
+
+  const res = await authApi(`/api/profiles/${profileId}/select`, "POST");
+  if (!res.ok) {
+    showToast(res.data.error || "Failed to switch profile");
+    return;
+  }
+
+  state.auth.activeProfile = target;
+  closeProfilesModal();
+  updateAuthUI();
+  showToast(`Switched to ${target.name}`);
+
+  // Re-sync watchlist and re-render
+  try {
+    const wlRes = await authApi("/api/profile/watchlist");
+    if (wlRes.ok && Array.isArray(wlRes.data.watchlist)) {
+      state.watchlist.clear();
+      wlRes.data.watchlist.forEach((item) => state.watchlist.add(item.title));
+      persistWatchlist();
+    }
+  } catch {}
+
+  render();
+}
+
+function openPinPrompt(profile) {
+  state.auth.pendingProfileForPin = profile;
+  const backdrop = $("#pin-prompt-backdrop");
+  if (!backdrop) return;
+  const title = $("#pin-prompt-title");
+  const desc = $("#pin-prompt-desc");
+  const pinInput = $("#pin-input");
+  if (title) title.textContent = `Unlock ${profile.name}`;
+  if (desc) desc.textContent = `Enter the 4-digit PIN for ${profile.name}.`;
+  if (pinInput) pinInput.value = "";
+  clearAuthFeedbacks();
+  backdrop.hidden = false;
+  setTimeout(() => pinInput?.focus(), 50);
+}
+
+function closePinPrompt() {
+  const backdrop = $("#pin-prompt-backdrop");
+  if (backdrop) backdrop.hidden = true;
+  state.auth.pendingProfileForPin = null;
+}
+
+let activeEditingProfileId = null;
+
+function openProfileEditModal(profile = null) {
+  activeEditingProfileId = profile ? profile.id : null;
+  const backdrop = $("#profile-edit-backdrop");
+  if (!backdrop) return;
+
+  const title = $("#profile-edit-title");
+  const nameInput = $("#edit-profile-name");
+  const kidsInput = $("#edit-profile-kids");
+  const maturitySelect = $("#edit-profile-maturity");
+  const langSelect = $("#edit-profile-language");
+  const pinInput = $("#edit-profile-pin");
+  const deleteBtn = $("#delete-profile-btn");
+
+  clearAuthFeedbacks();
+
+  if (profile) {
+    if (title) title.textContent = "Edit Profile";
+    if (nameInput) nameInput.value = profile.name;
+    if (kidsInput) kidsInput.checked = !!profile.isKids;
+    if (maturitySelect) maturitySelect.value = profile.maturityRating || "ALL";
+    if (langSelect) langSelect.value = profile.language || "en";
+    if (pinInput) pinInput.value = "";
+    if (deleteBtn) deleteBtn.hidden = !!profile.isPrimary;
+
+    // Highlight avatar
+    $$(".avatar-choice").forEach((btn) => {
+      btn.classList.toggle("selected", btn.dataset.avatar === (profile.avatar || "🦊"));
+    });
+  } else {
+    if (title) title.textContent = "Add Profile";
+    if (nameInput) nameInput.value = "";
+    if (kidsInput) kidsInput.checked = false;
+    if (maturitySelect) maturitySelect.value = "ALL";
+    if (langSelect) langSelect.value = "en";
+    if (pinInput) pinInput.value = "";
+    if (deleteBtn) deleteBtn.hidden = true;
+
+    $$(".avatar-choice").forEach((btn, idx) => {
+      btn.classList.toggle("selected", idx === 0);
+    });
+  }
+
+  backdrop.hidden = false;
+  setTimeout(() => nameInput?.focus(), 50);
+}
+
+function closeProfileEditModal() {
+  const backdrop = $("#profile-edit-backdrop");
+  if (backdrop) backdrop.hidden = true;
+  activeEditingProfileId = null;
+}
+
+async function handleSignOut() {
+  await authApi("/api/auth/logout", "POST");
+  state.auth.user = null;
+  state.auth.profiles = [];
+  state.auth.activeProfile = null;
+  state.auth.session = null;
+  $("#profile-dropdown")?.setAttribute("hidden", "true");
+  updateAuthUI();
+  showToast("You have been signed out");
+  setSection("home", true);
+}
+
+async function handleSignOutAll() {
+  await authApi("/api/auth/logout-all", "POST");
+  state.auth.user = null;
+  state.auth.profiles = [];
+  state.auth.activeProfile = null;
+  state.auth.session = null;
+  $("#profile-dropdown")?.setAttribute("hidden", "true");
+  updateAuthUI();
+  showToast("Signed out of all devices");
+  setSection("home", true);
+}
+
+async function handleResendVerify() {
+  const res = await authApi("/api/auth/resend-verification", "POST");
+  if (res.ok) {
+    showToast(res.data.message || "Verification email sent!");
+  } else {
+    showToast(res.data.error || "Could not send verification email");
+  }
+}
+
+function setupAuthEventListeners() {
+  // Topbar Login button
+  $("#topbar-login-btn")?.addEventListener("click", () => openAuthModal("signin"));
+  $("#guest-signin-btn")?.addEventListener("click", () => openAuthModal("signin", "#/profile"));
+
+  // Profile avatar button in topbar
+  $("#profile-button")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const dd = $("#profile-dropdown");
+    if (!dd) return;
+    const isHidden = dd.hasAttribute("hidden");
+    if (isHidden) {
+      dd.removeAttribute("hidden");
+      $("#profile-button").setAttribute("aria-expanded", "true");
+    } else {
+      dd.setAttribute("hidden", "true");
+      $("#profile-button").setAttribute("aria-expanded", "false");
+    }
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#profile-menu-wrap")) {
+      $("#profile-dropdown")?.setAttribute("hidden", "true");
+      $("#profile-button")?.setAttribute("aria-expanded", "false");
+    }
+  });
+
+  // Topbar dropdown links
+  $("#dropdown-manage-profiles")?.addEventListener("click", () => {
+    $("#profile-dropdown")?.setAttribute("hidden", "true");
+    openProfilesModal();
+  });
+
+  $("#dropdown-account-settings")?.addEventListener("click", () => {
+    $("#profile-dropdown")?.setAttribute("hidden", "true");
+    setSection("profile", true);
+  });
+
+  $("#dropdown-signout")?.addEventListener("click", handleSignOut);
+  $("#profile-signout-btn")?.addEventListener("click", handleSignOut);
+  $("#signout-all-btn")?.addEventListener("click", handleSignOutAll);
+  $("#profile-resend-verify-btn")?.addEventListener("click", handleResendVerify);
+
+  // Dropdown profile items
+  $("#dropdown-profiles-list")?.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-switch-profile]");
+    if (!btn) return;
+    $("#profile-dropdown")?.setAttribute("hidden", "true");
+    void selectProfile(btn.dataset.switchProfile);
+  });
+
+  // Inline profiles row
+  $("#profiles-inline-list")?.addEventListener("click", (e) => {
+    const item = e.target.closest("[data-switch-profile]");
+    if (!item) return;
+    void selectProfile(item.dataset.switchProfile);
+  });
+
+  $("#card-manage-profiles-btn")?.addEventListener("click", openProfilesModal);
+  $("#card-add-profile-btn")?.addEventListener("click", () => openProfileEditModal(null));
+
+  // Modal Backdrop click to dismiss
+  $("#auth-backdrop")?.addEventListener("click", (e) => {
+    if (e.target.id === "auth-backdrop") closeAuthModal();
+  });
+  $("#profiles-backdrop")?.addEventListener("click", (e) => {
+    if (e.target.id === "profiles-backdrop") closeProfilesModal();
+  });
+  $("#profile-edit-backdrop")?.addEventListener("click", (e) => {
+    if (e.target.id === "profile-edit-backdrop") closeProfileEditModal();
+  });
+  $("#pin-prompt-backdrop")?.addEventListener("click", (e) => {
+    if (e.target.id === "pin-prompt-backdrop") closePinPrompt();
+  });
+
+  // Modal close buttons
+  $("#close-auth-modal")?.addEventListener("click", closeAuthModal);
+  $("#close-profiles-modal-btn")?.addEventListener("click", closeProfilesModal);
+  $("#close-profile-edit-modal")?.addEventListener("click", closeProfileEditModal);
+  $("#cancel-profile-edit-btn")?.addEventListener("click", closeProfileEditModal);
+  $("#close-pin-modal")?.addEventListener("click", closePinPrompt);
+  $("#cancel-pin-btn")?.addEventListener("click", closePinPrompt);
+
+  // Auth Tabs & navigation
+  $("#tab-signin")?.addEventListener("click", () => switchAuthTab("signin"));
+  $("#tab-signup")?.addEventListener("click", () => switchAuthTab("signup"));
+  $("#forgot-password-link")?.addEventListener("click", () => switchAuthTab("forgot"));
+  $("#forgot-back-btn")?.addEventListener("click", () => switchAuthTab("signin"));
+  $("#reset-back-btn")?.addEventListener("click", () => switchAuthTab("signin"));
+
+  // 1. Sign In Form Submission
+  $("#form-signin")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("#signin-email")?.value.trim();
+    const password = $("#signin-password")?.value;
+    const rememberMe = $("#signin-remember")?.checked ?? true;
+
+    if (!email || !password) {
+      setFeedback("#signin-feedback", "Please enter both email and password.");
+      return;
+    }
+
+    const submitBtn = $("#signin-submit-btn");
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = "<span>Signing in…</span>";
+
+    const res = await authApi("/api/auth/login", "POST", { email, password, rememberMe });
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = "<span>Sign In</span>";
+
+    if (!res.ok) {
+      setFeedback("#signin-feedback", res.data.error || "Invalid credentials.");
+      return;
+    }
+
+    closeAuthModal();
+    showToast(`Welcome back, ${res.data.activeProfile?.name || res.data.user.email}!`);
+    await initAuth();
+
+    if (state.auth.returnUrl && state.auth.returnUrl !== "#/login") {
+      window.location.hash = state.auth.returnUrl;
+    }
+  });
+
+  // 2. Sign Up Form Submission
+  $("#form-signup")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = $("#signup-name")?.value.trim();
+    const email = $("#signup-email")?.value.trim();
+    const password = $("#signup-password")?.value;
+
+    if (!name || !email || !password) {
+      setFeedback("#signup-feedback", "Please fill in all fields.");
+      return;
+    }
+
+    const submitBtn = $("#signup-submit-btn");
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = "<span>Creating account…</span>";
+
+    const res = await authApi("/api/auth/register", "POST", { email, password, name });
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = "<span>Create Account</span>";
+
+    if (!res.ok) {
+      setFeedback("#signup-feedback", res.data.error || "Registration failed.");
+      return;
+    }
+
+    closeAuthModal();
+    showToast(`Welcome to Ustream, ${name}!`);
+    await initAuth();
+
+    if (state.auth.returnUrl && state.auth.returnUrl !== "#/register") {
+      window.location.hash = state.auth.returnUrl;
+    }
+  });
+
+  // 3. Forgot Password Form Submission
+  $("#form-forgot")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("#forgot-email")?.value.trim();
+    if (!email) {
+      setFeedback("#forgot-feedback", "Please enter your email.");
+      return;
+    }
+
+    const submitBtn = $("#forgot-submit-btn");
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = "<span>Sending…</span>";
+
+    const res = await authApi("/api/auth/forgot-password", "POST", { email });
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = "<span>Send Reset Instructions</span>";
+
+    if (res.ok) {
+      let msg = res.data.message || "Reset instructions sent!";
+      if (res.data.resetToken) {
+        msg += ` (Dev/Test Token: ${res.data.resetToken})`;
+      }
+      setFeedback("#forgot-feedback", msg, false);
+    } else {
+      setFeedback("#forgot-feedback", res.data.error || "Unable to send reset instructions.");
+    }
+  });
+
+  // 4. Reset Password Form Submission
+  $("#form-reset")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const token = $("#reset-token-input")?.value.trim();
+    const password = $("#reset-new-password")?.value;
+    const confirm = $("#reset-confirm-password")?.value;
+
+    if (!token || !password) {
+      setFeedback("#reset-feedback", "Please enter your reset token and new password.");
+      return;
+    }
+    if (password !== confirm) {
+      setFeedback("#reset-feedback", "Passwords do not match.");
+      return;
+    }
+
+    const submitBtn = $("#reset-submit-btn");
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = "<span>Updating…</span>";
+
+    const res = await authApi("/api/auth/reset-password", "POST", { token, password });
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = "<span>Reset Password</span>";
+
+    if (res.ok) {
+      setFeedback("#reset-feedback", "Password reset successfully! Please sign in with your new password.", false);
+      setTimeout(() => switchAuthTab("signin"), 1500);
+    } else {
+      setFeedback("#reset-feedback", res.data.error || "Password reset failed.");
+    }
+  });
+
+  // 5. Change Password Form Submission
+  $("#change-password-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const currentPassword = $("#current-password-input")?.value;
+    const newPassword = $("#new-password-input")?.value;
+    const confirmPassword = $("#confirm-password-input")?.value;
+
+    if (!currentPassword || !newPassword) {
+      setFeedback("#change-password-feedback", "Please enter your current and new password.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setFeedback("#change-password-feedback", "New passwords do not match.");
+      return;
+    }
+
+    const submitBtn = $("#update-password-btn");
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = "<span>Updating…</span>";
+
+    const res = await authApi("/api/auth/change-password", "POST", { currentPassword, newPassword });
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = "<span>Update Password</span>";
+
+    if (res.ok) {
+      setFeedback("#change-password-feedback", "Password updated successfully!", false);
+      $("#current-password-input").value = "";
+      $("#new-password-input").value = "";
+      $("#confirm-password-input").value = "";
+      void loadSessions();
+    } else {
+      setFeedback("#change-password-feedback", res.data.error || "Failed to update password.");
+    }
+  });
+
+  // 6. Profiles Modal & Tiles
+  $("#manage-profiles-toggle-btn")?.addEventListener("click", () => {
+    state.auth.isManagingProfiles = !state.auth.isManagingProfiles;
+    const backdrop = $("#profiles-backdrop");
+    const btn = $("#manage-profiles-toggle-btn");
+    if (state.auth.isManagingProfiles) {
+      backdrop?.classList.add("managing-profiles");
+      if (btn) btn.innerHTML = "<span>Done</span>";
+    } else {
+      backdrop?.classList.remove("managing-profiles");
+      if (btn) btn.innerHTML = "<span>Manage Profiles</span>";
+    }
+    renderProfilesGrid();
+  });
+
+  $("#profiles-grid")?.addEventListener("click", (e) => {
+    const tile = e.target.closest("[data-profile-card]");
+    if (tile) {
+      const pId = tile.dataset.profileCard;
+      const target = state.auth.profiles.find((p) => p.id === pId);
+      if (state.auth.isManagingProfiles) {
+        openProfileEditModal(target);
+      } else {
+        void selectProfile(pId);
+      }
+      return;
+    }
+
+    const addTile = e.target.closest("#tile-add-profile");
+    if (addTile) {
+      openProfileEditModal(null);
+    }
+  });
+
+  // 7. Avatar choices in Profile Edit Modal
+  $("#avatar-picker-grid")?.addEventListener("click", (e) => {
+    const choice = e.target.closest(".avatar-choice");
+    if (!choice) return;
+    $$(".avatar-choice").forEach((b) => b.classList.toggle("selected", b === choice));
+  });
+
+  // 8. Profile Edit Form Submission
+  $("#profile-edit-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = $("#edit-profile-name")?.value.trim();
+    if (!name) {
+      setFeedback("#profile-edit-feedback", "Please enter a profile name.");
+      return;
+    }
+
+    const selectedAvatar = $(".avatar-choice.selected")?.dataset.avatar || "🦊";
+    const isKids = $("#edit-profile-kids")?.checked ?? false;
+    const maturityRating = $("#edit-profile-maturity")?.value || "ALL";
+    const language = $("#edit-profile-language")?.value || "en";
+    const pin = $("#edit-profile-pin")?.value.trim() || undefined;
+
+    const payload = {
+      name,
+      avatar: selectedAvatar,
+      isKids,
+      maturityRating,
+      language,
+      pin
+    };
+
+    const saveBtn = $("#save-profile-btn");
+    saveBtn.disabled = true;
+
+    let res;
+    if (activeEditingProfileId) {
+      res = await authApi(`/api/profiles/${activeEditingProfileId}`, "PUT", payload);
+    } else {
+      res = await authApi("/api/profiles", "POST", payload);
+    }
+
+    saveBtn.disabled = false;
+
+    if (!res.ok) {
+      setFeedback("#profile-edit-feedback", res.data.error || "Could not save profile.");
+      return;
+    }
+
+    closeProfileEditModal();
+    showToast(activeEditingProfileId ? "Profile updated!" : "Profile created!");
+    await initAuth();
+    if (!$("#profiles-backdrop")?.hasAttribute("hidden")) {
+      renderProfilesGrid();
+    }
+  });
+
+  // 9. Delete Profile Button
+  $("#delete-profile-btn")?.addEventListener("click", async () => {
+    if (!activeEditingProfileId) return;
+    if (!confirm("Are you sure you want to delete this profile? All saved list items and progress will be lost.")) return;
+
+    const res = await authApi(`/api/profiles/${activeEditingProfileId}`, "DELETE");
+    if (!res.ok) {
+      setFeedback("#profile-edit-feedback", res.data.error || "Could not delete profile.");
+      return;
+    }
+
+    closeProfileEditModal();
+    showToast("Profile deleted");
+    await initAuth();
+    if (!$("#profiles-backdrop")?.hasAttribute("hidden")) {
+      renderProfilesGrid();
+    }
+  });
+
+  // 10. PIN Prompt Form Submission
+  $("#pin-prompt-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const pin = $("#pin-input")?.value.trim();
+    if (!pin || pin.length !== 4) {
+      setFeedback("#pin-prompt-feedback", "Please enter a 4-digit PIN.");
+      return;
+    }
+
+    const targetProfile = state.auth.pendingProfileForPin;
+    if (!targetProfile) return;
+
+    const res = await authApi(`/api/profiles/${targetProfile.id}/verify-pin`, "POST", { pin });
+    if (!res.ok) {
+      setFeedback("#pin-prompt-feedback", "Incorrect PIN. Please try again.");
+      const pinInput = $("#pin-input");
+      if (pinInput) {
+        pinInput.value = "";
+        pinInput.focus();
+      }
+      return;
+    }
+
+    // Switch profile after successful PIN verification
+    const selRes = await authApi(`/api/profiles/${targetProfile.id}/select`, "POST");
+    closePinPrompt();
+
+    if (selRes.ok) {
+      state.auth.activeProfile = targetProfile;
+      closeProfilesModal();
+      updateAuthUI();
+      showToast(`Switched to ${targetProfile.name}`);
+      render();
+    } else {
+      showToast(selRes.data.error || "Failed to switch profile");
+    }
+  });
+}
+
 function initRouter() {
   const handleRoute = () => {
-    const rawHash = window.location.hash.replace(/^#\/?/, "").toLowerCase();
+    const rawHash = window.location.hash.replace(/^#\/?/, "");
+    const [path, queryString] = rawHash.split("?");
+    const cleanPath = path ? path.toLowerCase() : "home";
+    const params = new URLSearchParams(queryString || "");
+
+    // Auth query alerts (e.g. verified=1, error=...)
+    if (params.get("verified") === "1" || window.location.search.includes("verified=1")) {
+      showToast("Email verified successfully! ✓");
+    }
+    if (params.get("error")) {
+      showToast(`Authentication Error: ${params.get("error")}`);
+    }
+
+    // Modal routes
+    if (cleanPath === "login") {
+      openAuthModal("signin");
+      setSection("home", false);
+      return;
+    }
+    if (cleanPath === "register") {
+      openAuthModal("signup");
+      setSection("home", false);
+      return;
+    }
+    if (cleanPath === "forgot-password") {
+      openAuthModal("forgot");
+      setSection("home", false);
+      return;
+    }
+    if (cleanPath === "reset-password") {
+      openAuthModal("reset");
+      const token = params.get("token");
+      if (token && $("#reset-token-input")) {
+        $("#reset-token-input").value = token;
+      }
+      setSection("home", false);
+      return;
+    }
+    if (cleanPath === "profiles") {
+      openProfilesModal();
+      setSection("home", false);
+      return;
+    }
+
     const validSections = ["home", "movies", "series", "anime", "my-list", "profile"];
-    const section = validSections.includes(rawHash) ? rawHash : "home";
+    const section = validSections.includes(cleanPath) ? cleanPath : "home";
     setSection(section, false);
   };
 
@@ -3699,6 +4638,8 @@ function initRouter() {
 }
 
 loadShowcaseCatalog();
+setupAuthEventListeners();
+void initAuth();
 initRouter();
 void loadLiveCatalog();
 void loadNewestRecommendations();

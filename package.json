@@ -5,8 +5,12 @@
   "description": "Ustream live streaming web app",
   "type": "module",
   "scripts": {
+    "test": "node --test tests/auth.test.mjs",
     "build": "node scripts/build.mjs",
     "dev": "node scripts/server.mjs",
     "serve": "node scripts/server.mjs"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3"
   }
 }

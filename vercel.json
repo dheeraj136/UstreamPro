@@ -5,6 +5,10 @@
     {
       "source": "/api/config",
       "destination": "/api/config.json"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/api/index"
     }
   ],
   "redirects": [
