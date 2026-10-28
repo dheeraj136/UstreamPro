@@ -123,6 +123,128 @@ const seriesChannel = seriesFilterResponse.data.typeList.find((entry) => entry.c
 
 const DEMO_ITEMS = [
   {
+    "subjectId": "movie-deadpool-wolverine",
+    "tmdbId": "533535",
+    "backdrop": "https://image.tmdb.org/t/p/original/by8z9Fe8y7p4jo2YlW2SZDnptyT.jpg",
+    "title": "Deadpool & Wolverine",
+    "category": "movie",
+    "type": "movie",
+    "adult": true,
+    "isAdult": true,
+    "maturityRating": "18+",
+    "contentRating": "R",
+    "genre": [
+      "action",
+      "comedy",
+      "18+"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2024,
+    "releaseDate": "2024-07-26",
+    "rating": 7.7,
+    "imdbRatingValue": "7.7",
+    "runtime": "2h 8m",
+    "duration": "2h 8m",
+    "language": "English, Multi Sub",
+    "badge": "18+ Adult",
+    "kicker": "Marvel Studios · R-Rated",
+    "image": "https://image.tmdb.org/t/p/w500/8cdWjvZQUExUUTzyp4t6EDMubfO.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/8cdWjvZQUExUUTzyp4t6EDMubfO.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #7f1d1d, #450a0a 50%, #020617)",
+    "description": "A listless Wade Wilson toils away in civilian life with his days as the morally flexible mercenary, Deadpool, behind him. But when his homeworld faces an existential threat, Wade must reluctantly suit-up again with an even more reluctant Wolverine.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+    },
+    "hasResource": true,
+    "seNum": 0
+  },
+  {
+    "subjectId": "series-euphoria",
+    "tmdbId": "85552",
+    "backdrop": "https://image.tmdb.org/t/p/original/mez2Z3WqlPKNXpi7mWoiiE5guE9.jpg",
+    "title": "Euphoria",
+    "category": "series",
+    "type": "series",
+    "adult": true,
+    "isAdult": true,
+    "maturityRating": "TV-MA",
+    "contentRating": "18+",
+    "genre": [
+      "series",
+      "drama",
+      "18+"
+    ],
+    "country": "United States",
+    "countryName": "United States",
+    "year": 2019,
+    "releaseDate": "2019-06-16",
+    "rating": 8.3,
+    "imdbRatingValue": "8.3",
+    "runtime": "55m / ep",
+    "duration": "55m / ep",
+    "language": "English, Multi Sub",
+    "badge": "18+ Mature",
+    "kicker": "HBO Original · TV-MA",
+    "image": "https://image.tmdb.org/t/p/w500/aJrG7OkoTMPWG5c8opz8a93AZPY.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/aJrG7OkoTMPWG5c8opz8a93AZPY.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #581c87, #3b0764 50%, #020617)",
+    "description": "A group of high school students navigate love and friendships in a world of drugs, sex, trauma and social media. Starring Zendaya in an Emmy-winning performance.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+    },
+    "hasResource": true,
+    "seNum": 1
+  },
+  {
+    "subjectId": "anime-chainsaw-man",
+    "tmdbId": "114410",
+    "backdrop": "https://image.tmdb.org/t/p/original/5DUMPBSnHOZsbBv81GFXZXvDpo6.jpg",
+    "title": "Chainsaw Man",
+    "category": "anime",
+    "type": "anime",
+    "isJapaneseAnime": true,
+    "adult": true,
+    "isAdult": true,
+    "maturityRating": "TV-MA",
+    "contentRating": "18+",
+    "genre": [
+      "anime",
+      "action",
+      "horror",
+      "18+"
+    ],
+    "country": "Japan",
+    "countryName": "Japan",
+    "year": 2022,
+    "releaseDate": "2022-10-12",
+    "rating": 8.6,
+    "imdbRatingValue": "8.6",
+    "runtime": "24m / ep",
+    "duration": "24m / ep",
+    "language": "Japanese, English Dub",
+    "badge": "18+ Anime",
+    "kicker": "MAPPA · TV-MA",
+    "image": "https://image.tmdb.org/t/p/w500/npdB6eFzizki0WaZ1OvKcJrWe97.jpg",
+    "cover": {
+      "url": "https://image.tmdb.org/t/p/w500/npdB6eFzizki0WaZ1OvKcJrWe97.jpg"
+    },
+    "gradient": "linear-gradient(145deg, #991b1b, #450a0a 50%, #020617)",
+    "description": "Denji is a young man living a life of extreme poverty. He lives with Pochita, the Chainsaw Devil. After a brutal betrayal, Denji is reborn as the devil-hunting devilman 'Chainsaw Man' in this visceral, gory anime masterpiece.",
+    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+    "playUrl": {
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+    },
+    "hasResource": true,
+    "seNum": 1
+  },
+  {
     "subjectId": "movie-inception",
     "tmdbId": "27205",
     "backdrop": "https://image.tmdb.org/t/p/original/8ZTVqvKDQ8emSGUEMjsS4yHAwrp.jpg",
@@ -1226,6 +1348,7 @@ const normalizeTmdbItem = (item, category = "movie") => {
   const backdrop = item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : (poster || "");
   const rating = item.vote_average ? Number(item.vote_average.toFixed(1)) : 8.0;
   const tmdbId = String(item.id);
+  const isAdult = Boolean(item.adult) || (Array.isArray(item.genre_ids) && item.genre_ids.includes(10749) && /\b(?:erotic|xxx|sex|porn)\b/i.test(item.overview || ""));
 
   return {
     tmdbId,
@@ -1233,6 +1356,8 @@ const normalizeTmdbItem = (item, category = "movie") => {
     title,
     category: type === "cartoon" ? "cartoons" : type,
     type,
+    adult: Boolean(item.adult || isAdult),
+    isAdult: Boolean(item.adult || isAdult),
     genre: isAnime ? ["anime"] : isCartoon ? ["animation", "cartoon"] : isMovie ? ["movie", "action"] : ["series", "drama"],
     country: item.origin_country?.[0] || (isAnime ? "Japan" : "United States"),
     countryName: item.origin_country?.[0] || (isAnime ? "Japan" : "United States"),
@@ -1732,6 +1857,12 @@ async function loadNewestRecommendations() {
 
 function setFeatured(item) {
   if (!item) return;
+  if (!isDarkModeActive() && isAdultContent(item)) {
+    const cleanItem = catalog.find((i) => !isAdultContent(i)) || DEMO_ITEMS.find((i) => !isAdultContent(i));
+    if (cleanItem && cleanItem !== item) {
+      return setFeatured(cleanItem);
+    }
+  }
   featured = item;
   const words = item.title.split(" ");
   const firstWord = words[0];
@@ -1793,9 +1924,11 @@ async function loadSearchResults(query) {
 
     if (requestId !== searchRequestId) return;
 
+    const isDark = isDarkModeActive();
     const filtered = (results || [])
       .filter((item) => item.media_type === "movie" || item.media_type === "tv")
-      .map((item) => normalizeTmdbItem(item, item.media_type === "movie" ? "movie" : "tv"));
+      .map((item) => normalizeTmdbItem(item, item.media_type === "movie" ? "movie" : "tv"))
+      .filter((item) => isDark || !isAdultContent(item));
 
     if (filtered.length) {
       catalog = filtered;
@@ -1998,8 +2131,51 @@ function setSection(section, updateHash = true) {
   if (visible.length > 0) {
     setFeatured(visible[0]);
   } else if (catalog.length > 0 && target === "home") {
-    setFeatured(catalog[0]);
+    const cleanItem = catalog.find((i) => isDarkModeActive() || !isAdultContent(i));
+    if (cleanItem) setFeatured(cleanItem);
   }
+}
+
+function isDarkModeActive() {
+  const current = document.documentElement.getAttribute("data-theme") || localStorage.getItem("ustream-theme") || "dark";
+  return current === "dark";
+}
+
+function isAdultContent(item) {
+  if (!item) return false;
+  if (item.adult === true || item.isAdult === true) return true;
+
+  const genres = Array.isArray(item.genre)
+    ? item.genre.map((g) => String(g).toLowerCase().trim())
+    : String(item.genre || "").toLowerCase().split(/[\s,]+/);
+  const adultGenres = ["erotic", "adult", "18+", "mature", "ecchi", "hentai", "nsfw", "xxx", "r-rated", "nc-17", "tv-ma"];
+  if (genres.some((g) => adultGenres.includes(g))) return true;
+
+  const meta = `${item.badge || ""} ${item.kicker || ""} ${item.maturityRating || ""} ${item.contentRating || ""}`.toLowerCase();
+  if (/\b(?:18\+|adult|nc-17|tv-ma|xxx|erotic|r-rated)\b/i.test(meta)) return true;
+
+  const text = `${item.title || ""} ${item.description || ""}`.toLowerCase();
+  if (/\b(?:hentai|erotic|nsfw|xxx|porn|softcore|18\+\s*only)\b/i.test(text)) return true;
+
+  const adultTitles = [
+    "deadpool & wolverine",
+    "deadpool",
+    "euphoria",
+    "chainsaw man",
+    "50 shades",
+    "fifty shades",
+    "365 days",
+    "game of thrones",
+    "house of the dragon",
+    "the boys",
+    "spartacus",
+    "caligula"
+  ];
+  if (item.title && adultTitles.some((t) => item.title.toLowerCase().includes(t))) {
+    return true;
+  }
+
+  return false;
 }
 
 function getVisibleCards() {
@@ -2008,6 +2184,11 @@ function getVisibleCards() {
   const apiGenre = state.filters.genre || "All";
   const apiLanguage = state.filters.classify || "All";
   let visible = catalog.filter((card) => {
+    // Dark Mode Setting: If Dark Mode is OFF, strictly hide all 18+ and adult content across all categories
+    if (!isDarkModeActive() && isAdultContent(card)) {
+      return false;
+    }
+
     let matchesSection = true;
     if (state.section === "cartoons") {
       matchesSection = card.isCartoon || card.type === "cartoon" || card.category === "cartoons" || card.genre?.includes("animation") || (card.type === "anime" && card.language === "en");
@@ -2057,7 +2238,10 @@ function renderContinue() {
   const row = $("#continue-row");
   if (!section || !row) return;
 
-  if (continuation.length === 0) {
+  const isDark = isDarkModeActive();
+  const visibleItems = continuation.filter((item) => isDark || !isAdultContent(item));
+
+  if (visibleItems.length === 0) {
     row.innerHTML = `
       <div class="continue-empty-state">
         <span class="empty-icon" aria-hidden="true">${renderIcon("play", "icon-sm")}</span>
@@ -2072,7 +2256,7 @@ function renderContinue() {
   }
 
   section.hidden = false;
-  row.innerHTML = continuation.map((item) => `
+  row.innerHTML = visibleItems.map((item) => `
     <button class="continue-card" style="--card-gradient:${item.gradient}" data-action="details" data-title="${escapeHtml(item.title)}" aria-label="Continue watching ${escapeHtml(item.title)}">
       <span class="card-label">Continue watching</span><strong>${escapeHtml(item.title)}</strong>
       <span class="watch-progress"><span style="width:${item.progress}%"></span></span>
@@ -2084,21 +2268,27 @@ function renderRecommendations() {
   const section = $("#recommendations-section");
   const row = $("#recommendation-row");
   if (!section || !row) return;
-  section.hidden = recommendations.length === 0;
-  row.innerHTML = recommendations.map(renderCard).join("");
+  const isDark = isDarkModeActive();
+  const visibleRecs = recommendations.filter((item) => isDark || !isAdultContent(item));
+  section.hidden = visibleRecs.length === 0;
+  row.innerHTML = visibleRecs.map(renderCard).join("");
   const update = $("#recommendation-update");
-  if (update) update.textContent = recommendations.length ? `Updated today · ${recommendations.length} picks` : "";
+  if (update) update.textContent = visibleRecs.length ? `Updated today · ${visibleRecs.length} picks` : "";
 }
 
 function renderCard(card) {
   const saved = state.watchlist.has(card.title);
   const cleanTitle = escapeHtml(card.title);
+  const isAdult = isAdultContent(card);
+  const badgeHtml = isAdult
+    ? `<span class="card-badge adult-badge" style="background:#ef4444;color:#fff;font-weight:800;">18+</span>`
+    : (card.badge ? `<span class="card-badge">${escapeHtml(card.badge)}</span>` : "");
   return `
     <article class="media-card" data-title="${cleanTitle}">
       <div class="poster" style="--poster-gradient:${card.gradient}">
         ${card.image ? `<img class="poster-image" src="${card.image}" alt="${cleanTitle} poster" loading="lazy" />` : ""}
         <span class="poster-kicker">${escapeHtml(card.kicker)}</span>
-        ${card.badge ? `<span class="card-badge">${escapeHtml(card.badge)}</span>` : ""}
+        ${badgeHtml}
         <span class="poster-title">${cleanTitle}</span>
         <button class="list-toggle ${saved ? "saved" : ""}" data-action="toggle-list" data-title="${cleanTitle}" aria-label="${saved ? "Remove" : "Add"} ${cleanTitle} ${saved ? "from" : "to"} my list">${saved ? renderIcon("heartFilled", "icon-sm") : renderIcon("plus", "icon-sm")}</button>
         <button class="card-hover" data-action="play" data-title="${cleanTitle}" aria-label="Play ${cleanTitle}"><span class="play-circle">${renderIcon("play", "icon-md")}</span></button>
@@ -5017,19 +5207,10 @@ function hideStartupLoader() {
    Appearance & Personalization Engine (GaiaFlix replicate)
    ========================================================================== */
 function initAppearanceSettings() {
-  const savedTheme = localStorage.getItem("ustream-theme") || "dark";
   const savedAccent = localStorage.getItem("ustream-accent") || "#e7ff51";
   const savedLang = localStorage.getItem("ustream-lang") || "en";
 
-  document.documentElement.setAttribute("data-theme", savedTheme);
   document.documentElement.style.setProperty("--accent", savedAccent);
-
-  const themeToggle = $("#theme-toggle-btn");
-  if (themeToggle) {
-    themeToggle.textContent = savedTheme.toUpperCase();
-    themeToggle.setAttribute("aria-pressed", savedTheme === "dark" ? "true" : "false");
-    themeToggle.classList.toggle("active", savedTheme === "dark");
-  }
 
   $$("#accent-color-choices .color-swatch").forEach((swatch) => {
     swatch.classList.toggle("active", swatch.dataset.color?.toLowerCase() === savedAccent.toLowerCase());
@@ -5050,15 +5231,51 @@ function initAppearanceSettings() {
     }
   });
 
-  themeToggle?.addEventListener("click", () => {
+  function updateThemeUI(theme, showNotification = true) {
+    const isDark = theme === "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("ustream-theme", theme);
+
+    const labelText = isDark ? "DARK (18+ ON)" : "LIGHT (18+ OFF)";
+    const themeToggle = $("#theme-toggle-btn");
+    if (themeToggle) {
+      themeToggle.textContent = labelText;
+      themeToggle.setAttribute("aria-pressed", isDark ? "true" : "false");
+      themeToggle.classList.toggle("active", isDark);
+    }
+
+    const serviceToggle = $("#settings-dark-mode-toggle");
+    if (serviceToggle) {
+      serviceToggle.textContent = labelText;
+      serviceToggle.setAttribute("aria-pressed", isDark ? "true" : "false");
+      serviceToggle.classList.toggle("active", isDark);
+    }
+
+    if (!isDark && isAdultContent(featured)) {
+      const cleanHero = catalog.find((i) => !isAdultContent(i)) || DEMO_ITEMS.find((i) => !isAdultContent(i));
+      if (cleanHero) setFeatured(cleanHero);
+    }
+
+    render();
+
+    if (showNotification) {
+      showToast(isDark ? "Dark Mode ON — 18+ and adult content unlocked" : "Light Mode ON — All 18+ and adult content hidden");
+    }
+  }
+
+  const savedTheme = localStorage.getItem("ustream-theme") || "dark";
+  updateThemeUI(savedTheme, false);
+
+  $("#theme-toggle-btn")?.addEventListener("click", () => {
     const current = document.documentElement.getAttribute("data-theme") || "dark";
     const next = current === "dark" ? "light" : "dark";
-    document.documentElement.setAttribute("data-theme", next);
-    themeToggle.textContent = next.toUpperCase();
-    themeToggle.setAttribute("aria-pressed", next === "dark" ? "true" : "false");
-    themeToggle.classList.toggle("active", next === "dark");
-    localStorage.setItem("ustream-theme", next);
-    showToast(`Switched to ${next} mode`);
+    updateThemeUI(next, true);
+  });
+
+  $("#settings-dark-mode-toggle")?.addEventListener("click", () => {
+    const current = document.documentElement.getAttribute("data-theme") || "dark";
+    const next = current === "dark" ? "light" : "dark";
+    updateThemeUI(next, true);
   });
 
   $$("#accent-color-choices .color-swatch").forEach((swatch) => {
@@ -5170,9 +5387,11 @@ async function executeModalSearch(query) {
 
   try {
     const qLower = query.toLowerCase();
+    const isDark = isDarkModeActive();
 
     // 1. Local catalog matches
     const matchedCatalog = catalog.filter((item) => {
+      if (!isDark && isAdultContent(item)) return false;
       const matchText = `${item.title} ${item.genre?.join(" ") || ""} ${item.country || ""}`.toLowerCase();
       if (!matchText.includes(qLower)) return false;
       if (modalSearchType === "movie") return item.type === "movie";
@@ -5221,6 +5440,8 @@ async function executeModalSearch(query) {
             isCartoon: isCartoon,
             tmdbId: item.id,
             mediaType: item.media_type,
+            adult: Boolean(item.adult),
+            isAdult: Boolean(item.adult),
             country: "Global",
             kicker: isMovie ? "Movie" : "TV Series",
             gradient: "linear-gradient(145deg, #1e293b, #0f172a 50%, #020617)",
@@ -5231,6 +5452,9 @@ async function executeModalSearch(query) {
       }
     } catch {}
 
+    if (!isDark) {
+      tmdbResults = tmdbResults.filter((i) => !isAdultContent(i));
+    }
     if (modalSearchType === "movie") tmdbResults = tmdbResults.filter(i => i.type === "movie" && !i.isJapaneseAnime);
     if (modalSearchType === "tv") tmdbResults = tmdbResults.filter(i => i.type === "series" && !i.isJapaneseAnime);
     if (modalSearchType === "anime") tmdbResults = tmdbResults.filter(i => i.isJapaneseAnime);
@@ -5886,6 +6110,8 @@ async function loadCategoryTmdb(category) {
         genre: isCartoons ? ["animation", "cartoon"] : ["anime"],
         isCartoon: isCartoons,
         isJapaneseAnime: !isCartoons,
+        adult: Boolean(t.adult),
+        isAdult: Boolean(t.adult),
         language: lang,
         tmdbId: t.id,
         backdrop: t.backdrop_path ? `https://image.tmdb.org/t/p/original${t.backdrop_path}` : (t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : ""),
@@ -5908,6 +6134,8 @@ async function loadCategoryTmdb(category) {
         genre: isCartoons ? ["animation", "cartoon"] : ["anime"],
         isCartoon: isCartoons,
         isJapaneseAnime: !isCartoons,
+        adult: Boolean(t.adult),
+        isAdult: Boolean(t.adult),
         language: lang,
         tmdbId: m.id,
         backdrop: m.backdrop_path ? `https://image.tmdb.org/t/p/original${m.backdrop_path}` : (m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : ""),

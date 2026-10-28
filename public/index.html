@@ -598,6 +598,17 @@
           </div>
 
           <div class="settings-group">
+            <span class="section-kicker">Appearance &amp; Content Access</span>
+            <div class="setting-row" style="margin-top: 10px; display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+              <div>
+                <strong>Dark Mode &amp; 18+ Content</strong>
+                <small id="service-theme-mode-desc" style="display: block; color: var(--muted); font-size: 12px; margin-top: 4px; line-height: 1.4;">When Dark Mode is ON, 18+ &amp; adult content is unlocked across all categories. When OFF, all adult content is strictly hidden.</small>
+              </div>
+              <button class="profile-toggle-btn active" id="settings-dark-mode-toggle" type="button" aria-pressed="true" aria-describedby="service-theme-mode-desc">DARK (18+ ON)</button>
+            </div>
+          </div>
+
+          <div class="settings-group">
             <span class="section-kicker">Catalog &amp; Playback</span>
             <p class="field-hint">Manage your streaming preferences, connection mode, and saved watchlist.</p>
             <div class="settings-actions-row">
@@ -871,10 +882,10 @@
         <div class="appearance-settings-content">
           <div class="setting-row">
             <div>
-              <strong>Theme Mode</strong>
-              <small>Toggle between Dark mode and Light mode</small>
+              <strong>Dark Mode &amp; 18+ Content</strong>
+              <small id="theme-mode-desc">When Dark Mode is ON, 18+ &amp; adult content is unlocked across all categories. When OFF, all adult content is strictly hidden.</small>
             </div>
-            <button class="profile-toggle-btn active" id="theme-toggle-btn" type="button" aria-pressed="true">DARK</button>
+            <button class="profile-toggle-btn active" id="theme-toggle-btn" type="button" aria-pressed="true" aria-describedby="theme-mode-desc">DARK (18+ ON)</button>
           </div>
           <div class="setting-block">
             <strong>Accent Color</strong>
