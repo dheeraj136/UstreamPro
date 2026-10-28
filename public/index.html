@@ -23,6 +23,9 @@
     <script src="https://unpkg.com/lucide@latest"></script>
   </head>
   <body>
+    <div id="startup-loader" class="startup-loader" aria-label="Loading Ustream">
+      <span></span><span></span><span></span>
+    </div>
     <a href="#main-content" class="skip-to-content">Skip to content</a>
     <div class="app-shell">
       <header class="topbar">
@@ -36,6 +39,9 @@
           <button class="nav-link" data-section="movies">Movies</button>
           <button class="nav-link" data-section="series">Series</button>
           <button class="nav-link" data-section="anime">Anime</button>
+          <button class="nav-link" data-section="cartoons">Cartoons</button>
+          <button class="nav-link" data-section="sports">Sports</button>
+          <button class="nav-link" data-section="explore">Explore</button>
           <button class="nav-link" data-section="my-list">My List</button>
           <button class="nav-link" data-section="profile">Profile</button>
         </nav>
@@ -45,13 +51,14 @@
             <span class="status-dot" id="status-dot"></span>
             <span id="status-label">Demo Active</span>
           </button>
-          <div class="search-box" id="search-box" aria-label="Search titles">
-            <button class="search-trigger" id="search-trigger" aria-label="Search"><span class="search-glyph" aria-hidden="true"></span></button>
-            <input id="search-input" type="search" placeholder="Search titles, genres..." aria-label="Search titles, genres" />
-            <kbd>/</kbd>
-          </div>
-          <button class="icon-button" id="notifications-button" aria-label="Notifications" title="Notifications">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+          <button class="icon-button" id="search-modal-trigger" aria-label="Search titles and matches" title="Search (/)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+          </button>
+          <button class="icon-button" id="appearance-btn" aria-label="Appearance &amp; Settings" title="Appearance Settings">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+          </button>
+          <button class="icon-button desktop-only" id="topbar-favorites-btn" data-section="my-list" aria-label="My List" title="My List">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
           </button>
           <button class="primary-button topbar-login-btn" id="topbar-login-btn" type="button" aria-label="Sign in"><span>Sign in</span></button>
           <div class="profile-menu-wrap" id="profile-menu-wrap" hidden>
@@ -167,6 +174,65 @@
               <button class="primary-button" id="retry-button" type="button" aria-label="Retry connection"><svg class="icon icon-sm icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg> <span>Retry connection</span></button>
               <button class="secondary-button" id="load-fallback-button" type="button" aria-label="Load showcase catalog"><span>Load showcase catalog</span></button>
             </div>
+          </div>
+        </section>
+
+        <!-- Live Sports Match Centre Section (GaiaFlix replicate) -->
+        <section class="content-section sports-section" id="sports-section" hidden>
+          <div class="sports-header">
+            <div>
+              <span class="eyebrow"><span class="live-dot"></span> Match Centre</span>
+              <h2>Live &amp; Upcoming Sports</h2>
+              <p class="section-kicker">Live streams, schedules, and 24/7 channels worldwide powered by BinTV.</p>
+            </div>
+            <div class="sports-search-box">
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+              <input type="search" id="sports-search-input" placeholder="Search teams, channels, or events…" aria-label="Search sports">
+            </div>
+          </div>
+
+          <div class="sports-nav-tabs">
+            <button class="sports-tab active" data-sports-tab="live" type="button">
+              <span class="live-dot"></span> Live Now <b id="sports-live-count">0</b>
+            </button>
+            <button class="sports-tab" data-sports-tab="upcoming" type="button">
+              Upcoming <b id="sports-upcoming-count">0</b>
+            </button>
+            <button class="sports-tab" data-sports-tab="channels" type="button">
+              Live TV (24/7) <b id="sports-channels-count">0</b>
+            </button>
+          </div>
+
+          <div class="sports-categories-pills" id="sports-categories-pills"></div>
+          <div class="sports-channel-letters" id="sports-channel-letters" hidden></div>
+
+          <div class="sports-match-grid" id="sports-match-grid" aria-live="polite">
+            <div class="sports-loading-state">
+              <span class="player-loading-indicator"></span>
+              <span>Loading live matches…</span>
+            </div>
+          </div>
+
+          <div class="sports-pagination" id="sports-pagination" hidden></div>
+        </section>
+
+        <!-- Explore / Watch Providers Section (GaiaFlix replicate) -->
+        <section class="content-section explore-section" id="explore-section" hidden>
+          <div class="section-heading">
+            <div>
+              <span class="eyebrow">Streaming Network Directory</span>
+              <h2 id="explore-title">Explore by Service</h2>
+              <p class="section-kicker" id="explore-kicker">Browse catalogs of top global streaming networks.</p>
+            </div>
+            <button class="secondary-button" id="explore-back-btn" type="button" hidden><span>← All Networks</span></button>
+          </div>
+
+          <div class="providers-grid" id="providers-grid">
+            <div class="sports-loading-state"><span class="player-loading-indicator"></span> <span>Loading streaming services…</span></div>
+          </div>
+
+          <div class="provider-catalog-view" id="provider-catalog-view" hidden>
+            <div class="catalog-grid" id="provider-titles-grid"></div>
           </div>
         </section>
 
@@ -317,10 +383,10 @@
       <nav class="mobile-nav" role="navigation" aria-label="Mobile navigation">
         <button class="mobile-nav-item active" data-section="home" aria-label="Home"><svg class="icon icon-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><small>Home</small></button>
         <button class="mobile-nav-item" data-section="movies" aria-label="Movies"><svg class="icon icon-movies" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18"/><path d="M3 7.5h4"/><path d="M3 12h18"/><path d="M3 16.5h4"/><path d="M17 3v18"/><path d="M17 7.5h4"/><path d="M17 16.5h4"/></svg><small>Movies</small></button>
+        <button class="mobile-nav-item" id="mobile-search-btn" aria-label="Search"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><small>Search</small></button>
         <button class="mobile-nav-item" data-section="series" aria-label="Series"><svg class="icon icon-series" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="15" x="2" y="7" rx="2"/><polyline points="17 2 12 7 7 2"/></svg><small>Series</small></button>
         <button class="mobile-nav-item" data-section="anime" aria-label="Anime"><svg class="icon icon-anime" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg><small>Anime</small></button>
-        <button class="mobile-nav-item" data-section="my-list" aria-label="My List"><svg class="icon icon-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg><small>My List</small></button>
-        <button class="mobile-nav-item" data-section="profile" aria-label="Profile"><svg class="icon icon-profile" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><small>Profile</small></button>
+        <button class="mobile-nav-item" data-section="sports" aria-label="Sports"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v3a4 4 0 0 1-8 0V4Z"/><path d="M8 6H4v1a5 5 0 0 0 5 5M16 6h4v1a5 5 0 0 1-5 5M12 11v5M8 20h8M10 16h4"/></svg><small>Sports</small></button>
       </nav>
     </div>
 
@@ -370,10 +436,12 @@
         <div class="player-action-bar" aria-label="Player actions">
           <div class="player-server-selector">
             <select id="player-server-select" class="player-server-select" aria-label="Stream Server">
-              <option value="vidlink" selected>Server 1 · VidLink HD</option>
-              <option value="vidsrc">Server 2 · VidSrc Cloud</option>
-              <option value="smashy">Server 3 · SmashyStream</option>
-              <option value="autoembed">Server 4 · AutoEmbed</option>
+              <option value="vidstuck" selected>Server 1 · Vidstuck HD</option>
+              <option value="vidlink">Server 2 · VidLink Cloud</option>
+              <option value="vidsrc">Server 3 · VidSrc VIP</option>
+              <option value="aniembed">Server 4 · AniEmbed (Anime)</option>
+              <option value="smashy">Server 5 · SmashyStream</option>
+              <option value="autoembed">Server 6 · AutoEmbed</option>
             </select>
           </div>
           <div class="player-language-selector" id="player-language-bar-field">
@@ -745,6 +813,102 @@
             <button class="secondary-button" id="cancel-pin-btn" type="button"><span>Cancel</span></button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <!-- Global Search Modal (GaiaFlix replicate) -->
+    <div class="modal-backdrop" id="search-backdrop" hidden>
+      <div class="search-modal" role="dialog" aria-modal="true" aria-labelledby="search-dialog-title">
+        <div class="search-modal-head">
+          <div class="search-modal-bar">
+            <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+            <input type="search" id="modal-search-input" placeholder="Search movies, TV shows, anime, sports…" autocomplete="off" aria-label="Search catalog">
+            <button class="close-button" id="close-search-modal" aria-label="Close search"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+          </div>
+          <div class="search-type-filters">
+            <button class="search-type-pill active" data-search-type="all" type="button">All</button>
+            <button class="search-type-pill" data-search-type="movie" type="button">Movies</button>
+            <button class="search-type-pill" data-search-type="tv" type="button">TV Shows</button>
+            <button class="search-type-pill" data-search-type="anime" type="button">Anime</button>
+            <button class="search-type-pill" data-search-type="cartoon" type="button">Cartoons</button>
+          </div>
+          <div class="search-popular-tags">
+            <span>Popular:</span>
+            <button class="tag-btn" data-search-tag="Reacher" type="button">Reacher</button>
+            <button class="tag-btn" data-search-tag="Spider-Man" type="button">Spider-Man</button>
+            <button class="tag-btn" data-search-tag="Anime" type="button">Anime</button>
+            <button class="tag-btn" data-search-tag="Inception" type="button">Inception</button>
+            <button class="tag-btn" data-search-tag="Batman" type="button">Batman</button>
+          </div>
+        </div>
+        <div class="search-modal-body" id="modal-search-results">
+          <div class="search-empty-prompt">Start typing to search titles, genres, and live events.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Appearance & Personalization Settings Modal (GaiaFlix replicate) -->
+    <div class="modal-backdrop" id="appearance-backdrop" hidden>
+      <div class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="appearance-title">
+        <div class="settings-head">
+          <div>
+            <span class="eyebrow">Personalize</span>
+            <h2 id="appearance-title">Appearance &amp; Settings</h2>
+          </div>
+          <button class="close-button" id="close-appearance-btn" aria-label="Close settings"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        <div class="appearance-settings-content">
+          <div class="setting-row">
+            <div>
+              <strong>Theme Mode</strong>
+              <small>Toggle between Dark mode and Light mode</small>
+            </div>
+            <button class="profile-toggle-btn active" id="theme-toggle-btn" type="button" aria-pressed="true">DARK</button>
+          </div>
+          <div class="setting-block">
+            <strong>Accent Color</strong>
+            <p class="field-hint">Select your preferred interface accent highlight</p>
+            <div class="accent-color-choices" id="accent-color-choices">
+              <button class="color-swatch active" data-color="#e7ff51" style="background:#e7ff51;" title="Neon Lime" type="button"></button>
+              <button class="color-swatch" data-color="#00e5ff" style="background:#00e5ff;" title="Cyber Cyan" type="button"></button>
+              <button class="color-swatch" data-color="#ff9100" style="background:#ff9100;" title="Sunset Amber" type="button"></button>
+              <button class="color-swatch" data-color="#d500f9" style="background:#d500f9;" title="Electric Purple" type="button"></button>
+              <button class="color-swatch" data-color="#e50914" style="background:#e50914;" title="Gaia Crimson" type="button"></button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div>
+              <strong>Metadata Language</strong>
+              <small>Display language for catalog overviews and titles</small>
+            </div>
+            <select id="appearance-language-select" class="player-select">
+              <option value="en" selected>English</option>
+              <option value="es">Español</option>
+              <option value="fr">Français</option>
+              <option value="de">Deutsch</option>
+              <option value="hi">हिन्दी</option>
+              <option value="ja">日本語</option>
+              <option value="ko">한국어</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sports Live Stream Player Modal (GaiaFlix replicate) -->
+    <div class="player-backdrop" id="sports-player-backdrop" hidden>
+      <div class="player-modal sports-player-shell" role="dialog" aria-modal="true" aria-labelledby="sports-player-title">
+        <div class="player-head">
+          <div>
+            <span class="eyebrow"><span class="live-dot"></span> Live Sports Broadcast</span>
+            <h2 id="sports-player-title">Live Match</h2>
+          </div>
+          <button class="close-button" id="close-sports-player" aria-label="Close sports player"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        <div class="player-media-container" id="sports-media-container">
+          <iframe id="sports-stream-frame" class="embed-player" src="about:blank" allowfullscreen="true" allow="autoplay; fullscreen; encrypted-media"></iframe>
+        </div>
+        <div class="sports-stream-feeds-bar" id="sports-stream-feeds-bar"></div>
       </div>
     </div>
 

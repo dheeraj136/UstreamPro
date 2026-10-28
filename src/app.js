@@ -1541,7 +1541,7 @@ function updateProfileStats() {
 }
 
 function setSection(section, updateHash = true) {
-  const validSections = ["home", "movies", "series", "anime", "my-list", "profile"];
+  const validSections = ["home", "movies", "series", "anime", "cartoons", "sports", "explore", "my-list", "profile"];
   const target = validSections.includes(section) ? section : "home";
   state.section = target;
 
@@ -1558,19 +1558,24 @@ function setSection(section, updateHash = true) {
   });
 
   state.filters = makeFilterDefaults(getFilterChannel());
-  state.genre = target === "anime" ? "anime" : "all";
+  state.genre = (target === "anime" || target === "cartoons") ? target : "all";
 
   const heroSection = $(".hero");
   const quickPicks = $(".quick-picks");
   const recommendationsSection = $("#recommendations-section");
   const catalogSection = $("#catalog");
   const profileSection = $("#profile-section");
+  const sportsSection = $("#sports-section");
+  const exploreSection = $("#explore-section");
 
   const titles = {
     home: ["Explore the collection", "Trending now"],
     movies: ["Feature-length stories", "Top movies"],
     series: ["Your next obsession", "Binge-worthy series"],
     anime: ["Anime Collection", "Anime picks"],
+    cartoons: ["Western Animation", "Cartoons & Animated Features"],
+    sports: ["BinTV Live", "Live & Upcoming Sports"],
+    explore: ["Streaming Network Directory", "Explore by Service"],
     "my-list": ["Saved for later", "My list"],
     profile: ["Account & Preferences", "Your Profile"],
   };
@@ -1582,16 +1587,40 @@ function setSection(section, updateHash = true) {
 
   const filterChannelKicker = $("#filter-channel-kicker");
   if (filterChannelKicker) {
-    filterChannelKicker.textContent = target === "series" ? "Series Collection" : "Anime Collection";
+    filterChannelKicker.textContent = target === "series" ? "Series Collection" : target === "cartoons" ? "Cartoons Collection" : "Anime Collection";
   }
 
   $$(".genre-tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.genre === state.genre));
 
-  if (target === "profile") {
+  if (target === "sports") {
     if (heroSection) heroSection.hidden = true;
     if (quickPicks) quickPicks.hidden = true;
     if (recommendationsSection) recommendationsSection.hidden = true;
     if (catalogSection) catalogSection.hidden = true;
+    if (profileSection) profileSection.hidden = true;
+    if (exploreSection) exploreSection.hidden = true;
+    if (sportsSection) {
+      sportsSection.hidden = false;
+      initSportsSection();
+    }
+  } else if (target === "explore") {
+    if (heroSection) heroSection.hidden = true;
+    if (quickPicks) quickPicks.hidden = true;
+    if (recommendationsSection) recommendationsSection.hidden = true;
+    if (catalogSection) catalogSection.hidden = true;
+    if (profileSection) profileSection.hidden = true;
+    if (sportsSection) sportsSection.hidden = true;
+    if (exploreSection) {
+      exploreSection.hidden = false;
+      initExploreSection();
+    }
+  } else if (target === "profile") {
+    if (heroSection) heroSection.hidden = true;
+    if (quickPicks) quickPicks.hidden = true;
+    if (recommendationsSection) recommendationsSection.hidden = true;
+    if (catalogSection) catalogSection.hidden = true;
+    if (sportsSection) sportsSection.hidden = true;
+    if (exploreSection) exploreSection.hidden = true;
     if (profileSection) {
       profileSection.hidden = false;
       updateProfileStats();
@@ -1602,12 +1631,21 @@ function setSection(section, updateHash = true) {
     if (recommendationsSection) recommendationsSection.hidden = true;
     if (catalogSection) catalogSection.hidden = false;
     if (profileSection) profileSection.hidden = true;
-  } else if (target === "movies" || target === "series" || target === "anime") {
+    if (sportsSection) sportsSection.hidden = true;
+    if (exploreSection) exploreSection.hidden = true;
+  } else if (target === "movies" || target === "series" || target === "anime" || target === "cartoons") {
     if (heroSection) heroSection.hidden = false;
     if (quickPicks) quickPicks.hidden = true;
     if (recommendationsSection) recommendationsSection.hidden = true;
     if (catalogSection) catalogSection.hidden = false;
     if (profileSection) profileSection.hidden = true;
+    if (sportsSection) sportsSection.hidden = true;
+    if (exploreSection) exploreSection.hidden = true;
+    if (target === "cartoons") {
+      loadCategoryTmdb("cartoons");
+    } else if (target === "anime") {
+      loadCategoryTmdb("anime");
+    }
   } else {
     // "home"
     if (heroSection) heroSection.hidden = false;
@@ -1615,6 +1653,8 @@ function setSection(section, updateHash = true) {
     if (recommendationsSection) recommendationsSection.hidden = recommendations.length === 0;
     if (catalogSection) catalogSection.hidden = false;
     if (profileSection) profileSection.hidden = true;
+    if (sportsSection) sportsSection.hidden = true;
+    if (exploreSection) exploreSection.hidden = true;
   }
 
   // Smooth section transition effect
@@ -1631,11 +1671,18 @@ function setSection(section, updateHash = true) {
 
 function getVisibleCards() {
   const query = state.search.trim().toLowerCase();
-  const sectionType = { movies: "movie", series: "series", anime: "anime" }[state.section];
+  const sectionType = { movies: "movie", series: "series", anime: "anime", cartoons: "cartoon" }[state.section];
   const apiGenre = state.filters.genre || "All";
   const apiLanguage = state.filters.classify || "All";
   let visible = catalog.filter((card) => {
-    const matchesSection = !sectionType || card.type === sectionType;
+    let matchesSection = true;
+    if (state.section === "cartoons") {
+      matchesSection = card.isCartoon || card.genre?.includes("animation") || (card.type === "anime" && card.language === "en");
+    } else if (state.section === "anime") {
+      matchesSection = card.type === "anime" || card.isJapaneseAnime || card.language === "ja";
+    } else if (sectionType) {
+      matchesSection = card.type === sectionType;
+    }
     const matchesList = state.section !== "my-list" || state.watchlist.has(card.title);
     const matchesGenre = state.genre === "all" || card.genre.includes(state.genre);
     const matchesApiGenre = apiGenre === "All" || card.genre.some((value) => value.toLowerCase() === apiGenre.toLowerCase());
@@ -1829,8 +1876,13 @@ function openDetails(title) {
 
 const isHttpUrl = (value) => typeof value === "string" && /^https?:\/\//i.test(value);
 
+const extraTitlesMap = new Map();
+function registerExtraTitle(item) {
+  if (item?.title) extraTitlesMap.set(item.title, item);
+}
+
 function findTitle(title) {
-  return [featured, ...catalog, ...recommendations].find((item) => item?.title === title) || null;
+  return [featured, ...catalog, ...recommendations].find((item) => item?.title === title) || extraTitlesMap.get(title) || null;
 }
 
 function collectPlaybackUrls(value, urls = [], key = "") {
@@ -1947,29 +1999,39 @@ const TITLE_TMDB_MAP = {
 };
 
 const STREAM_SERVERS = {
+  vidstuck: {
+    name: "Server 1 (Vidstuck HD)",
+    getMovieUrl: (id) => `https://vidstuck.cc/embed/movie/${id}?color=e7ff51&autoplay=false`,
+    getTvUrl: (id, s, e) => `https://vidstuck.cc/embed/tv/${id}/${s}/${e}?color=e7ff51&autoplay=false`
+  },
   vidlink: {
-    name: "Server 1 (VidLink HD)",
-    getMovieUrl: (id) => `https://vidlink.pro/movie/${id}?primaryColor=e50914&secondaryColor=1f1f1f&icons=vid`,
-    getTvUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e50914&secondaryColor=1f1f1f&icons=vid`
+    name: "Server 2 (VidLink Cloud)",
+    getMovieUrl: (id) => `https://vidlink.pro/movie/${id}?primaryColor=e7ff51&secondaryColor=1f1f1f&icons=vid`,
+    getTvUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e7ff51&secondaryColor=1f1f1f&icons=vid`
   },
   vidsrc: {
-    name: "Server 2 (VidSrc Cloud)",
-    getMovieUrl: (id) => `https://vidsrc.cc/v2/embed/movie/${id}`,
-    getTvUrl: (id, s, e) => `https://vidsrc.cc/v2/embed/tv/${id}/${s}/${e}`
+    name: "Server 3 (VidSrc VIP)",
+    getMovieUrl: (id) => `https://vidsrc.to/embed/movie/${id}`,
+    getTvUrl: (id, s, e) => `https://vidsrc.to/embed/tv/${id}/${s}/${e}`
+  },
+  aniembed: {
+    name: "Server 4 (AniEmbed Anime)",
+    getMovieUrl: (id) => `https://aniembed.se/e/${id}/1?lang=sub&autoplay=1`,
+    getTvUrl: (id, s, e) => `https://aniembed.se/e/${id}/${e}?lang=sub&autoplay=1`
   },
   smashy: {
-    name: "Server 3 (SmashyStream)",
+    name: "Server 5 (SmashyStream)",
     getMovieUrl: (id) => `https://player.smashy.stream/movie/${id}`,
     getTvUrl: (id, s, e) => `https://player.smashy.stream/tv/${id}?s=${s}&e=${e}`
   },
   autoembed: {
-    name: "Server 4 (AutoEmbed)",
+    name: "Server 6 (AutoEmbed)",
     getMovieUrl: (id) => `https://player.autoembed.cc/embed/movie/${id}`,
     getTvUrl: (id, s, e) => `https://player.autoembed.cc/embed/tv/${id}/${s}/${e}`
   }
 };
 
-let currentServerKey = "vidlink";
+let currentServerKey = "vidstuck";
 
 const LANGUAGE_LABELS = {
   en: "English",
@@ -4582,6 +4644,903 @@ function setupAuthEventListeners() {
   });
 }
 
+/* ==========================================================================
+   Startup Loader Engine
+   ========================================================================== */
+function hideStartupLoader() {
+  const loader = $("#startup-loader");
+  if (!loader || loader.dataset.hidden) return;
+  loader.dataset.hidden = "true";
+  loader.classList.add("fade-out");
+  setTimeout(() => {
+    loader.style.display = "none";
+  }, 450);
+}
+
+/* ==========================================================================
+   Appearance & Personalization Engine (GaiaFlix replicate)
+   ========================================================================== */
+function initAppearanceSettings() {
+  const savedTheme = localStorage.getItem("ustream-theme") || "dark";
+  const savedAccent = localStorage.getItem("ustream-accent") || "#e7ff51";
+  const savedLang = localStorage.getItem("ustream-lang") || "en";
+
+  document.documentElement.setAttribute("data-theme", savedTheme);
+  document.documentElement.style.setProperty("--accent", savedAccent);
+
+  const themeToggle = $("#theme-toggle-btn");
+  if (themeToggle) {
+    themeToggle.textContent = savedTheme.toUpperCase();
+    themeToggle.setAttribute("aria-pressed", savedTheme === "dark" ? "true" : "false");
+    themeToggle.classList.toggle("active", savedTheme === "dark");
+  }
+
+  $$("#accent-color-choices .color-swatch").forEach((swatch) => {
+    swatch.classList.toggle("active", swatch.dataset.color?.toLowerCase() === savedAccent.toLowerCase());
+  });
+
+  const langSelect = $("#appearance-language-select");
+  if (langSelect) langSelect.value = savedLang;
+
+  $("#appearance-btn")?.addEventListener("click", () => {
+    $("#appearance-backdrop")?.removeAttribute("hidden");
+  });
+  $("#close-appearance-btn")?.addEventListener("click", () => {
+    $("#appearance-backdrop")?.setAttribute("hidden", "true");
+  });
+  $("#appearance-backdrop")?.addEventListener("click", (e) => {
+    if (e.target.id === "appearance-backdrop") {
+      $("#appearance-backdrop").setAttribute("hidden", "true");
+    }
+  });
+
+  themeToggle?.addEventListener("click", () => {
+    const current = document.documentElement.getAttribute("data-theme") || "dark";
+    const next = current === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    themeToggle.textContent = next.toUpperCase();
+    themeToggle.setAttribute("aria-pressed", next === "dark" ? "true" : "false");
+    themeToggle.classList.toggle("active", next === "dark");
+    localStorage.setItem("ustream-theme", next);
+    showToast(`Switched to ${next} mode`);
+  });
+
+  $$("#accent-color-choices .color-swatch").forEach((swatch) => {
+    swatch.addEventListener("click", () => {
+      const color = swatch.dataset.color;
+      if (!color) return;
+      document.documentElement.style.setProperty("--accent", color);
+      $$("#accent-color-choices .color-swatch").forEach((s) => s.classList.toggle("active", s === swatch));
+      localStorage.setItem("ustream-accent", color);
+      showToast(`Accent color updated`);
+    });
+  });
+
+  langSelect?.addEventListener("change", (e) => {
+    const lang = e.target.value;
+    localStorage.setItem("ustream-lang", lang);
+    state.lang = lang;
+    showToast(`Language updated to ${lang.toUpperCase()}`);
+    if (state.section === "cartoons" || state.section === "anime") {
+      loadCategoryTmdb(state.section);
+    }
+  });
+}
+
+/* ==========================================================================
+   Global Search Modal Engine (GaiaFlix replicate)
+   ========================================================================== */
+let modalSearchType = "all";
+let modalSearchDebounce = null;
+
+function openSearchModal(initialQuery = "") {
+  const backdrop = $("#search-backdrop");
+  if (!backdrop) return;
+  backdrop.removeAttribute("hidden");
+  const input = $("#modal-search-input");
+  if (input) {
+    if (initialQuery) input.value = initialQuery;
+    input.focus();
+    if (initialQuery) executeModalSearch(initialQuery);
+  }
+}
+
+function closeSearchModal() {
+  $("#search-backdrop")?.setAttribute("hidden", "true");
+}
+
+function initSearchModal() {
+  $("#search-modal-trigger")?.addEventListener("click", () => openSearchModal());
+  $("#mobile-search-btn")?.addEventListener("click", () => openSearchModal());
+  $("#close-search-modal")?.addEventListener("click", closeSearchModal);
+  $("#search-backdrop")?.addEventListener("click", (e) => {
+    if (e.target.id === "search-backdrop") closeSearchModal();
+  });
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "/" && !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) {
+      e.preventDefault();
+      openSearchModal();
+    } else if (e.key === "Escape") {
+      closeSearchModal();
+      $("#appearance-backdrop")?.setAttribute("hidden", "true");
+      closeSportsPlayer();
+    }
+  });
+
+  $$(".search-type-pill").forEach((pill) => {
+    pill.addEventListener("click", () => {
+      $$(".search-type-pill").forEach((p) => p.classList.toggle("active", p === pill));
+      modalSearchType = pill.dataset.searchType || "all";
+      const q = $("#modal-search-input")?.value.trim();
+      if (q) executeModalSearch(q);
+    });
+  });
+
+  $$(".search-popular-tags .tag-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tag = btn.dataset.searchTag;
+      if (!tag) return;
+      const input = $("#modal-search-input");
+      if (input) {
+        input.value = tag;
+        input.focus();
+      }
+      executeModalSearch(tag);
+    });
+  });
+
+  $("#modal-search-input")?.addEventListener("input", (e) => {
+    const q = e.target.value.trim();
+    clearTimeout(modalSearchDebounce);
+    if (!q) {
+      const resultsEl = $("#modal-search-results");
+      if (resultsEl) resultsEl.innerHTML = `<div class="search-empty-prompt">Start typing to search titles, genres, and live events.</div>`;
+      return;
+    }
+    modalSearchDebounce = setTimeout(() => executeModalSearch(q), 280);
+  });
+}
+
+async function executeModalSearch(query) {
+  const resultsEl = $("#modal-search-results");
+  if (!resultsEl) return;
+  resultsEl.innerHTML = `
+    <div class="search-loading-state" style="padding: 40px; text-align: center; color: var(--muted);">
+      <span class="player-loading-indicator"></span>
+      <p style="margin-top: 10px;">Searching titles &amp; events for “${escapeHtml(query)}”…</p>
+    </div>
+  `;
+
+  try {
+    const qLower = query.toLowerCase();
+
+    // 1. Local catalog matches
+    const matchedCatalog = catalog.filter((item) => {
+      const matchText = `${item.title} ${item.genre?.join(" ") || ""} ${item.country || ""}`.toLowerCase();
+      if (!matchText.includes(qLower)) return false;
+      if (modalSearchType === "movie") return item.type === "movie";
+      if (modalSearchType === "tv") return item.type === "series";
+      if (modalSearchType === "anime") return item.type === "anime" || item.isJapaneseAnime;
+      if (modalSearchType === "cartoon") return item.isCartoon || item.genre?.includes("animation");
+      return true;
+    });
+
+    // 2. Search sports events
+    let matchedSports = [];
+    if (sportsState.cache && (modalSearchType === "all" || modalSearchType === "sports")) {
+      const allEvents = [...(sportsState.cache.live || []), ...(sportsState.cache.upcoming || []), ...(sportsState.cache.channels || [])];
+      matchedSports = allEvents.filter((ev) => {
+        const text = `${ev.title} ${ev.category} ${ev.teams?.home?.name || ""} ${ev.teams?.away?.name || ""}`.toLowerCase();
+        return text.includes(qLower);
+      }).slice(0, 6);
+    }
+
+    // 3. TMDB search proxy or direct
+    let tmdbResults = [];
+    try {
+      const tmdbUrl = `/api/tmdb/search/multi?query=${encodeURIComponent(query)}&language=${localStorage.getItem("ustream-lang") || "en-US"}`;
+      let res = await fetch(tmdbUrl).catch(() => null);
+      if (!res?.ok) {
+        res = await fetch(`https://api.themoviedb.org/3/search/multi?api_key=16f62d38fec24f4e6c2adc9388da20ce&query=${encodeURIComponent(query)}&language=${localStorage.getItem("ustream-lang") || "en-US"}`).catch(() => null);
+      }
+      if (res?.ok) {
+        const data = await res.json();
+        tmdbResults = (data.results || []).filter((item) => item.media_type === "movie" || item.media_type === "tv").slice(0, 12).map((item) => {
+          const isMovie = item.media_type === "movie";
+          const title = isMovie ? item.title : item.name;
+          const year = (isMovie ? item.release_date : item.first_air_date || "").slice(0, 4);
+          const isAnime = item.original_language === "ja" && item.genre_ids?.includes(16);
+          const isCartoon = item.original_language === "en" && item.genre_ids?.includes(16);
+          const normalized = {
+            title: title || "Untitled",
+            type: isMovie ? "movie" : "series",
+            year: year || "2024",
+            rating: item.vote_average || 7.5,
+            runtime: isMovie ? "Feature film" : "TV Series",
+            image: item.poster_path ? `https://image.tmdb.org/t/p/w342${item.poster_path}` : "",
+            badge: isAnime ? "Anime" : isCartoon ? "Cartoon" : isMovie ? "Movie" : "Series",
+            genre: isAnime ? ["anime"] : isCartoon ? ["animation"] : [isMovie ? "movie" : "drama"],
+            isJapaneseAnime: isAnime,
+            isCartoon: isCartoon,
+            tmdbId: item.id,
+            mediaType: item.media_type,
+            country: "Global",
+            kicker: isMovie ? "Movie" : "TV Series",
+            gradient: "linear-gradient(145deg, #1e293b, #0f172a 50%, #020617)",
+          };
+          registerExtraTitle(normalized);
+          return normalized;
+        });
+      }
+    } catch {}
+
+    if (modalSearchType === "movie") tmdbResults = tmdbResults.filter(i => i.type === "movie" && !i.isJapaneseAnime);
+    if (modalSearchType === "tv") tmdbResults = tmdbResults.filter(i => i.type === "series" && !i.isJapaneseAnime);
+    if (modalSearchType === "anime") tmdbResults = tmdbResults.filter(i => i.isJapaneseAnime);
+    if (modalSearchType === "cartoon") tmdbResults = tmdbResults.filter(i => i.isCartoon);
+
+    const seenTitles = new Set();
+    const finalCards = [];
+    for (const card of [...matchedCatalog, ...tmdbResults]) {
+      const key = card.title.toLowerCase();
+      if (!seenTitles.has(key)) {
+        seenTitles.add(key);
+        finalCards.push(card);
+      }
+    }
+
+    if (!finalCards.length && !matchedSports.length) {
+      resultsEl.innerHTML = `
+        <div class="search-empty-prompt">
+          <p>No results found for “${escapeHtml(query)}”.</p>
+          <small>Try another keyword or select a different media filter.</small>
+        </div>
+      `;
+      return;
+    }
+
+    let markup = ``;
+
+    if (matchedSports.length) {
+      markup += `
+        <div style="margin-bottom: 18px;">
+          <h4 style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 10px;">⚡ Live Sports &amp; Channels</h4>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            ${matchedSports.map(m => `
+              <div class="sports-match-card" data-watch-sports-id="${escapeHtml(m.id)}" style="flex-direction: row; align-items: center; justify-content: space-between; padding: 10px 16px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span class="sports-live-tag" style="margin: 0;">${m._live ? '<span class="live-dot"></span> LIVE' : escapeHtml(m.category)}</span>
+                  <strong style="font-size: 13px;">${escapeHtml(m.title)}</strong>
+                </div>
+                <button class="primary-button" type="button" style="padding: 6px 14px; font-size: 11px;">Watch</button>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    if (finalCards.length) {
+      markup += `
+        <div>
+          <h4 style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 12px;">🎬 Movies, Series &amp; Anime</h4>
+          <div class="search-results-grid">
+            ${finalCards.map(item => `
+              <article class="search-result-card" data-search-card-title="${escapeHtml(item.title)}">
+                <img class="search-result-poster" src="${item.image || "about:blank"}" alt="${escapeHtml(item.title)}" loading="lazy">
+                <span class="search-result-title">${escapeHtml(item.title)}</span>
+                <div class="search-result-meta">
+                  <span>${item.year || "2024"}</span>
+                  <span style="color: var(--accent); font-weight: 700;">★ ${Number(item.rating || 7).toFixed(1)}</span>
+                  <span>${escapeHtml(item.badge || item.type || "")}</span>
+                </div>
+              </article>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    resultsEl.innerHTML = markup;
+
+    resultsEl.querySelectorAll("[data-search-card-title]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const title = el.dataset.searchCardTitle;
+        closeSearchModal();
+        playTitle(title);
+      });
+    });
+
+    resultsEl.querySelectorAll("[data-watch-sports-id]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const sportId = el.dataset.watchSportsId;
+        const allEvents = [...(sportsState.cache?.live || []), ...(sportsState.cache?.upcoming || []), ...(sportsState.cache?.channels || [])];
+        const match = allEvents.find(e => e.id === sportId);
+        if (match) {
+          closeSearchModal();
+          openSportsPlayer(match);
+        }
+      });
+    });
+  } catch (err) {
+    console.error("Search modal error:", err);
+    resultsEl.innerHTML = `<div class="search-empty-prompt">Search error. Please try again.</div>`;
+  }
+}
+
+/* ==========================================================================
+   Live Sports Match Centre Engine (BinTV Integration)
+   ========================================================================== */
+const sportsState = {
+  tab: "live",
+  query: "",
+  category: "all",
+  channelLetter: "",
+  channelPage: 0,
+  pageSize: 24,
+  cache: null,
+  loading: false,
+  activeMatch: null,
+  activeFeedIndex: 0,
+  initialized: false,
+};
+
+async function fetchSportsCatalog() {
+  if (sportsState.cache && Date.now() - (sportsState.cache.timestamp || 0) < 45000) {
+    return sportsState.cache;
+  }
+  let raw = null;
+  try {
+    const res = await fetch("/api/sports").catch(() => null);
+    if (res?.ok) raw = await res.json();
+  } catch {}
+  if (!raw?.success) {
+    try {
+      const res = await fetch("https://bintvjson.lovable.app/api/public/bintvjson").catch(() => null);
+      if (res?.ok) raw = await res.json();
+    } catch {}
+  }
+  if (!raw) throw new Error("BinTV sports feed unavailable");
+
+  const normalizeEvent = (item, fallbackStatus) => {
+    if (!item?.id || !item?.name) return null;
+    const streams = (Array.isArray(item.streams) ? item.streams : []).map((st, idx) => {
+      const url = String(st?.url || "");
+      if (!url.includes("bintv-sources.pages.dev")) return null;
+      const name = String(st?.name || `Feed ${idx + 1}`);
+      return { embedUrl: url, name, hd: /(?:hd|4k|1080|720)/i.test(name), streamNo: idx + 1 };
+    }).filter(Boolean);
+    if (!streams.length) return null;
+    const title = String(item.name).trim();
+    const versus = title.split(/\s+(?:vs\.?|v|@)\s+/i);
+    const poster = item.poster ? String(item.poster).replace(/^http:/i, "https:") : "";
+    return {
+      id: String(item.id),
+      title,
+      category: String(item.category || "Other"),
+      poster,
+      status: String(item.status || fallbackStatus),
+      _live: String(item.status || fallbackStatus).toLowerCase() === "live",
+      teams: versus.length === 2 ? { home: { name: versus[0].trim() }, away: { name: versus[1].trim() } } : null,
+      sources: streams,
+      date: Number(item.date || 0)
+    };
+  };
+
+  const parseList = (key, fallback) => (Array.isArray(raw[key]) ? raw[key] : []).map(i => normalizeEvent(i, fallback)).filter(Boolean);
+  const live = parseList("Live Events", "live");
+  const upcoming = parseList("Upcoming Events", "upcoming");
+  const channels = parseList("24/7 Channels", "24/7");
+  const categories = [...new Set([...live, ...upcoming, ...channels].map(i => i.category).filter(Boolean))].sort();
+
+  sportsState.cache = { live, upcoming, channels, categories, timestamp: Date.now() };
+  return sportsState.cache;
+}
+
+function initSportsSection() {
+  if (!sportsState.initialized) {
+    sportsState.initialized = true;
+
+    $$("[data-sports-tab]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        $$("[data-sports-tab]").forEach(b => b.classList.toggle("active", b === btn));
+        sportsState.tab = btn.dataset.sportsTab || "live";
+        sportsState.channelPage = 0;
+        sportsState.channelLetter = "";
+        renderSportsSection();
+      });
+    });
+
+    $("#sports-search-input")?.addEventListener("input", (e) => {
+      sportsState.query = e.target.value.trim().toLowerCase();
+      sportsState.channelPage = 0;
+      renderSportsSection();
+    });
+
+    $("#close-sports-player")?.addEventListener("click", closeSportsPlayer);
+    $("#sports-player-backdrop")?.addEventListener("click", (e) => {
+      if (e.target.id === "sports-player-backdrop") closeSportsPlayer();
+    });
+  }
+
+  loadAndRenderSports();
+}
+
+async function loadAndRenderSports() {
+  const grid = $("#sports-match-grid");
+  if (!sportsState.cache && grid) {
+    grid.innerHTML = `
+      <div class="sports-loading-state">
+        <span class="player-loading-indicator"></span>
+        <span>Loading live matches &amp; channels…</span>
+      </div>
+    `;
+  }
+  try {
+    await fetchSportsCatalog();
+    renderSportsSection();
+  } catch (err) {
+    if (grid) {
+      grid.innerHTML = `
+        <div class="sports-loading-state">
+          <p>Failed to load sports events. Please check connection.</p>
+          <button class="primary-button" id="retry-sports-btn" type="button" style="margin-top: 10px;">Retry</button>
+        </div>
+      `;
+      $("#retry-sports-btn")?.addEventListener("click", () => loadAndRenderSports());
+    }
+  }
+}
+
+function renderSportsSection() {
+  const data = sportsState.cache;
+  if (!data) return;
+
+  const liveCount = $("#sports-live-count");
+  const upCount = $("#sports-upcoming-count");
+  const chCount = $("#sports-channels-count");
+  if (liveCount) liveCount.textContent = String(data.live.length);
+  if (upCount) upCount.textContent = String(data.upcoming.length);
+  if (chCount) chCount.textContent = String(data.channels.length);
+
+  const pillsEl = $("#sports-categories-pills");
+  if (pillsEl && sportsState.tab !== "channels") {
+    pillsEl.hidden = false;
+    pillsEl.innerHTML = `
+      <button class="sports-cat-pill ${sportsState.category === "all" ? "active" : ""}" data-sports-category="all" type="button">All Sports</button>
+      ${data.categories.map(cat => `
+        <button class="sports-cat-pill ${sportsState.category === cat ? "active" : ""}" data-sports-category="${escapeHtml(cat)}" type="button">${escapeHtml(cat)}</button>
+      `).join("")}
+    `;
+    pillsEl.querySelectorAll("[data-sports-category]").forEach(p => {
+      p.addEventListener("click", () => {
+        sportsState.category = p.dataset.sportsCategory || "all";
+        renderSportsSection();
+      });
+    });
+  } else if (pillsEl) {
+    pillsEl.hidden = true;
+  }
+
+  const lettersEl = $("#sports-channel-letters");
+  if (lettersEl) {
+    if (sportsState.tab === "channels") {
+      lettersEl.hidden = false;
+      const letters = [...new Set(data.channels.map(c => {
+        const first = c.title.trim().charAt(0).toUpperCase();
+        return /^[A-Z]$/.test(first) ? first : "#";
+      }))].sort();
+      lettersEl.innerHTML = `
+        <button class="letter-pill ${!sportsState.channelLetter ? "active" : ""}" data-letter="" type="button" style="width: auto; padding: 0 10px;">All</button>
+        ${letters.map(l => `
+          <button class="letter-pill ${sportsState.channelLetter === l ? "active" : ""}" data-letter="${escapeHtml(l)}" type="button">${escapeHtml(l)}</button>
+        `).join("")}
+      `;
+      lettersEl.querySelectorAll("[data-letter]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          sportsState.channelLetter = btn.dataset.letter;
+          sportsState.channelPage = 0;
+          renderSportsSection();
+        });
+      });
+    } else {
+      lettersEl.hidden = true;
+    }
+  }
+
+  let items = sportsState.tab === "live" ? data.live : sportsState.tab === "upcoming" ? data.upcoming : data.channels;
+  if (sportsState.tab !== "channels" && sportsState.category !== "all") {
+    items = items.filter(i => i.category === sportsState.category);
+  }
+  if (sportsState.tab === "channels" && sportsState.channelLetter) {
+    items = items.filter(i => {
+      const first = i.title.trim().charAt(0).toUpperCase();
+      const l = /^[A-Z]$/.test(first) ? first : "#";
+      return l === sportsState.channelLetter;
+    });
+  }
+  if (sportsState.query) {
+    const q = sportsState.query;
+    items = items.filter(i => `${i.title} ${i.category} ${i.teams?.home?.name || ""} ${i.teams?.away?.name || ""}`.toLowerCase().includes(q));
+  }
+
+  const pagerEl = $("#sports-pagination");
+  let displayItems = items;
+  if (sportsState.tab === "channels") {
+    const totalPages = Math.max(1, Math.ceil(items.length / sportsState.pageSize));
+    const page = Math.min(sportsState.channelPage, totalPages - 1);
+    sportsState.channelPage = page;
+    displayItems = items.slice(page * sportsState.pageSize, (page + 1) * sportsState.pageSize);
+    if (pagerEl && totalPages > 1) {
+      pagerEl.hidden = false;
+      pagerEl.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 14px 0; color: var(--muted); font-size: 13px;">
+          <span>Showing ${page * sportsState.pageSize + 1}–${Math.min((page + 1) * sportsState.pageSize, items.length)} of ${items.length} channels</span>
+          <div style="display: flex; gap: 8px;">
+            <button class="secondary-button" id="prev-channel-page" type="button" ${page === 0 ? "disabled" : ""}>← Prev</button>
+            <span style="display: flex; align-items: center; padding: 0 10px; font-weight: 700; color: var(--text);">Page ${page + 1} / ${totalPages}</span>
+            <button class="secondary-button" id="next-channel-page" type="button" ${page >= totalPages - 1 ? "disabled" : ""}>Next →</button>
+          </div>
+        </div>
+      `;
+      $("#prev-channel-page")?.addEventListener("click", () => {
+        sportsState.channelPage--;
+        renderSportsSection();
+      });
+      $("#next-channel-page")?.addEventListener("click", () => {
+        sportsState.channelPage++;
+        renderSportsSection();
+      });
+    } else if (pagerEl) {
+      pagerEl.hidden = true;
+    }
+  } else if (pagerEl) {
+    pagerEl.hidden = true;
+  }
+
+  const grid = $("#sports-match-grid");
+  if (!grid) return;
+
+  if (!displayItems.length) {
+    grid.innerHTML = `
+      <div class="sports-loading-state">
+        <p>No ${sportsState.tab === "channels" ? "channels" : "matches"} match your criteria.</p>
+        <button class="text-button" id="reset-sports-filters" type="button">Clear filters</button>
+      </div>
+    `;
+    $("#reset-sports-filters")?.addEventListener("click", () => {
+      sportsState.query = "";
+      sportsState.category = "all";
+      sportsState.channelLetter = "";
+      if ($("#sports-search-input")) $("#sports-search-input").value = "";
+      renderSportsSection();
+    });
+    return;
+  }
+
+  grid.innerHTML = displayItems.map(match => {
+    const teams = match.teams;
+    const isChannel = match.status === "24/7";
+    const timing = match.date ? (() => {
+      const d = new Date(match.date);
+      return {
+        day: new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric" }).format(d),
+        time: new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(d)
+      };
+    })() : { day: "Scheduled", time: "TBA" };
+
+    return `
+      <article class="sports-match-card ${match.poster ? "has-poster" : ""}" data-sports-id="${escapeHtml(match.id)}">
+        <div class="sports-card-art">
+          ${match.poster ? `<img src="${escapeHtml(match.poster)}" alt="" loading="lazy">` : ""}
+          <div class="sports-versus-overlay">
+            ${teams ? `
+              <div class="sports-team-col">
+                <div class="sports-team-badge">${escapeHtml(teams.home?.name?.charAt(0) || "H")}</div>
+                <span class="sports-team-name">${escapeHtml(teams.home?.name || "Home")}</span>
+              </div>
+              <span class="sports-vs-pill">VS</span>
+              <div class="sports-team-col">
+                <div class="sports-team-badge">${escapeHtml(teams.away?.name?.charAt(0) || "A")}</div>
+                <span class="sports-team-name">${escapeHtml(teams.away?.name || "Away")}</span>
+              </div>
+            ` : `
+              <div style="font-size: 18px; font-weight: 900; color: var(--accent);">${escapeHtml(match.title.slice(0, 16))}</div>
+            `}
+          </div>
+        </div>
+        <div class="sports-card-copy">
+          <div class="sports-card-meta">
+            ${match._live ? `<span class="sports-live-tag"><span class="live-dot"></span> LIVE</span>` : isChannel ? `<span class="sports-channel-badge">24/7 TV</span>` : `<span class="sports-card-time">${timing.day} · ${timing.time}</span>`}
+            <span class="sports-stream-count">${match.sources?.length || 1} feed${(match.sources?.length || 1) === 1 ? "" : "s"}</span>
+          </div>
+          <h3 class="sports-card-title">${escapeHtml(match.title)}</h3>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  grid.querySelectorAll("[data-sports-id]").forEach(card => {
+    card.addEventListener("click", () => {
+      const id = card.dataset.sportsId;
+      const match = displayItems.find(m => m.id === id);
+      if (match) openSportsPlayer(match);
+    });
+  });
+}
+
+function openSportsPlayer(match) {
+  sportsState.activeMatch = match;
+  sportsState.activeFeedIndex = 0;
+  const modal = $("#sports-player-backdrop");
+  const titleEl = $("#sports-player-title");
+  const frame = $("#sports-stream-frame");
+  const feedsBar = $("#sports-stream-feeds-bar");
+
+  if (!modal || !frame) return;
+  modal.removeAttribute("hidden");
+  if (titleEl) titleEl.textContent = match.title;
+
+  const sources = match.sources || [];
+  if (feedsBar) {
+    feedsBar.innerHTML = sources.map((s, idx) => `
+      <button class="sports-feed-btn ${idx === 0 ? "active" : ""}" data-feed-idx="${idx}" type="button">
+        ${escapeHtml(s.name || `Feed ${idx + 1}`)} ${s.hd ? "· HD" : ""}
+      </button>
+    `).join("");
+
+    feedsBar.querySelectorAll("[data-feed-idx]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.dataset.feedIdx);
+        sportsState.activeFeedIndex = idx;
+        feedsBar.querySelectorAll("[data-feed-idx]").forEach(b => b.classList.toggle("active", b === btn));
+        if (sources[idx]?.embedUrl) {
+          frame.src = sources[idx].embedUrl;
+        }
+      });
+    });
+  }
+
+  if (sources[0]?.embedUrl) {
+    frame.src = sources[0].embedUrl;
+  }
+}
+
+function closeSportsPlayer() {
+  const modal = $("#sports-player-backdrop");
+  const frame = $("#sports-stream-frame");
+  if (frame) frame.src = "about:blank";
+  if (modal) modal.setAttribute("hidden", "true");
+}
+
+/* ==========================================================================
+   Explore / Watch Providers Directory Engine (GaiaFlix replicate)
+   ========================================================================== */
+const exploreProviders = [
+  { id: 8, name: "Netflix", logo: "https://image.tmdb.org/t/p/w154/pbpMk2JmcoNnQwx5JGpXngfoWtp.jpg", tag: "Movies & Series" },
+  { id: 337, name: "Disney+", logo: "https://image.tmdb.org/t/p/w154/7qe86JjY55fUe0Fw9l8tq2659oN.jpg", tag: "Originals & Marvel" },
+  { id: 9, name: "Amazon Prime Video", logo: "https://image.tmdb.org/t/p/w154/pvsN14P4m8J611mQZ2R07qZ4G4A.jpg", tag: "Blockbusters" },
+  { id: 350, name: "Apple TV+", logo: "https://image.tmdb.org/t/p/w154/2E03q95o887pmRo1F1v589Bq61U.jpg", tag: "Award Winners" },
+  { id: 1899, name: "Max (HBO)", logo: "https://image.tmdb.org/t/p/w154/fksCUZ9QDWZMUwL2LgMtL9080n9.jpg", tag: "HBO Originals" },
+  { id: 283, name: "Crunchyroll", logo: "https://image.tmdb.org/t/p/w154/8z7rC8uIDaTM91X0Z7fk9v3098E.jpg", tag: "Anime Simulcasts" },
+  { id: 531, name: "Paramount+", logo: "https://image.tmdb.org/t/p/w154/xbhHLa3cA4CugR1LswZ3h3jS42K.jpg", tag: "Paramount & CBS" },
+  { id: 15, name: "Hulu", logo: "https://image.tmdb.org/t/p/w154/zxrVdFj005hsRsCare7Tjnkr8mg.jpg", tag: "Current TV" },
+  { id: 387, name: "Peacock", logo: "https://image.tmdb.org/t/p/w154/8VCV78Prwd9Q2ZnEm0ReO6bERDa.jpg", tag: "NBC Classics" },
+  { id: 2, name: "Apple iTunes", logo: "https://image.tmdb.org/t/p/w154/peURlLlr8jggOwK53fJ5wdQl05y.jpg", tag: "Digital Cinema" },
+  { id: 3, name: "Google Play Movies", logo: "https://image.tmdb.org/t/p/w154/tbEdFQDwx5LEVr8Wp68XvkjkUZ0.jpg", tag: "Rent & Buy" },
+  { id: 384, name: "HBO Max", logo: "https://image.tmdb.org/t/p/w154/aS2zvJWn9mwiCOeaaCkIh4w00d9.jpg", tag: "Warner Bros" }
+];
+
+let exploreInitialized = false;
+
+function initExploreSection() {
+  if (!exploreInitialized) {
+    exploreInitialized = true;
+    $("#explore-back-btn")?.addEventListener("click", () => {
+      $("#provider-catalog-view")?.setAttribute("hidden", "true");
+      $("#explore-back-btn")?.setAttribute("hidden", "true");
+      $("#providers-grid")?.removeAttribute("hidden");
+      const titleEl = $("#explore-title");
+      const kickerEl = $("#explore-kicker");
+      if (titleEl) titleEl.textContent = "Explore by Service";
+      if (kickerEl) kickerEl.textContent = "Browse catalogs of top global streaming networks.";
+    });
+  }
+
+  renderExploreProviders();
+}
+
+function renderExploreProviders() {
+  const grid = $("#providers-grid");
+  if (!grid) return;
+  grid.removeAttribute("hidden");
+  $("#provider-catalog-view")?.setAttribute("hidden", "true");
+  $("#explore-back-btn")?.setAttribute("hidden", "true");
+
+  grid.innerHTML = exploreProviders.map(p => `
+    <article class="provider-tile" data-provider-id="${p.id}">
+      <div class="provider-logo-wrap">
+        <img src="${p.logo}" alt="${escapeHtml(p.name)}" loading="lazy">
+      </div>
+      <span class="provider-tile-name">${escapeHtml(p.name)}</span>
+      <span class="provider-tile-tag">${escapeHtml(p.tag)}</span>
+    </article>
+  `).join("");
+
+  grid.querySelectorAll("[data-provider-id]").forEach(tile => {
+    tile.addEventListener("click", () => {
+      const pid = Number(tile.dataset.providerId);
+      const provider = exploreProviders.find(p => p.id === pid);
+      if (provider) openProviderCatalog(provider);
+    });
+  });
+}
+
+async function openProviderCatalog(provider) {
+  const grid = $("#providers-grid");
+  const view = $("#provider-catalog-view");
+  const titlesGrid = $("#provider-titles-grid");
+  const backBtn = $("#explore-back-btn");
+  const titleEl = $("#explore-title");
+  const kickerEl = $("#explore-kicker");
+
+  if (grid) grid.setAttribute("hidden", "true");
+  if (view) view.removeAttribute("hidden");
+  if (backBtn) backBtn.removeAttribute("hidden");
+  if (titleEl) titleEl.textContent = `${provider.name} on Ustream`;
+  if (kickerEl) kickerEl.textContent = `Streaming collection on ${provider.name}`;
+
+  if (titlesGrid) {
+    titlesGrid.innerHTML = Array.from({ length: 8 }).map(() => `
+      <div class="skeleton-card" aria-hidden="true">
+        <div class="skeleton-thumb"></div>
+        <div class="skeleton-line full"></div>
+        <div class="skeleton-line half"></div>
+      </div>
+    `).join("");
+  }
+
+  try {
+    const lang = localStorage.getItem("ustream-lang") || "en-US";
+    const movieUrl = `/api/tmdb/discover/movie?with_watch_providers=${provider.id}&watch_region=US&language=${lang}&sort_by=popularity.desc`;
+    const tvUrl = `/api/tmdb/discover/tv?with_watch_providers=${provider.id}&watch_region=US&language=${lang}&sort_by=popularity.desc`;
+
+    const [movieRes, tvRes] = await Promise.all([
+      fetch(movieUrl).catch(() => fetch(`https://api.themoviedb.org/3/discover/movie?api_key=16f62d38fec24f4e6c2adc9388da20ce&with_watch_providers=${provider.id}&watch_region=US&sort_by=popularity.desc`).catch(() => null)),
+      fetch(tvUrl).catch(() => fetch(`https://api.themoviedb.org/3/discover/tv?api_key=16f62d38fec24f4e6c2adc9388da20ce&with_watch_providers=${provider.id}&watch_region=US&sort_by=popularity.desc`).catch(() => null))
+    ]);
+
+    const movies = movieRes?.ok ? (await movieRes.json()).results || [] : [];
+    const tvs = tvRes?.ok ? (await tvRes.json()).results || [] : [];
+
+    const normList = [];
+    movies.slice(0, 12).forEach(m => {
+      const item = {
+        title: m.title || "Untitled",
+        type: "movie",
+        year: Number((m.release_date || "").slice(0, 4)) || 2024,
+        rating: m.vote_average || 7.5,
+        runtime: "Movie",
+        image: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : "",
+        badge: "HD",
+        kicker: provider.name,
+        genre: ["movie"],
+        tmdbId: m.id,
+        country: "Global",
+        gradient: "linear-gradient(145deg, #1e293b, #0f172a 50%, #020617)"
+      };
+      registerExtraTitle(item);
+      normList.push(item);
+    });
+
+    tvs.slice(0, 12).forEach(t => {
+      const item = {
+        title: t.name || "Untitled",
+        type: "series",
+        year: Number((t.first_air_date || "").slice(0, 4)) || 2024,
+        rating: t.vote_average || 7.5,
+        runtime: "Series",
+        image: t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : "",
+        badge: "Series",
+        kicker: provider.name,
+        genre: ["series"],
+        tmdbId: t.id,
+        country: "Global",
+        gradient: "linear-gradient(145deg, #0369a1, #0c4a6e 50%, #082f49)"
+      };
+      registerExtraTitle(item);
+      normList.push(item);
+    });
+
+    if (titlesGrid) {
+      titlesGrid.innerHTML = normList.length ? normList.map(renderCard).join("") : `<div class="empty-state" style="padding: 40px; grid-column: 1 / -1; text-align: center;">No titles currently listed for this network.</div>`;
+    }
+  } catch (err) {
+    console.error("Provider catalog error:", err);
+    if (titlesGrid) {
+      titlesGrid.innerHTML = `<div class="empty-state" style="padding: 40px; grid-column: 1 / -1; text-align: center;">Unable to load titles right now.</div>`;
+    }
+  }
+}
+
+/* ==========================================================================
+   Cartoons & Anime TMDB Category Loader (GaiaFlix replicate)
+   ========================================================================== */
+const categoryCache = new Set();
+async function loadCategoryTmdb(category) {
+  if (categoryCache.has(category)) return;
+  categoryCache.add(category);
+
+  try {
+    const isCartoons = category === "cartoons";
+    const lang = isCartoons ? "en" : "ja";
+    const langCode = localStorage.getItem("ustream-lang") || "en-US";
+    const tvUrl = `/api/tmdb/discover/tv?with_genres=16&with_original_language=${lang}&language=${langCode}&sort_by=popularity.desc`;
+    const movieUrl = `/api/tmdb/discover/movie?with_genres=16&with_original_language=${lang}&language=${langCode}&sort_by=popularity.desc`;
+
+    const [tvRes, movieRes] = await Promise.all([
+      fetch(tvUrl).catch(() => fetch(`https://api.themoviedb.org/3/discover/tv?api_key=16f62d38fec24f4e6c2adc9388da20ce&with_genres=16&with_original_language=${lang}&sort_by=popularity.desc`).catch(() => null)),
+      fetch(movieUrl).catch(() => fetch(`https://api.themoviedb.org/3/discover/movie?api_key=16f62d38fec24f4e6c2adc9388da20ce&with_genres=16&with_original_language=${lang}&sort_by=popularity.desc`).catch(() => null))
+    ]);
+
+    const tvItems = tvRes?.ok ? (await tvRes.json()).results || [] : [];
+    const movieItems = movieRes?.ok ? (await movieRes.json()).results || [] : [];
+
+    const newCards = [];
+    tvItems.slice(0, 15).forEach(t => {
+      const card = {
+        title: t.name || "Untitled",
+        type: isCartoons ? "cartoon" : "anime",
+        year: Number((t.first_air_date || "").slice(0, 4)) || 2024,
+        rating: t.vote_average || 8.0,
+        runtime: "Series",
+        image: t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : "",
+        badge: isCartoons ? "Cartoon" : "Anime",
+        kicker: isCartoons ? "Animation" : "Anime Series",
+        genre: isCartoons ? ["animation", "cartoon"] : ["anime"],
+        isCartoon: isCartoons,
+        isJapaneseAnime: !isCartoons,
+        language: lang,
+        tmdbId: t.id,
+        country: isCartoons ? "United States" : "Japan",
+        gradient: isCartoons ? "linear-gradient(145deg, #db2777, #831843 50%, #4c0519)" : "linear-gradient(145deg, #b45309, #78350f 50%, #451a03)"
+      };
+      newCards.push(card);
+    });
+
+    movieItems.slice(0, 10).forEach(m => {
+      const card = {
+        title: m.title || "Untitled",
+        type: isCartoons ? "cartoon" : "anime",
+        year: Number((m.release_date || "").slice(0, 4)) || 2024,
+        rating: m.vote_average || 8.0,
+        runtime: "Movie",
+        image: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : "",
+        badge: isCartoons ? "Animated Movie" : "Anime Movie",
+        kicker: isCartoons ? "Feature Animation" : "Anime Film",
+        genre: isCartoons ? ["animation", "cartoon"] : ["anime"],
+        isCartoon: isCartoons,
+        isJapaneseAnime: !isCartoons,
+        language: lang,
+        tmdbId: m.id,
+        country: isCartoons ? "United States" : "Japan",
+        gradient: "linear-gradient(145deg, #ca8a04, #713f12 50%, #422006)"
+      };
+      newCards.push(card);
+    });
+
+    if (newCards.length) {
+      const seen = new Set(catalog.map(c => c.title.toLowerCase()));
+      const filtered = newCards.filter(c => !seen.has(c.title.toLowerCase()));
+      catalog = [...catalog, ...filtered];
+      render();
+    }
+  } catch (err) {
+    console.error(`Failed to load ${category} from TMDB:`, err);
+  }
+}
+
 function initRouter() {
   const handleRoute = () => {
     const rawHash = window.location.hash.replace(/^#\/?/, "");
@@ -4628,7 +5587,7 @@ function initRouter() {
       return;
     }
 
-    const validSections = ["home", "movies", "series", "anime", "my-list", "profile"];
+    const validSections = ["home", "movies", "series", "anime", "cartoons", "sports", "explore", "my-list", "profile"];
     const section = validSections.includes(cleanPath) ? cleanPath : "home";
     setSection(section, false);
   };
@@ -4640,7 +5599,11 @@ function initRouter() {
 loadShowcaseCatalog();
 setupAuthEventListeners();
 void initAuth();
+initAppearanceSettings();
+initSearchModal();
 initRouter();
 void loadLiveCatalog();
 void loadNewestRecommendations();
+window.addEventListener("load", hideStartupLoader);
+setTimeout(hideStartupLoader, 1200);
 }
