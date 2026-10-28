@@ -7,6 +7,14 @@
       "destination": "/api/config.json"
     },
     {
+      "source": "/api/sports",
+      "destination": "/api/sports.json"
+    },
+    {
+      "source": "/api/livetv",
+      "destination": "/api/sports.json"
+    },
+    {
       "source": "/api/(.+)",
       "destination": "/api"
     }

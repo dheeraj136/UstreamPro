@@ -35,4 +35,23 @@ await writeFile(
   "utf8"
 );
 
+// Fetch latest Live Sports Catalog and build static sports.json for high-availability CDN delivery
+try {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+  const sportsRes = await fetch("https://bintvjson.lovable.app/api/public/bintvjson", {
+    signal: controller.signal,
+    headers: { "Accept": "application/json" }
+  }).catch(() => null);
+  clearTimeout(timer);
+
+  if (sportsRes?.ok) {
+    const sportsData = await sportsRes.json();
+    await writeFile(join(publicApiDir, "sports.json"), JSON.stringify(sportsData), "utf8");
+    console.log("Cached sports.json successfully.");
+  }
+} catch (e) {
+  console.warn("Could not cache live sports during build:", e.message);
+}
+
 console.log("Build complete.");
