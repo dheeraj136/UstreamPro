@@ -518,10 +518,12 @@ const DEMO_ITEMS = [
     "tmdbId": "569094",
     "backdrop": "https://image.tmdb.org/t/p/original/kVd3a9YeLGkoeR50jGEXM6EqseS.jpg",
     "title": "Spider-Man: Across the Spider-Verse",
-    "category": "movie",
-    "type": "movie",
+    "category": "cartoons",
+    "type": "cartoon",
+    "isCartoon": true,
     "genre": [
       "animation",
+      "cartoon",
       "action",
       "adventure"
     ],
@@ -661,9 +663,11 @@ const DEMO_ITEMS = [
     "tmdbId": "129",
     "backdrop": "https://image.tmdb.org/t/p/original/m4TUa2ciEWSlk37rOsjiSIvZDXE.jpg",
     "title": "Spirited Away",
-    "category": "movie",
-    "type": "movie",
+    "category": "anime",
+    "type": "anime",
+    "isJapaneseAnime": true,
     "genre": [
+      "anime",
       "animation",
       "adventure",
       "fantasy"
@@ -1425,6 +1429,36 @@ const normalizeSearchItem = (item) => {
   return normalizeApiItem(item, category);
 };
 
+const TMDB_API_KEYS = [
+  "e9e9d8da18ae29fc430845952232787c",
+  "3fd2be6f0c70a2a598f084ddfb75487c",
+  "16f62d38fec24f4e6c2adc9388da20ce"
+];
+
+const TMDB_GENRE_NAMES = {
+  28: "action", 12: "adventure", 16: "animation", 35: "comedy", 80: "crime",
+  99: "documentary", 18: "drama", 10751: "family", 14: "fantasy", 36: "history",
+  27: "horror", 10402: "music", 9648: "mystery", 10749: "romance", 878: "sci-fi",
+  10770: "tv movie", 53: "thriller", 10752: "war", 37: "western",
+  10759: "action", 10762: "kids", 10763: "news", 10764: "reality",
+  10765: "sci-fi", 10766: "soap", 10767: "talk", 10768: "war"
+};
+
+async function fetchTmdbResults(path) {
+  const sep = path.includes("?") ? "&" : "?";
+  for (const apiKey of TMDB_API_KEYS) {
+    try {
+      const directUrl = `https://api.themoviedb.org/3${path}${sep}api_key=${apiKey}`;
+      const res = await fetch(directUrl);
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json?.results)) return json.results;
+      }
+    } catch {}
+  }
+  return [];
+}
+
 const normalizeTmdbItem = (item, category = "movie") => {
   const isMovie = category === "movie" || item.media_type === "movie" || (!item.first_air_date && !!item.release_date);
   const isAnime = category === "anime" || (item.original_language === "ja" && (item.genre_ids || []).includes(16));
@@ -1439,15 +1473,30 @@ const normalizeTmdbItem = (item, category = "movie") => {
   const tmdbId = String(item.id);
   const isAdult = Boolean(item.adult) || (Array.isArray(item.genre_ids) && item.genre_ids.includes(10749) && /\b(?:erotic|xxx|sex|porn)\b/i.test(item.overview || ""));
 
+  const genreSet = new Set(Array.isArray(item.genre_ids) ? item.genre_ids.map(id => TMDB_GENRE_NAMES[id]).filter(Boolean) : []);
+  if (isAnime) {
+    genreSet.add("anime");
+    genreSet.add("animation");
+  } else if (isCartoon) {
+    genreSet.add("cartoon");
+    genreSet.add("animation");
+  } else if (isMovie) {
+    genreSet.add("movie");
+  } else {
+    genreSet.add("series");
+  }
+
   return {
     tmdbId,
     subjectId: `tmdb-${tmdbId}`,
     title,
-    category: type === "cartoon" ? "cartoons" : type,
+    category: isAnime ? "anime" : isCartoon ? "cartoons" : isMovie ? "movie" : "series",
     type,
+    isJapaneseAnime: isAnime,
+    isCartoon: isCartoon,
     adult: Boolean(item.adult || isAdult),
     isAdult: Boolean(item.adult || isAdult),
-    genre: isAnime ? ["anime"] : isCartoon ? ["animation", "cartoon"] : isMovie ? ["movie", "action"] : ["series", "drama"],
+    genre: [...genreSet],
     country: item.origin_country?.[0] || (isAnime ? "Japan" : "United States"),
     countryName: item.origin_country?.[0] || (isAnime ? "Japan" : "United States"),
     year,
@@ -2084,6 +2133,7 @@ function setSection(section, updateHash = true) {
   const validSections = ["home", "movies", "series", "anime", "cartoons", "sports", "explore", "my-list", "profile"];
   const target = validSections.includes(section) ? section : "home";
   state.section = target;
+  state.genre = "all"; // Reset genre sub-tab so all titles in this section are visible!
 
   if (updateHash) {
     const newHash = target === "home" ? "#/home" : `#/${target}`;
@@ -2098,7 +2148,6 @@ function setSection(section, updateHash = true) {
   });
 
   state.filters = makeFilterDefaults(getFilterChannel());
-  state.genre = (target === "anime" || target === "cartoons") ? target : "all";
 
   const heroSection = $(".hero");
   const quickPicks = $(".quick-picks");
@@ -2130,7 +2179,8 @@ function setSection(section, updateHash = true) {
     filterChannelKicker.textContent = target === "series" ? "Series Collection" : target === "cartoons" ? "Cartoons Collection" : "Anime Collection";
   }
 
-  $$(".genre-tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.genre === state.genre));
+  // Reset genre pills to 'all' (For you)
+  $$(".genre-tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.genre === "all"));
 
   if (target === "sports") {
     if (heroSection) heroSection.hidden = true;
@@ -2205,23 +2255,39 @@ function setSection(section, updateHash = true) {
     mainEl.classList.add("section-fade");
   }
 
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  // Render the new section
   render();
+
+  // Update featured hero to a top title from the active category!
+  const visible = getVisibleCards();
+  if (visible.length > 0 && target !== "home") {
+    setFeatured(visible[0]);
+  } else if (catalog.length > 0 && target === "home") {
+    const cleanItem = catalog.find((i) => isDarkModeActive() || !isAdultContent(i));
+    if (cleanItem) setFeatured(cleanItem);
+  }
+
+  // Smart scrolling: if user was scrolled down past 350px, scroll to catalog grid; otherwise stay at top
+  if (["movies", "series", "anime", "cartoons"].includes(target)) {
+    if (window.scrollY > 350) {
+      $("#catalog")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  } else if (target === "my-list") {
+    $("#catalog")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  } else if (target === "sports" || target === "explore" || target === "profile") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   hasMoreContent = true;
   isLoadingMore = false;
   const loadMoreWrap = $("#catalog-load-more-wrap");
   if (loadMoreWrap) {
     loadMoreWrap.hidden = ["sports", "explore", "profile", "my-list"].includes(target);
   }
-  const visible = getVisibleCards();
   if (visible.length < 24 && !["sports", "explore", "profile", "my-list"].includes(target)) {
     void loadMoreTitles();
-  }
-  if (visible.length > 0) {
-    setFeatured(visible[0]);
-  } else if (catalog.length > 0 && target === "home") {
-    const cleanItem = catalog.find((i) => isDarkModeActive() || !isAdultContent(i));
-    if (cleanItem) setFeatured(cleanItem);
   }
 }
 
@@ -2269,100 +2335,85 @@ function isAdultContent(item) {
 
 function getVisibleCards() {
   const query = state.search.trim().toLowerCase();
-  const sectionType = { movies: "movie", series: "series", anime: "anime", cartoons: "cartoon" }[state.section];
+  const targetSection = state.section || "home";
   const apiGenre = state.filters.genre || "All";
   const apiLanguage = state.filters.classify || "All";
+  const isDark = isDarkModeActive();
+
   let visible = catalog.filter((card) => {
     // Dark Mode Setting: If Dark Mode is OFF, strictly hide all 18+ and adult content across all categories
-    if (!isDarkModeActive() && isAdultContent(card)) {
+    if (!isDark && isAdultContent(card)) {
       return false;
     }
 
+    // Section Filtering:
     let matchesSection = true;
-    if (state.section === "cartoons") {
-      matchesSection = card.isCartoon || card.type === "cartoon" || card.category === "cartoons" || card.genre?.includes("animation") || (card.type === "anime" && card.language === "en");
-    } else if (state.section === "anime") {
-      matchesSection = card.type === "anime" || card.isJapaneseAnime || card.category === "anime" || card.language === "ja";
-    } else if (state.section === "movies") {
-      matchesSection = (card.type === "movie" || card.category === "movie") && !card.isJapaneseAnime && !card.isCartoon;
-    } else if (state.section === "series") {
-      matchesSection = (card.type === "series" || card.category === "series" || card.category === "tv") && !card.isJapaneseAnime && !card.isCartoon;
-    } else if (sectionType) {
-      matchesSection = card.type === sectionType;
+    if (targetSection === "movies") {
+      const isAnim = card.type === "anime" || card.isJapaneseAnime || card.category === "anime" || (card.language && /japanese/i.test(card.language) && card.genre?.includes("animation"));
+      const isCart = card.type === "cartoon" || card.isCartoon || card.category === "cartoons";
+      matchesSection = (card.type === "movie" || card.category === "movie") && !isAnim && !isCart;
+    } else if (targetSection === "series") {
+      const isAnim = card.type === "anime" || card.isJapaneseAnime || card.category === "anime";
+      const isCart = card.type === "cartoon" || card.isCartoon || card.category === "cartoons";
+      matchesSection = (card.type === "series" || card.category === "series" || card.category === "tv") && !isAnim && !isCart;
+    } else if (targetSection === "anime") {
+      matchesSection = card.type === "anime" || 
+                       card.isJapaneseAnime || 
+                       card.category === "anime" || 
+                       card.genre?.includes("anime") ||
+                       (card.language && /japanese/i.test(card.language)) ||
+                       card.country === "Japan" || 
+                       card.countryName === "Japan" ||
+                       card.origin_country?.[0] === "JP";
+    } else if (targetSection === "cartoons") {
+      const isJapanese = card.type === "anime" || 
+                         card.isJapaneseAnime || 
+                         card.category === "anime" || 
+                         (card.language && /japanese/i.test(card.language)) ||
+                         card.country === "Japan" || 
+                         card.countryName === "Japan" ||
+                         card.origin_country?.[0] === "JP";
+      matchesSection = !isJapanese && (
+        card.type === "cartoon" || 
+        card.isCartoon || 
+        card.category === "cartoons" || 
+        card.category === "cartoon" || 
+        card.genre?.includes("cartoon") || 
+        card.genre?.includes("animation") ||
+        card.badge === "Cartoon" ||
+        card.kicker === "Animation"
+      );
+    } else if (targetSection === "my-list") {
+      matchesSection = state.watchlist.has(card.title);
     }
-    const matchesList = state.section !== "my-list" || state.watchlist.has(card.title);
-    const matchesGenre = state.genre === "all" || card.genre.includes(state.genre);
-    const matchesApiGenre = apiGenre === "All" || card.genre.some((value) => value.toLowerCase() === apiGenre.toLowerCase());
-    const matchesLanguage = apiLanguage === "All" || card.language === apiLanguage;
-    const matchesQuery = !query || `${card.title} ${card.country} ${card.genre.join(" ")}`.toLowerCase().includes(query);
-    const matchesCountry = state.filters.country === "All" || card.country === state.filters.country;
-    const matchesYear = state.filters.year === "All" || matchesYearFilter(card.year, state.filters.year);
-    const matchesRating = card.rating >= state.filters.rateMin && card.rating <= state.filters.rateMax;
-    
-    // Kids Mode & Maturity Rating Restrictions
-    if (state.auth?.activeProfile?.isKids) {
-      const matureGenres = ["horror", "crime", "thriller", "war", "erotic"];
-      if (card.genre.some((g) => matureGenres.includes(String(g).toLowerCase()))) return false;
-    }
-    const maturity = state.auth?.activeProfile?.maturityRating;
-    if (maturity === "G" && card.rating > 7.5) return false;
-    if (maturity === "PG" && card.genre.some((g) => ["horror", "erotic"].includes(String(g).toLowerCase()))) return false;
 
-    return matchesSection && matchesList && matchesGenre && matchesApiGenre && matchesLanguage && matchesQuery && matchesCountry && matchesYear && matchesRating;
+    // Genre Filter (Active genre pill / sub-tab in #genre-tabs):
+    let matchesGenre = true;
+    if (state.genre && state.genre !== "all") {
+      const g = state.genre.toLowerCase();
+      matchesGenre = (card.genre || []).some(v => v.toLowerCase() === g || v.toLowerCase().includes(g));
+    }
+
+    const matchesApiGenre = apiGenre === "All" || (card.genre || []).some((val) => val.toLowerCase() === apiGenre.toLowerCase());
+    const matchesLanguage = apiLanguage === "All" || card.language === apiLanguage || (apiLanguage === "English" && /english/i.test(card.language || "")) || (apiLanguage === "Japanese" && /japanese/i.test(card.language || ""));
+    const matchesQuery = !query || `${card.title} ${card.country || ""} ${(card.genre || []).join(" ")}`.toLowerCase().includes(query);
+    const matchesCountry = state.filters.country === "All" || card.country === state.filters.country || card.countryName === state.filters.country;
+    const matchesYear = state.filters.year === "All" || matchesYearFilter(card.year, state.filters.year);
+    const matchesRating = (card.rating || 0) >= (state.filters.rateMin ?? 0) && (card.rating || 0) <= (state.filters.rateMax ?? 10);
+
+    return (
+      matchesSection &&
+      matchesGenre &&
+      matchesApiGenre &&
+      matchesLanguage &&
+      matchesQuery &&
+      matchesCountry &&
+      matchesYear &&
+      matchesRating
+    );
   });
 
-  if (state.filters.sort === "Hottest") visible.sort((a, b) => b.rating - a.rating);
-  if (state.filters.sort === "Latest") visible.sort((a, b) => b.year - a.year);
   return visible;
-}
-
-function matchesYearFilter(year, filter) {
-  if (/^\d{4}$/.test(filter)) return year === Number(filter);
-  if (/^\d{4}s$/.test(filter)) return Math.floor(year / 10) * 10 === Number(filter.slice(0, 4));
-  return true;
-}
-
-function renderContinue() {
-  const section = $(".quick-picks");
-  const row = $("#continue-row");
-  if (!section || !row) return;
-
-  const isDark = isDarkModeActive();
-  const visibleItems = continuation.filter((item) => isDark || !isAdultContent(item));
-
-  if (visibleItems.length === 0) {
-    row.innerHTML = `
-      <div class="continue-empty-state">
-        <span class="empty-icon" aria-hidden="true">${renderIcon("play", "icon-sm")}</span>
-        <div>
-          <strong>Start watching to build your queue</strong>
-          <p>Stream any movie, series, or anime to keep track of your progress and pick up right where you left off.</p>
-        </div>
-      </div>
-    `;
-    section.hidden = false;
-    return;
-  }
-
-  section.hidden = false;
-  row.innerHTML = visibleItems.map((item) => `
-    <button class="continue-card" style="--card-gradient:${item.gradient}" data-action="details" data-title="${escapeHtml(item.title)}" aria-label="Continue watching ${escapeHtml(item.title)}">
-      <span class="card-label">Continue watching</span><strong>${escapeHtml(item.title)}</strong>
-      <span class="watch-progress"><span style="width:${item.progress}%"></span></span>
-    </button>
-  `).join("");
-}
-
-function renderRecommendations() {
-  const section = $("#recommendations-section");
-  const row = $("#recommendation-row");
-  if (!section || !row) return;
-  const isDark = isDarkModeActive();
-  const visibleRecs = recommendations.filter((item) => isDark || !isAdultContent(item));
-  section.hidden = visibleRecs.length === 0;
-  row.innerHTML = visibleRecs.map(renderCard).join("");
-  const update = $("#recommendation-update");
-  if (update) update.textContent = visibleRecs.length ? `Updated today · ${visibleRecs.length} picks` : "";
 }
 
 function renderCard(card) {
@@ -2690,10 +2741,8 @@ function escapeHtml(str) {
   }[c]));
 }
 
-const TMDB_API_KEYS = [
-  "e9e9d8da18ae29fc430845952232787c",
-  "3fd2be6f0c70a2a598f084ddfb75487c"
-];
+// TMDB_API_KEYS declared at top
+
 const TMDB_CACHE = new Map();
 
 function isItemSeries(item) {
@@ -7015,75 +7064,44 @@ async function loadCategoryTmdb(category) {
     const isCartoons = category === "cartoons";
     const lang = isCartoons ? "en" : "ja";
     const langCode = localStorage.getItem("ustream-lang") || "en-US";
-    const tvUrl = `/api/tmdb/discover/tv?with_genres=16&with_original_language=${lang}&language=${langCode}&sort_by=popularity.desc`;
-    const movieUrl = `/api/tmdb/discover/movie?with_genres=16&with_original_language=${lang}&language=${langCode}&sort_by=popularity.desc`;
+    const tvPath = `/discover/tv?with_genres=16&with_original_language=${lang}&language=${langCode}&sort_by=popularity.desc&page=1`;
+    const moviePath = `/discover/movie?with_genres=16&with_original_language=${lang}&language=${langCode}&sort_by=popularity.desc&page=1`;
 
-    const [tvRes, movieRes] = await Promise.all([
-      fetch(tvUrl).catch(() => fetch(`https://api.themoviedb.org/3/discover/tv?api_key=16f62d38fec24f4e6c2adc9388da20ce&with_genres=16&with_original_language=${lang}&sort_by=popularity.desc`).catch(() => null)),
-      fetch(movieUrl).catch(() => fetch(`https://api.themoviedb.org/3/discover/movie?api_key=16f62d38fec24f4e6c2adc9388da20ce&with_genres=16&with_original_language=${lang}&sort_by=popularity.desc`).catch(() => null))
+    const [tvResults, movieResults] = await Promise.all([
+      fetchTmdbResults(tvPath),
+      fetchTmdbResults(moviePath)
     ]);
 
-    const tvItems = tvRes?.ok ? (await tvRes.json()).results || [] : [];
-    const movieItems = movieRes?.ok ? (await movieRes.json()).results || [] : [];
-
-    const newCards = [];
-    tvItems.slice(0, 15).forEach(t => {
-      const card = {
-        title: t.name || "Untitled",
-        type: isCartoons ? "cartoon" : "anime",
-        year: Number((t.first_air_date || "").slice(0, 4)) || 2024,
-        rating: t.vote_average || 8.0,
-        runtime: "Series",
-        image: t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : "",
-        badge: isCartoons ? "Cartoon" : "Anime",
-        kicker: isCartoons ? "Animation" : "Anime Series",
-        genre: isCartoons ? ["animation", "cartoon"] : ["anime"],
-        isCartoon: isCartoons,
-        isJapaneseAnime: !isCartoons,
-        adult: Boolean(t.adult),
-        isAdult: Boolean(t.adult),
-        language: lang,
-        tmdbId: t.id,
-        backdrop: t.backdrop_path ? `https://image.tmdb.org/t/p/original${t.backdrop_path}` : (t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : ""),
-        country: isCartoons ? "United States" : "Japan",
-        gradient: isCartoons ? "linear-gradient(145deg, #db2777, #831843 50%, #4c0519)" : "linear-gradient(145deg, #b45309, #78350f 50%, #451a03)"
-      };
-      newCards.push(card);
-    });
-
-    movieItems.slice(0, 10).forEach(m => {
-      const card = {
-        title: m.title || "Untitled",
-        type: isCartoons ? "cartoon" : "anime",
-        year: Number((m.release_date || "").slice(0, 4)) || 2024,
-        rating: m.vote_average || 8.0,
-        runtime: "Movie",
-        image: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : "",
-        badge: isCartoons ? "Animated Movie" : "Anime Movie",
-        kicker: isCartoons ? "Feature Animation" : "Anime Film",
-        genre: isCartoons ? ["animation", "cartoon"] : ["anime"],
-        isCartoon: isCartoons,
-        isJapaneseAnime: !isCartoons,
-        adult: Boolean(t.adult),
-        isAdult: Boolean(t.adult),
-        language: lang,
-        tmdbId: m.id,
-        backdrop: m.backdrop_path ? `https://image.tmdb.org/t/p/original${m.backdrop_path}` : (m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : ""),
-        country: isCartoons ? "United States" : "Japan",
-        gradient: "linear-gradient(145deg, #ca8a04, #713f12 50%, #422006)"
-      };
-      newCards.push(card);
-    });
+    const newCards = [
+      ...tvResults.slice(0, 20).map(t => normalizeTmdbItem(t, category)),
+      ...movieResults.slice(0, 20).map(m => normalizeTmdbItem(m, category))
+    ];
 
     if (newCards.length) {
-      const seen = new Set(catalog.map(c => c.title.toLowerCase()));
-      const filtered = newCards.filter(c => !seen.has(c.title.toLowerCase()));
-      catalog = [...catalog, ...filtered];
-      render();
+      const seen = new Set(catalog.map(c => (c.title || "").toLowerCase().trim()));
+      const filtered = newCards.filter(c => !seen.has((c.title || "").toLowerCase().trim()));
+      if (filtered.length) {
+        catalog = [...catalog, ...filtered];
+        render();
+        const vis = getVisibleCards();
+        if (vis.length > 0 && state.section === category) {
+          setFeatured(vis[0]);
+        }
+      }
     }
   } catch (err) {
     console.error(`Failed to load ${category} from TMDB:`, err);
   }
+}
+
+function initSectionButtons() {
+  $("[data-section]").forEach((button) => {
+    button.addEventListener("click", (e) => {
+      e.preventDefault();
+      const sec = button.dataset.section;
+      if (sec) setSection(sec, true);
+    });
+  });
 }
 
 function initRouter() {
@@ -7138,6 +7156,7 @@ function initRouter() {
   };
 
   window.addEventListener("hashchange", handleRoute);
+  initSectionButtons();
   handleRoute();
 }
 
