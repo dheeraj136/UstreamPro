@@ -2625,15 +2625,15 @@ const TITLE_TMDB_MAP = {
 };
 
 const STREAM_SERVERS = {
-  vidlink: {
-    name: "Server 1 (VidLink Cloud - Fast & Ad-Free)",
-    getMovieUrl: (id) => `https://vidlink.pro/movie/${id}?primaryColor=e7ff51&secondaryColor=1f1f1f&icons=vid`,
-    getTvUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e7ff51&secondaryColor=1f1f1f&icons=vid`
-  },
   vidstuck: {
-    name: "Server 2 (Vidstuck HD)",
+    name: "Server 1 (Vidstuck HD - Fast & Reliable)",
     getMovieUrl: (id) => `https://vidstuck.cc/embed/movie/${id}?color=e7ff51&autoplay=false`,
     getTvUrl: (id, s, e) => `https://vidstuck.cc/embed/tv/${id}/${s}/${e}?color=e7ff51&autoplay=false`
+  },
+  vidlink: {
+    name: "Server 2 (VidLink Cloud)",
+    getMovieUrl: (id) => `https://vidlink.pro/movie/${id}?primaryColor=e7ff51&secondaryColor=1f1f1f&icons=vid`,
+    getTvUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e7ff51&secondaryColor=1f1f1f&icons=vid`
   },
   vidsrc: {
     name: "Server 3 (VidSrc VIP)",
@@ -2657,10 +2657,10 @@ const STREAM_SERVERS = {
   }
 };
 
-let currentServerKey = "vidlink";
+let currentServerKey = "vidstuck";
 try {
   const savedServer = localStorage.getItem("ustream-server");
-  if (savedServer && STREAM_SERVERS[savedServer]) {
+  if (savedServer && STREAM_SERVERS[savedServer] && savedServer !== "vidlink") {
     currentServerKey = savedServer;
   }
 } catch {}
@@ -2838,7 +2838,7 @@ async function resolveTmdbId(item) {
 }
 
 function getEmbedStreamUrl(tmdbId, item, season = 1, episode = 1, serverKey = currentServerKey) {
-  const server = STREAM_SERVERS[serverKey] || STREAM_SERVERS.vidlink;
+  const server = STREAM_SERVERS[serverKey] || STREAM_SERVERS.vidstuck;
   const isSeries = item.mediaType === "tv" || item.type === "series" || (item.type === "anime" && item.mediaType !== "movie" && (Number(item.seNum) > 0 || (item.seasons && item.seasons.length > 0)));
   let url = isSeries
     ? server.getTvUrl(tmdbId, Math.max(1, Number(season) || 1), Math.max(1, Number(episode) || 1))
@@ -3875,6 +3875,7 @@ function reloadCurrentEmbed() {
   if (!item || !player.tmdbId) return;
   const embed = $("#embed-player");
   if (!embed) return;
+  embed.removeAttribute("sandbox");
   const season = player.selectedSeason || 1;
   const episode = player.selectedEpisode || 1;
   const url = getEmbedStreamUrl(player.tmdbId, item, season, episode, currentServerKey);
@@ -4019,8 +4020,11 @@ async function playTitle(title) {
   }
 
   // Load embed player with actual content!
+  const serverSelect = $("#player-server-select");
+  if (serverSelect) serverSelect.value = currentServerKey;
   const streamUrl = getEmbedStreamUrl(tmdbId, item, state.player.selectedSeason || 1, state.player.selectedEpisode || 1, currentServerKey);
   if (embed) {
+    embed.removeAttribute("sandbox");
     embed.src = streamUrl;
     embed.hidden = false;
   }
@@ -4284,6 +4288,9 @@ $("#filter-groups").addEventListener("change", (event) => {
 document.addEventListener("change", (event) => {
   if (event.target.id === "player-server-select") {
     currentServerKey = event.target.value;
+    try {
+      localStorage.setItem("ustream-server", currentServerKey);
+    } catch {}
     reloadCurrentEmbed();
     showToast(`Switched to ${STREAM_SERVERS[currentServerKey]?.name || "HD Server"}`);
     return;

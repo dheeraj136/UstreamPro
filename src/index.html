@@ -19,7 +19,7 @@
     <meta name="twitter:title" content="Ustream — Watch What Moves You" />
     <meta name="twitter:description" content="Stream movies, series, and anime on Ustream" />
     <meta name="twitter:image" content="https://ustream-pro.vercel.app/assets/brand-banner.jpg" />
-    <link rel="stylesheet" href="./styles.css?v=20261026-seo-a11y" />
+    <link rel="stylesheet" href="./styles.css?v=20261028-fix-v4" />
   </head>
   <body>
     <div id="startup-loader" class="startup-loader" aria-label="Loading Ustream">
@@ -456,8 +456,8 @@
         <div class="player-action-bar" aria-label="Player actions">
           <div class="player-server-selector">
             <select id="player-server-select" class="player-server-select" aria-label="Stream Server">
-              <option value="vidlink" selected>Server 1 · VidLink Cloud (Ad-Free HD)</option>
-              <option value="vidstuck">Server 2 · Vidstuck HD</option>
+              <option value="vidstuck" selected>Server 1 · Vidstuck HD (Fast &amp; Reliable)</option>
+              <option value="vidlink">Server 2 · VidLink Cloud</option>
               <option value="vidsrc">Server 3 · VidSrc VIP</option>
               <option value="aniembed">Server 4 · AniEmbed (Anime)</option>
               <option value="smashy">Server 5 · SmashyStream</option>
@@ -954,7 +954,7 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="./app.js?v=20261028-live-fix-v1"></script>
+    <script type="module" src="./app.js?v=20261028-fix-v4"></script>
     <script>
       (function() {
         function dismissStartupLoader() {
