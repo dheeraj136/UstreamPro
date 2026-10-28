@@ -1,5 +1,93 @@
 import { ICONS, renderIcon } from "./assets/icons.js";
 
+/* ==========================================================================
+   Ustream Anti-Ad & Redirect Blocker Shield
+   Guarantees zero unauthorized ad pop-ups, pop-unders, top-window hijacks,
+   or rogue promotional redirects.
+   ========================================================================== */
+function initAdShield() {
+  if (typeof window === "undefined") return;
+
+  // 1. Hard-block unauthorized window.open ad popups and tab redirects
+  const _origOpen = window.open;
+  window.open = function (url, target, features) {
+    if (!url || typeof url !== "string") return null;
+    try {
+      const parsed = new URL(url, window.location.origin);
+      if (parsed.origin === window.location.origin) {
+        return _origOpen.call(window, url, target, features);
+      }
+    } catch {}
+    console.warn("[Ustream Ad Shield] Blocked unauthorized pop-up / redirect to:", url);
+    return null;
+  };
+
+  // 2. Clear known promotional vendor ad tags / keys
+  const adKeys = ["gaia-promo-off-once", "promo-shown", "_pop_fired", "monetag", "adcash", "propeller", "adsterra"];
+  adKeys.forEach((k) => {
+    try {
+      localStorage.removeItem(k);
+      sessionStorage.removeItem(k);
+    } catch {}
+  });
+
+  // 3. Block and remove rogue ad network script tags and full-screen invisible clickjack overlays
+  const adDomains = [
+    "sepoygalliot.com",
+    "googletagmanager.com/gtag",
+    "monetag.com",
+    "adsterra.com",
+    "propellerads.com",
+    "popcash.net",
+    "clickadu.com",
+    "exoclick.com",
+    "adcash.com",
+    "juicyads.com",
+    "trafficjunky.com",
+    "bet365",
+    "1xbet"
+  ];
+
+  const observer = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      for (const node of m.addedNodes) {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const el = node;
+          const tagName = el.tagName.toLowerCase();
+          if (tagName === "script") {
+            const src = (el.src || "").toLowerCase();
+            if (adDomains.some((d) => src.includes(d))) {
+              console.warn("[Ustream Ad Shield] Intercepted and removed rogue ad script:", src);
+              el.remove();
+            }
+          }
+          if (tagName === "div" || tagName === "a") {
+            const style = el.getAttribute("style") || "";
+            if (
+              (style.includes("position: fixed") || style.includes("position:fixed")) &&
+              (style.includes("opacity: 0") || style.includes("opacity:0")) &&
+              (style.includes("z-index: 2147483647") || style.includes("z-index: 999999") || style.includes("z-index:999999"))
+            ) {
+              console.warn("[Ustream Ad Shield] Removed clickjacking ad overlay");
+              el.remove();
+            }
+          }
+        }
+      }
+    }
+  });
+
+  if (document.documentElement) {
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  } else {
+    document.addEventListener("DOMContentLoaded", () => {
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+    });
+  }
+}
+
+initAdShield();
+
 const animeFilterResponse = {
   code: 0,
   data: {
@@ -1375,8 +1463,8 @@ const normalizeTmdbItem = (item, category = "movie") => {
     backdrop,
     gradient: isAnime ? "linear-gradient(145deg, #b45309, #78350f 50%, #451a03)" : isCartoon ? "linear-gradient(145deg, #db2777, #831843 50%, #4c0519)" : isMovie ? "linear-gradient(145deg, #1e293b, #0f172a 50%, #020617)" : "linear-gradient(145deg, #0369a1, #0c4a6e 50%, #082f49)",
     description: item.overview || `Stream ${title} in high definition on Ustream.`,
-    video: `https://vidstuck.cc/embed/${isMovie ? "movie" : "tv"}/${tmdbId}${isMovie ? "" : "/1/1"}`,
-    playUrl: { url: `https://vidstuck.cc/embed/${isMovie ? "movie" : "tv"}/${tmdbId}${isMovie ? "" : "/1/1"}` },
+    video: `https://vidlink.pro/${isMovie ? "movie" : "tv"}/${tmdbId}${isMovie ? "" : "/1/1"}?primaryColor=e7ff51`,
+    playUrl: { url: `https://vidlink.pro/${isMovie ? "movie" : "tv"}/${tmdbId}${isMovie ? "" : "/1/1"}?primaryColor=e7ff51` },
     hasResource: true,
     seNum: isMovie ? 0 : 1,
     mediaType: isMovie ? "movie" : "tv",
@@ -2536,15 +2624,15 @@ const TITLE_TMDB_MAP = {
 };
 
 const STREAM_SERVERS = {
-  vidstuck: {
-    name: "Server 1 (Vidstuck HD)",
-    getMovieUrl: (id) => `https://vidstuck.cc/embed/movie/${id}?color=e7ff51&autoplay=false`,
-    getTvUrl: (id, s, e) => `https://vidstuck.cc/embed/tv/${id}/${s}/${e}?color=e7ff51&autoplay=false`
-  },
   vidlink: {
-    name: "Server 2 (VidLink Cloud)",
+    name: "Server 1 (VidLink Cloud - Fast & Ad-Free)",
     getMovieUrl: (id) => `https://vidlink.pro/movie/${id}?primaryColor=e7ff51&secondaryColor=1f1f1f&icons=vid`,
     getTvUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e7ff51&secondaryColor=1f1f1f&icons=vid`
+  },
+  vidstuck: {
+    name: "Server 2 (Vidstuck HD)",
+    getMovieUrl: (id) => `https://vidstuck.cc/embed/movie/${id}?color=e7ff51&autoplay=false`,
+    getTvUrl: (id, s, e) => `https://vidstuck.cc/embed/tv/${id}/${s}/${e}?color=e7ff51&autoplay=false`
   },
   vidsrc: {
     name: "Server 3 (VidSrc VIP)",
@@ -2568,7 +2656,13 @@ const STREAM_SERVERS = {
   }
 };
 
-let currentServerKey = "vidstuck";
+let currentServerKey = "vidlink";
+try {
+  const savedServer = localStorage.getItem("ustream-server");
+  if (savedServer && STREAM_SERVERS[savedServer]) {
+    currentServerKey = savedServer;
+  }
+} catch {}
 
 const LANGUAGE_LABELS = {
   en: "English",
@@ -3783,6 +3877,7 @@ function reloadCurrentEmbed() {
   const season = player.selectedSeason || 1;
   const episode = player.selectedEpisode || 1;
   const url = getEmbedStreamUrl(player.tmdbId, item, season, episode, currentServerKey);
+  embed.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms allow-presentation");
   embed.src = url;
   embed.hidden = false;
   const video = $("#video-player");
@@ -3926,6 +4021,7 @@ async function playTitle(title) {
   // Load embed player with actual content!
   const streamUrl = getEmbedStreamUrl(tmdbId, item, state.player.selectedSeason || 1, state.player.selectedEpisode || 1, currentServerKey);
   if (embed) {
+    embed.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms allow-presentation");
     embed.src = streamUrl;
     embed.hidden = false;
   }
@@ -5889,6 +5985,7 @@ function openSportsPlayer(match) {
 
   if (!modal || !frame) return;
   modal.removeAttribute("hidden");
+  frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms allow-presentation");
   if (titleEl) titleEl.textContent = match.title;
 
   const sources = match.sources || [];

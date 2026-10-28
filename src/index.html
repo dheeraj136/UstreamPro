@@ -20,7 +20,6 @@
     <meta name="twitter:description" content="Stream movies, series, and anime on Ustream" />
     <meta name="twitter:image" content="https://ustream-pro.vercel.app/assets/brand-banner.jpg" />
     <link rel="stylesheet" href="./styles.css?v=20261026-seo-a11y" />
-    <script src="https://unpkg.com/lucide@latest"></script>
   </head>
   <body>
     <div id="startup-loader" class="startup-loader" aria-label="Loading Ustream">
@@ -441,14 +440,14 @@
           <button class="close-button" id="close-player" aria-label="Close player"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
         </div>
         <div class="player-media-container" id="player-media-container">
-          <iframe id="embed-player" class="embed-player" src="about:blank" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true" allow="autoplay; fullscreen; picture-in-picture; encrypted-media"></iframe>
+          <iframe id="embed-player" class="embed-player" src="about:blank" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true" allow="autoplay; fullscreen; picture-in-picture; encrypted-media"></iframe>
           <video id="video-player" controls playsinline preload="metadata" hidden></video>
         </div>
         <div class="player-action-bar" aria-label="Player actions">
           <div class="player-server-selector">
             <select id="player-server-select" class="player-server-select" aria-label="Stream Server">
-              <option value="vidstuck" selected>Server 1 · Vidstuck HD</option>
-              <option value="vidlink">Server 2 · VidLink Cloud</option>
+              <option value="vidlink" selected>Server 1 · VidLink Cloud (Ad-Free HD)</option>
+              <option value="vidstuck">Server 2 · Vidstuck HD</option>
               <option value="vidsrc">Server 3 · VidSrc VIP</option>
               <option value="aniembed">Server 4 · AniEmbed (Anime)</option>
               <option value="smashy">Server 5 · SmashyStream</option>
@@ -928,7 +927,7 @@
           <button class="close-button" id="close-sports-player" aria-label="Close sports player"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
         </div>
         <div class="player-media-container" id="sports-media-container">
-          <iframe id="sports-stream-frame" class="embed-player" src="about:blank" allowfullscreen="true" allow="autoplay; fullscreen; encrypted-media"></iframe>
+          <iframe id="sports-stream-frame" class="embed-player" src="about:blank" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" allowfullscreen="true" allow="autoplay; fullscreen; encrypted-media"></iframe>
         </div>
         <div class="sports-stream-feeds-bar" id="sports-stream-feeds-bar"></div>
       </div>
