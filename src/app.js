@@ -4474,13 +4474,18 @@ document.addEventListener("keydown", (event) => {
 // ==========================================================================
 
 async function authApi(endpoint, method = "GET", body = null) {
+  const token = localStorage.getItem("ustream_auth_token");
+  const headers = {
+    "content-type": "application/json",
+    accept: "application/json"
+  };
+  if (token) {
+    headers["authorization"] = `Bearer ${token}`;
+  }
   const options = {
     method,
     credentials: "include",
-    headers: {
-      "content-type": "application/json",
-      accept: "application/json"
-    }
+    headers
   };
   if (body) options.body = JSON.stringify(body);
   try {
@@ -4528,6 +4533,9 @@ async function initAuth() {
       }
     } catch {}
   } else {
+    if (res.status === 401) {
+      localStorage.removeItem("ustream_auth_token");
+    }
     state.auth.user = null;
     state.auth.profiles = [];
     state.auth.activeProfile = null;
@@ -4899,6 +4907,7 @@ function closeProfileEditModal() {
 }
 
 async function handleSignOut() {
+  localStorage.removeItem("ustream_auth_token");
   await authApi("/api/auth/logout", "POST");
   state.auth.user = null;
   state.auth.profiles = [];
@@ -4911,6 +4920,7 @@ async function handleSignOut() {
 }
 
 async function handleSignOutAll() {
+  localStorage.removeItem("ustream_auth_token");
   await authApi("/api/auth/logout-all", "POST");
   state.auth.user = null;
   state.auth.profiles = [];
@@ -5046,6 +5056,10 @@ function setupAuthEventListeners() {
       return;
     }
 
+    if (res.data?.token) {
+      localStorage.setItem("ustream_auth_token", res.data.token);
+    }
+
     closeAuthModal();
     showToast(`Welcome back, ${res.data.activeProfile?.name || res.data.user.email}!`);
     await initAuth();
@@ -5078,6 +5092,10 @@ function setupAuthEventListeners() {
     if (!res.ok) {
       setFeedback("#signup-feedback", res.data.error || "Registration failed.");
       return;
+    }
+
+    if (res.data?.token) {
+      localStorage.setItem("ustream_auth_token", res.data.token);
     }
 
     closeAuthModal();
