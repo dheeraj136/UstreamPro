@@ -1529,8 +1529,12 @@ function showToast(message) {
 }
 
 function focusSearch() {
-  $("#search-box").classList.add("mobile-open");
-  $("#search-input").focus();
+  if (typeof openSearchModal === "function") {
+    openSearchModal();
+    return;
+  }
+  $("#search-box")?.classList.add("mobile-open");
+  $("#search-input")?.focus();
 }
 
 function updateProfileStats() {
@@ -1857,7 +1861,8 @@ function renderFilterGroups() {
 function resetFilters() {
   state.filters = makeFilterDefaults(getFilterChannel());
   state.search = "";
-  $("#search-input").value = "";
+  const searchInput = $("#search-input") || $("#modal-search-input");
+  if (searchInput) searchInput.value = "";
   render();
 }
 
@@ -3523,7 +3528,7 @@ document.addEventListener("click", (event) => {
   if (button.dataset.clearFilter !== undefined) {
     const target = button.dataset.clearFilter;
     const defaults = makeFilterDefaults(getFilterChannel());
-    if (target === "search") { state.search = ""; $("#search-input").value = ""; }
+    if (target === "search") { state.search = ""; const sInp = $("#search-input"); if (sInp) sInp.value = ""; }
     if (target === "rate") { state.filters.rateMin = defaults.rateMin; state.filters.rateMax = defaults.rateMax; }
     if (target !== "search" && target !== "rate" && target in defaults) state.filters[target] = defaults[target];
     render();
@@ -3628,7 +3633,7 @@ function clearWatchlist() {
   showToast("Watchlist cleared");
 }
 
-$("#search-input").addEventListener("input", (event) => {
+$("#search-input")?.addEventListener("input", (event) => {
   state.search = event.target.value;
   render();
   window.clearTimeout(searchTimer);
@@ -3763,7 +3768,7 @@ $("#video-player").addEventListener("error", () => {
 });
 
 document.addEventListener("keydown", (event) => {
-  if (event.key === "/" && document.activeElement !== $("#search-input")) {
+  if (event.key === "/" && !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) {
     event.preventDefault();
     focusSearch();
   }
@@ -3776,8 +3781,10 @@ document.addEventListener("keydown", (event) => {
     closeProfilesModal();
     closeProfileEditModal();
     closePinPrompt();
+    closeSearchModal();
+    closeSportsPlayer();
     $("#profile-dropdown")?.setAttribute("hidden", "true");
-    $("#search-box").classList.remove("mobile-open");
+    $("#search-box")?.classList.remove("mobile-open");
   }
 });
 
@@ -5633,6 +5640,13 @@ initSearchModal();
 initRouter();
 void loadLiveCatalog();
 void loadNewestRecommendations();
-window.addEventListener("load", hideStartupLoader);
-setTimeout(hideStartupLoader, 1200);
+hideStartupLoader();
+if (document.readyState === "complete" || document.readyState === "interactive") {
+  hideStartupLoader();
+} else {
+  window.addEventListener("load", hideStartupLoader);
+  window.addEventListener("DOMContentLoaded", hideStartupLoader);
+}
+setTimeout(hideStartupLoader, 300);
+setTimeout(hideStartupLoader, 800);
 }
