@@ -124,7 +124,10 @@ a { color: inherit; text-decoration: none; }
 .icon-filled { fill: currentColor; }
 
 .hero { min-height: 600px; position: relative; isolation: isolate; display: flex; align-items: center; padding: 80px 10vw 76px; overflow: hidden; }
-.hero-backdrop { position: absolute; z-index: -3; inset: 0; background: radial-gradient(circle at 73% 42%, rgba(34, 49, 87, .78), transparent 30%), linear-gradient(90deg, #0a0a10 0%, rgba(10, 10, 16, .92) 36%, rgba(10, 10, 16, .28) 73%, #0a0a10 100%), linear-gradient(155deg, #0e1628, #282047 45%, #0c0e13); }
+.hero-backdrop { position: absolute; z-index: -3; inset: 0; background: radial-gradient(circle at 73% 42%, rgba(34, 49, 87, .78), transparent 30%), linear-gradient(90deg, #0a0a10 0%, rgba(10, 10, 16, .92) 36%, rgba(10, 10, 16, .28) 73%, #0a0a10 100%), linear-gradient(155deg, #0e1628, #282047 45%, #0c0e13); background-size: cover; background-position: center top; background-repeat: no-repeat; transition: background-image .4s ease-in-out; }
+.hero-backdrop[style*="url"] ~ .hero-art .orb { opacity: .18; }
+.hero-backdrop[style*="url"] ~ .hero-art .signal-lines { opacity: .22; }
+.hero-backdrop[style*="url"] ~ .hero-art .hero-number { opacity: .07; }
 .hero-backdrop::after { content: ""; position: absolute; inset: 0; opacity: .2; background-image: radial-gradient(rgba(255,255,255,.18) .7px, transparent .7px); background-size: 5px 5px; mix-blend-mode: screen; }
 .hero-content { max-width: 540px; position: relative; z-index: 2; }
 .eyebrow, .section-kicker { color: var(--accent); text-transform: uppercase; letter-spacing: .14em; font-size: 10px; font-weight: 800; }

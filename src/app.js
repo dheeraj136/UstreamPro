@@ -124,6 +124,8 @@ const seriesChannel = seriesFilterResponse.data.typeList.find((entry) => entry.c
 const DEMO_ITEMS = [
   {
     "subjectId": "movie-inception",
+    "tmdbId": "27205",
+    "backdrop": "https://image.tmdb.org/t/p/original/8ZTVqvKDQ8emSGUEMjsS4yHAwrp.jpg",
     "title": "Inception",
     "category": "movie",
     "type": "movie",
@@ -158,6 +160,8 @@ const DEMO_ITEMS = [
   },
   {
     "subjectId": "movie-interstellar",
+    "tmdbId": "157336",
+    "backdrop": "https://image.tmdb.org/t/p/original/8sNiAPPYU14PUepFNeSNGUTiHW.jpg",
     "title": "Interstellar",
     "category": "movie",
     "type": "movie",
@@ -192,6 +196,8 @@ const DEMO_ITEMS = [
   },
   {
     "subjectId": "movie-dark-knight",
+    "tmdbId": "155",
+    "backdrop": "https://image.tmdb.org/t/p/original/9FE5eD92WfVCiivM9Pq9GVSrlWk.jpg",
     "title": "The Dark Knight",
     "category": "movie",
     "type": "movie",
@@ -226,6 +232,8 @@ const DEMO_ITEMS = [
   },
   {
     "subjectId": "movie-dune-2",
+    "tmdbId": "693134",
+    "backdrop": "https://image.tmdb.org/t/p/original/eZ239CUp1d6OryZEBPnO2n87gMG.jpg",
     "title": "Dune: Part Two",
     "category": "movie",
     "type": "movie",
@@ -260,6 +268,8 @@ const DEMO_ITEMS = [
   },
   {
     "subjectId": "movie-oppenheimer",
+    "tmdbId": "872585",
+    "backdrop": "https://image.tmdb.org/t/p/original/neeNHeXjMF5fXoCJRsOmkNGC7q.jpg",
     "title": "Oppenheimer",
     "category": "movie",
     "type": "movie",
@@ -294,6 +304,8 @@ const DEMO_ITEMS = [
   },
   {
     "subjectId": "movie-spider-verse",
+    "tmdbId": "569094",
+    "backdrop": "https://image.tmdb.org/t/p/original/kVd3a9YeLGkoeR50jGEXM6EqseS.jpg",
     "title": "Spider-Man: Across the Spider-Verse",
     "category": "movie",
     "type": "movie",
@@ -328,6 +340,8 @@ const DEMO_ITEMS = [
   },
   {
     "subjectId": "movie-avengers-endgame",
+    "tmdbId": "299534",
+    "backdrop": "https://image.tmdb.org/t/p/original/7RyHsO4yDXtBv1zUU3mTpHeQ0d5.jpg",
     "title": "Avengers: Endgame",
     "category": "movie",
     "type": "movie",
@@ -362,6 +376,8 @@ const DEMO_ITEMS = [
   },
   {
     "subjectId": "movie-gladiator",
+    "tmdbId": "98",
+    "backdrop": "https://image.tmdb.org/t/p/original/Ar7QuJ7sJEiC0oP3I8fKBKIQD9u.jpg",
     "title": "Gladiator",
     "category": "movie",
     "type": "movie",
@@ -396,6 +412,8 @@ const DEMO_ITEMS = [
   },
   {
     "subjectId": "movie-matrix",
+    "tmdbId": "603",
+    "backdrop": "https://image.tmdb.org/t/p/original/tlm8UkiQsitc8rSuIAscQDCnP8d.jpg",
     "title": "The Matrix",
     "category": "movie",
     "type": "movie",
@@ -429,6 +447,8 @@ const DEMO_ITEMS = [
   },
   {
     "subjectId": "movie-spirited-away",
+    "tmdbId": "129",
+    "backdrop": "https://image.tmdb.org/t/p/original/m4TUa2ciEWSlk37rOsjiSIvZDXE.jpg",
     "title": "Spirited Away",
     "category": "movie",
     "type": "movie",
@@ -463,6 +483,8 @@ const DEMO_ITEMS = [
   },
   {
     "subjectId": "series-breaking-bad",
+    "tmdbId": "1396",
+    "backdrop": "https://image.tmdb.org/t/p/original/tsRy63Mu5cu8etL1X7ZLyf7UP1M.jpg",
     "title": "Breaking Bad",
     "category": "tv",
     "type": "series",
@@ -497,6 +519,8 @@ const DEMO_ITEMS = [
   },
   {
     "subjectId": "series-stranger-things",
+    "tmdbId": "66732",
+    "backdrop": "https://image.tmdb.org/t/p/original/9P4IIMYY3HifqeruZq0ZZ9g7YUi.jpg",
     "title": "Stranger Things",
     "category": "tv",
     "type": "series",
@@ -532,6 +556,8 @@ const DEMO_ITEMS = [
   },
   {
     "subjectId": "series-last-of-us",
+    "tmdbId": "100088",
+    "backdrop": "https://image.tmdb.org/t/p/original/lY2DhbA7Hy44fAKddr06UrXWWaQ.jpg",
     "title": "The Last of Us",
     "category": "tv",
     "type": "series",
@@ -567,6 +593,8 @@ const DEMO_ITEMS = [
   },
   {
     "subjectId": "series-game-of-thrones",
+    "tmdbId": "1399",
+    "backdrop": "https://image.tmdb.org/t/p/original/zZqpAXxVSBtxV9qPBcscfXBcL2w.jpg",
     "title": "Game of Thrones",
     "category": "tv",
     "type": "series",
@@ -602,6 +630,8 @@ const DEMO_ITEMS = [
   },
   {
     "subjectId": "series-severance",
+    "tmdbId": "95557",
+    "backdrop": "https://image.tmdb.org/t/p/original/9qrroces8C6R9aKr08hACNPVXdZ.jpg",
     "title": "Severance",
     "category": "tv",
     "type": "series",
@@ -637,6 +667,8 @@ const DEMO_ITEMS = [
   },
   {
     "subjectId": "anime-attack-on-titan",
+    "tmdbId": "1429",
+    "backdrop": "https://image.tmdb.org/t/p/original/rqbCbjB19amtOtFQbb3K2lgm2zv.jpg",
     "title": "Attack on Titan",
     "category": "anime",
     "type": "anime",
@@ -672,6 +704,8 @@ const DEMO_ITEMS = [
   },
   {
     "subjectId": "anime-demon-slayer",
+    "tmdbId": "85937",
+    "backdrop": "https://image.tmdb.org/t/p/original/nTvM4mhqNlHIvUkI1gVnW6XP7GG.jpg",
     "title": "Demon Slayer: Kimetsu no Yaiba",
     "category": "anime",
     "type": "anime",
@@ -706,6 +740,8 @@ const DEMO_ITEMS = [
   },
   {
     "subjectId": "anime-jujutsu-kaisen",
+    "tmdbId": "95479",
+    "backdrop": "https://image.tmdb.org/t/p/original/qpin8cASXEVtwhzNsprHYFiOAGk.jpg",
     "title": "Jujutsu Kaisen",
     "category": "anime",
     "type": "anime",
@@ -741,6 +777,8 @@ const DEMO_ITEMS = [
   },
   {
     "subjectId": "anime-death-note",
+    "tmdbId": "13916",
+    "backdrop": "https://image.tmdb.org/t/p/original/koBa94NxTaGe2FoDzlXMuJptsv0.jpg",
     "title": "Death Note",
     "category": "anime",
     "type": "anime",
@@ -777,6 +815,8 @@ const DEMO_ITEMS = [
   },
   {
     "subjectId": "anime-fma-brotherhood",
+    "tmdbId": "31911",
+    "backdrop": "https://image.tmdb.org/t/p/original/2UG177tWHy7xRmMKWJHB7nAUmKd.jpg",
     "title": "Fullmetal Alchemist: Brotherhood",
     "category": "anime",
     "type": "anime",
@@ -1174,6 +1214,50 @@ const normalizeSearchItem = (item) => {
   return normalizeApiItem(item, category);
 };
 
+const normalizeTmdbItem = (item, category = "movie") => {
+  const isMovie = category === "movie" || item.media_type === "movie" || (!item.first_air_date && !!item.release_date);
+  const isAnime = category === "anime" || (item.original_language === "ja" && (item.genre_ids || []).includes(16));
+  const isCartoon = category === "cartoons" || category === "cartoon" || (item.original_language === "en" && (item.genre_ids || []).includes(16));
+  const type = isAnime ? "anime" : isCartoon ? "cartoon" : isMovie ? "movie" : "series";
+  const title = (item.title || item.name || item.original_title || item.original_name || "Untitled").trim();
+  const yearStr = item.release_date || item.first_air_date || "";
+  const year = parseInt(yearStr.slice(0, 4), 10) || new Date().getFullYear();
+  const poster = item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : "";
+  const backdrop = item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : (poster || "");
+  const rating = item.vote_average ? Number(item.vote_average.toFixed(1)) : 8.0;
+  const tmdbId = String(item.id);
+
+  return {
+    tmdbId,
+    subjectId: `tmdb-${tmdbId}`,
+    title,
+    category: type === "cartoon" ? "cartoons" : type,
+    type,
+    genre: isAnime ? ["anime"] : isCartoon ? ["animation", "cartoon"] : isMovie ? ["movie", "action"] : ["series", "drama"],
+    country: item.origin_country?.[0] || (isAnime ? "Japan" : "United States"),
+    countryName: item.origin_country?.[0] || (isAnime ? "Japan" : "United States"),
+    year,
+    releaseDate: yearStr,
+    rating,
+    imdbRatingValue: String(rating),
+    runtime: isMovie ? "Feature film" : "Series",
+    duration: isMovie ? "Feature film" : "Series",
+    language: item.original_language === "ja" ? "Japanese, English Dub" : "English, Multi Sub",
+    badge: rating >= 8.0 ? "Top Rated" : "Popular",
+    kicker: isAnime ? "Anime Series" : isCartoon ? "Animation" : isMovie ? "Blockbuster" : "Hit Series",
+    image: poster,
+    cover: { url: poster },
+    backdrop,
+    gradient: isAnime ? "linear-gradient(145deg, #b45309, #78350f 50%, #451a03)" : isCartoon ? "linear-gradient(145deg, #db2777, #831843 50%, #4c0519)" : isMovie ? "linear-gradient(145deg, #1e293b, #0f172a 50%, #020617)" : "linear-gradient(145deg, #0369a1, #0c4a6e 50%, #082f49)",
+    description: item.overview || `Stream ${title} in high definition on Ustream.`,
+    video: `https://vidstuck.cc/embed/${isMovie ? "movie" : "tv"}/${tmdbId}${isMovie ? "" : "/1/1"}`,
+    playUrl: { url: `https://vidstuck.cc/embed/${isMovie ? "movie" : "tv"}/${tmdbId}${isMovie ? "" : "/1/1"}` },
+    hasResource: true,
+    seNum: isMovie ? 0 : 1,
+    mediaType: isMovie ? "movie" : "tv",
+  };
+};
+
 function updateStatusBadge(isLive, count) {
   const dot = $("#status-dot");
   const label = $("#status-label");
@@ -1312,73 +1396,80 @@ async function loadLiveCatalog(isRetry = false) {
   if (isRetry) showToast("Connecting to live catalog...");
 
   try {
-    const configUrl = buildApiUrl("config");
-    const configRes = await fetch(configUrl).catch(() => null);
-    const config = configRes?.ok ? await configRes.json() : null;
+    const tmdbRequests = [
+      { path: "/trending/all/day", cat: "trending" },
+      { path: "/movie/popular?page=1", cat: "movie" },
+      { path: "/tv/popular?page=1", cat: "tv" },
+      { path: "/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc", cat: "anime" },
+      { path: "/discover/tv?with_genres=16&with_original_language=en&sort_by=popularity.desc", cat: "cartoons" }
+    ];
 
-    const categories = ["movie", "tv", "anime"];
-    const results = await Promise.all(categories.map(async (cat) => {
-      // 1. Try proxy endpoint
+    const results = await Promise.all(tmdbRequests.map(async ({ path, cat }) => {
+      // 1. Try /api/tmdb local proxy
       try {
-        const proxyUrl = buildApiUrl("catalog", { category: cat, page: 1, sort: "ForYou" });
-        const res = await fetch(proxyUrl);
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.data?.items?.length) return { ok: true, data, cat };
-        }
-      } catch {}
-
-      // 2. Direct RapidAPI fallback with CORS
-      try {
-        const directUrl = `https://moviebox-api.p.rapidapi.com/movie-or-tv/list?category=${cat}&page=1&sort=ForYou`;
-        const directRes = await fetch(directUrl, {
-          headers: {
-            "x-rapidapi-host": "moviebox-api.p.rapidapi.com",
-            "x-rapidapi-key": "68d9a25612msh6bb2c17daf102cdp1fe4fbjsnc2adc8510c22",
-            "accept": "application/json"
+        const proxyRes = await fetch(`/api/tmdb${path}`);
+        if (proxyRes.ok) {
+          const data = await proxyRes.json();
+          if (Array.isArray(data?.results) && data.results.length) {
+            return { ok: true, items: data.results.map((i) => normalizeTmdbItem(i, cat)), cat };
           }
-        });
-        if (directRes.ok) {
-          const data = await directRes.json();
-          if (data?.data?.items?.length) return { ok: true, data, cat };
         }
       } catch {}
 
-      return { ok: false, cat };
+      // 2. Direct TMDB with working fallback keys
+      for (const apiKey of TMDB_API_KEYS) {
+        try {
+          const sep = path.includes("?") ? "&" : "?";
+          const directUrl = `https://api.themoviedb.org/3${path}${sep}api_key=${apiKey}`;
+          const directRes = await fetch(directUrl);
+          if (directRes.ok) {
+            const data = await directRes.json();
+            if (Array.isArray(data?.results) && data.results.length) {
+              return { ok: true, items: data.results.map((i) => normalizeTmdbItem(i, cat)), cat };
+            }
+          }
+        } catch {}
+      }
+
+      // 3. Fallback: try /api/catalog endpoint
+      try {
+        const catRes = await fetch(`/api/catalog?category=${cat === "trending" ? "all" : cat}`);
+        if (catRes.ok) {
+          const catData = await catRes.json();
+          const items = catData?.data?.items;
+          if (Array.isArray(items) && items.length) {
+            return { ok: true, items: items.map((i) => (i.tmdbId ? i : normalizeApiItem(i, cat))), cat };
+          }
+        }
+      } catch {}
+
+      return { ok: false, items: [], cat };
     }));
 
-    const failed = results.filter((r) => !r.ok);
-    if (failed.length === results.length) {
-      console.warn("[Ustream API unavailable - activating showcase catalog with 20 curated titles]");
-      loadShowcaseCatalog();
+    const successfulItems = [];
+    const seenTitles = new Set();
+    results.forEach(({ items }) => {
+      items.forEach((item) => {
+        const key = item.title.toLowerCase().trim();
+        if (!seenTitles.has(key)) {
+          seenTitles.add(key);
+          successfulItems.push(item);
+        }
+      });
+    });
+
+    if (successfulItems.length >= 10) {
+      catalog = successfulItems;
+      setFeatured(successfulItems[0]);
+      updateStatusBadge(true, successfulItems.length);
+      clearErrorState();
+      render();
+      showToast(`Loaded ${successfulItems.length} live trending titles`);
       return;
     }
 
-    const moviePayload = results.find((r) => r.cat === "movie")?.data;
-    const seriesPayload = results.find((r) => r.cat === "tv")?.data;
-    const animePayload = results.find((r) => r.cat === "anime")?.data;
-
-    const isDemo = results.some((r) => r.data?.demo);
-
-    const liveMovies = (moviePayload?.data?.items || []).map((item) => normalizeApiItem(item, "movie"));
-    const liveSeries = (seriesPayload?.data?.items || []).map((item) => normalizeApiItem(item, "tv"));
-    const liveAnime = (animePayload?.data?.items || []).map((item) => normalizeApiItem(item, "anime"));
-    const liveCatalog = [...liveMovies, ...liveSeries, ...liveAnime];
-
-    if (liveCatalog.length) {
-      catalog = liveCatalog;
-      setFeatured(liveCatalog[0]);
-      updateStatusBadge(!isDemo, liveCatalog.length);
-      clearErrorState();
-      render();
-      if (!isDemo) showToast(`Loaded ${liveCatalog.length} trending titles`);
-    } else {
-      catalog = [...DEMO_ITEMS];
-      setFeatured(DEMO_ITEMS[0]);
-      updateStatusBadge(false, DEMO_ITEMS.length);
-      clearErrorState();
-      render();
-    }
+    console.warn("[TMDB catalog fallback to showcase items]");
+    loadShowcaseCatalog();
   } catch (error) {
     console.error("[Ustream Unhandled Catalog Error]", error);
     loadShowcaseCatalog();
@@ -1387,46 +1478,34 @@ async function loadLiveCatalog(isRetry = false) {
 
 async function loadNewestRecommendations() {
   try {
-    const categories = ["movie", "tv", "anime"];
-    const responses = await Promise.allSettled(categories.map(async (cat) => {
-      // 1. Try proxy endpoint
-      try {
-        const url = buildApiUrl("catalog", { category: cat, page: 1, sort: "Latest" });
-        const res = await fetch(url);
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.data?.items?.length) return { cat, data };
+    let recItems = [];
+    try {
+      const recRes = await fetch("/api/tmdb/movie/now_playing?page=1");
+      if (recRes.ok) {
+        const data = await recRes.json();
+        if (Array.isArray(data?.results) && data.results.length) {
+          recItems = data.results.slice(0, 12).map((i) => normalizeTmdbItem(i, "movie"));
         }
-      } catch {}
+      }
+    } catch {}
 
-      // 2. Direct RapidAPI fallback
-      try {
-        const directUrl = `https://moviebox-api.p.rapidapi.com/movie-or-tv/list?category=${cat}&page=1&sort=Latest`;
-        const directRes = await fetch(directUrl, {
-          headers: {
-            "x-rapidapi-host": "moviebox-api.p.rapidapi.com",
-            "x-rapidapi-key": "68d9a25612msh6bb2c17daf102cdp1fe4fbjsnc2adc8510c22",
-            "accept": "application/json"
+    if (!recItems.length) {
+      for (const apiKey of TMDB_API_KEYS) {
+        try {
+          const directRes = await fetch(`https://api.themoviedb.org/3/movie/now_playing?api_key=${apiKey}&page=1`);
+          if (directRes.ok) {
+            const data = await directRes.json();
+            if (Array.isArray(data?.results) && data.results.length) {
+              recItems = data.results.slice(0, 12).map((i) => normalizeTmdbItem(i, "movie"));
+              break;
+            }
           }
-        });
-        if (directRes.ok) {
-          const data = await directRes.json();
-          if (data?.data?.items?.length) return { cat, data };
-        }
-      } catch {}
-
-      throw new Error(`Failed to load recommendations for ${cat}`);
-    }));
-
-    const latest = [];
-    for (const result of responses) {
-      if (result.status !== "fulfilled") continue;
-      const { cat, data } = result.value;
-      latest.push(...(data.data?.items || []).map((item) => normalizeApiItem(item, cat)));
+        } catch {}
+      }
     }
 
-    if (latest.length) {
-      recommendations = [...new Map(latest.map((item) => [item.subjectId || item.title, item])).values()].slice(0, 12);
+    if (recItems.length) {
+      recommendations = recItems;
     } else {
       recommendations = DEMO_ITEMS.slice(0, 6);
     }
@@ -1446,10 +1525,23 @@ function setFeatured(item) {
   const restWords = words.slice(1).join(" ");
   $("#hero-title").innerHTML = restWords ? `${firstWord}<br /><em>${restWords}</em>` : firstWord;
   $("#hero-description").textContent = item.description || `Stream ${item.title} from the catalog.`;
-  $("#hero-meta").innerHTML = `<span>${item.year}</span><span class="rating">★ ${item.rating ? item.rating.toFixed(1) : "—"}</span><span>${item.runtime || "Live title"}</span><span>${item.type === "anime" ? "Anime" : item.type === "series" ? "Series" : "Movie"}</span>`;
+  const typeLabel = item.type === "anime" ? "Anime" : item.type === "series" ? "Series" : item.type === "cartoon" ? "Cartoon" : "Movie";
+  $("#hero-meta").innerHTML = `<span>${item.year}</span><span class="rating">★ ${item.rating ? item.rating.toFixed(1) : "—"}</span><span>${item.runtime || "Live title"}</span><span>${typeLabel}</span>`;
   $("#hero-credit").innerHTML = `<span>${item.kicker || "Featured"}</span> · ${item.country || "Catalog"}`;
   $("#hero-play").dataset.title = item.title;
   $("#hero-details").dataset.title = item.title;
+
+  const backdrop = $("#hero-backdrop");
+  if (backdrop) {
+    const backdropUrl = item.backdrop || item.image || item.cover?.url;
+    if (backdropUrl) {
+      backdrop.style.backgroundImage = `radial-gradient(circle at 73% 42%, rgba(34, 49, 87, .45), transparent 45%), linear-gradient(90deg, #0a0a10 0%, rgba(10, 10, 16, .88) 42%, rgba(10, 10, 16, .25) 75%, #0a0a10 100%), url("${backdropUrl}")`;
+      backdrop.style.backgroundSize = "cover";
+      backdrop.style.backgroundPosition = "center top";
+      backdrop.style.backgroundRepeat = "no-repeat";
+      backdrop.setAttribute("aria-label", `${item.title} banner`);
+    }
+  }
 }
 
 async function loadSearchResults(query) {
@@ -1460,42 +1552,51 @@ async function loadSearchResults(query) {
     return;
   }
   try {
-    let payload = null;
+    let results = [];
     try {
-      const url = buildApiUrl("search", { query: trimmed, page: 1, tabId: "TV" });
-      const response = await fetch(url);
-      if (response.ok) {
-        payload = await response.json();
+      const url = `/api/tmdb/search/multi?query=${encodeURIComponent(trimmed)}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data?.results)) results = data.results;
       }
     } catch {}
 
-    if (!payload) {
-      const directUrl = `https://moviebox-api.p.rapidapi.com/Search?query=${encodeURIComponent(trimmed)}&page=1&tabId=TV`;
-      const directRes = await fetch(directUrl, {
-        headers: {
-          "x-rapidapi-host": "moviebox-api.p.rapidapi.com",
-          "x-rapidapi-key": "68d9a25612msh6bb2c17daf102cdp1fe4fbjsnc2adc8510c22",
-          "accept": "application/json"
-        }
-      });
-      if (directRes.ok) {
-        payload = await directRes.json();
+    if (!results.length) {
+      for (const apiKey of TMDB_API_KEYS) {
+        try {
+          const directUrl = `https://api.themoviedb.org/3/search/multi?api_key=${apiKey}&query=${encodeURIComponent(trimmed)}`;
+          const directRes = await fetch(directUrl);
+          if (directRes.ok) {
+            const data = await directRes.json();
+            if (Array.isArray(data?.results)) {
+              results = data.results;
+              break;
+            }
+          }
+        } catch {}
       }
     }
 
-    if (!payload) {
-      throw new Error("Search requests failed");
-    }
-
     if (requestId !== searchRequestId) return;
-    const subjects = (payload.data?.results || []).flatMap((group) => group.subjects || []).concat(payload.data?.items || []);
-    const unique = [...new Map(subjects.map((item) => [item.subjectId, item])).values()];
-    catalog = unique.map(normalizeSearchItem);
-    render();
-    showToast(`Found ${unique.length} live results for “${trimmed}”`);
+
+    const filtered = (results || [])
+      .filter((item) => item.media_type === "movie" || item.media_type === "tv")
+      .map((item) => normalizeTmdbItem(item, item.media_type === "movie" ? "movie" : "tv"));
+
+    if (filtered.length) {
+      catalog = filtered;
+      setFeatured(filtered[0]);
+      render();
+      showToast(`Found ${filtered.length} live results for "${trimmed}"`);
+    } else {
+      catalog = [];
+      render();
+      showToast(`No results found for "${trimmed}"`);
+    }
   } catch (error) {
     if (requestId !== searchRequestId) return;
-    showToast("Live search unavailable · try again");
+    showToast("Live search unavailable — try again");
     console.warn(error);
   }
 }
@@ -1671,6 +1772,12 @@ function setSection(section, updateHash = true) {
 
   window.scrollTo({ top: 0, behavior: "smooth" });
   render();
+  const visible = getVisibleCards();
+  if (visible.length > 0) {
+    setFeatured(visible[0]);
+  } else if (catalog.length > 0 && target === "home") {
+    setFeatured(catalog[0]);
+  }
 }
 
 function getVisibleCards() {
@@ -1681,9 +1788,13 @@ function getVisibleCards() {
   let visible = catalog.filter((card) => {
     let matchesSection = true;
     if (state.section === "cartoons") {
-      matchesSection = card.isCartoon || card.genre?.includes("animation") || (card.type === "anime" && card.language === "en");
+      matchesSection = card.isCartoon || card.type === "cartoon" || card.category === "cartoons" || card.genre?.includes("animation") || (card.type === "anime" && card.language === "en");
     } else if (state.section === "anime") {
-      matchesSection = card.type === "anime" || card.isJapaneseAnime || card.language === "ja";
+      matchesSection = card.type === "anime" || card.isJapaneseAnime || card.category === "anime" || card.language === "ja";
+    } else if (state.section === "movies") {
+      matchesSection = (card.type === "movie" || card.category === "movie") && !card.isJapaneseAnime && !card.isCartoon;
+    } else if (state.section === "series") {
+      matchesSection = (card.type === "series" || card.category === "series" || card.category === "tv") && !card.isJapaneseAnime && !card.isCartoon;
     } else if (sectionType) {
       matchesSection = card.type === sectionType;
     }
@@ -1887,7 +1998,16 @@ function registerExtraTitle(item) {
 }
 
 function findTitle(title) {
-  return [featured, ...catalog, ...recommendations].find((item) => item?.title === title) || extraTitlesMap.get(title) || null;
+  if (!title) return null;
+  const direct = [featured, ...catalog, ...recommendations].find((item) => item?.title === title) || extraTitlesMap.get(title);
+  if (direct) return direct;
+  const lower = title.trim().toLowerCase();
+  const matched = [featured, ...catalog, ...recommendations].find((item) => item?.title && item.title.trim().toLowerCase() === lower);
+  if (matched) return matched;
+  for (const [key, item] of extraTitlesMap.entries()) {
+    if (key && key.trim().toLowerCase() === lower) return item;
+  }
+  return null;
 }
 
 function collectPlaybackUrls(value, urls = [], key = "") {
@@ -2176,6 +2296,13 @@ async function resolveTmdbId(item) {
             const foundId = String(top.id);
             const mediaType = top.media_type === "tv" ? "tv" : "movie";
             item.mediaType = mediaType;
+            item.tmdbId = foundId;
+            if (top.backdrop_path && !item.backdrop) {
+              item.backdrop = `https://image.tmdb.org/t/p/original${top.backdrop_path}`;
+            }
+            if (top.poster_path && !item.image) {
+              item.image = `https://image.tmdb.org/t/p/w500${top.poster_path}`;
+            }
             if (mediaType === "tv") {
               item.type = "series";
             } else if (mediaType === "movie" && item.type !== "anime") {
@@ -5539,6 +5666,7 @@ async function loadCategoryTmdb(category) {
         isJapaneseAnime: !isCartoons,
         language: lang,
         tmdbId: t.id,
+        backdrop: t.backdrop_path ? `https://image.tmdb.org/t/p/original${t.backdrop_path}` : (t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : ""),
         country: isCartoons ? "United States" : "Japan",
         gradient: isCartoons ? "linear-gradient(145deg, #db2777, #831843 50%, #4c0519)" : "linear-gradient(145deg, #b45309, #78350f 50%, #451a03)"
       };
@@ -5560,6 +5688,7 @@ async function loadCategoryTmdb(category) {
         isJapaneseAnime: !isCartoons,
         language: lang,
         tmdbId: m.id,
+        backdrop: m.backdrop_path ? `https://image.tmdb.org/t/p/original${m.backdrop_path}` : (m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : ""),
         country: isCartoons ? "United States" : "Japan",
         gradient: "linear-gradient(145deg, #ca8a04, #713f12 50%, #422006)"
       };
