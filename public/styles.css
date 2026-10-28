@@ -2410,3 +2410,57 @@ html[data-theme="light"] .pin-prompt-modal {
 .provider-catalog-view {
   margin-top: 24px;
 }
+
+/* Infinite Catalog & Load More (GaiaFlix replicate) */
+.catalog-infinite-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px 0;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.infinite-spinner {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(231, 255, 81, .2);
+  border-top-color: var(--accent);
+  animation: spin 0.7s linear infinite;
+}
+.catalog-load-more-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 24px 0 16px;
+}
+.load-more-btn {
+  padding: 12px 32px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  transition: all .2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.load-more-btn:hover {
+  background: var(--accent);
+  color: #0c0e13;
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(231, 255, 81, 0.25);
+}
+.catalog-sentinel {
+  height: 10px;
+  width: 100%;
+  pointer-events: none;
+}

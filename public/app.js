@@ -1392,16 +1392,48 @@ function buildApiUrl(action, params = {}) {
 
 async function loadLiveCatalog(isRetry = false) {
   clearErrorState();
-  renderSkeletons();
+  
+  // Instant Cold-Start Rendering: Check if cached catalog exists to show immediately (0ms delay)
+  const cachedCatalogStr = localStorage.getItem("ustream-catalog-cache");
+  if (cachedCatalogStr) {
+    try {
+      const cached = JSON.parse(cachedCatalogStr);
+      if (Array.isArray(cached) && cached.length >= 20) {
+        catalog = cached;
+        setFeatured(catalog[0]);
+        updateStatusBadge(true, catalog.length);
+        render();
+      }
+    } catch {}
+  } else {
+    renderSkeletons();
+  }
+
   if (isRetry) showToast("Connecting to live catalog...");
 
   try {
+    // GaiaFlix-style Multi-Page Deep Load: 15 pages fetched in parallel (~280-300+ titles)
     const tmdbRequests = [
-      { path: "/trending/all/day", cat: "trending" },
+      // Trending Now (Pages 1 & 2)
+      { path: "/trending/all/day?page=1", cat: "trending" },
+      { path: "/trending/all/day?page=2", cat: "trending" },
+      // Popular & Top Rated Movies (Pages 1-3)
       { path: "/movie/popular?page=1", cat: "movie" },
+      { path: "/movie/popular?page=2", cat: "movie" },
+      { path: "/movie/popular?page=3", cat: "movie" },
+      { path: "/movie/top_rated?page=1", cat: "movie" },
+      // Popular TV Series (Pages 1-3)
       { path: "/tv/popular?page=1", cat: "tv" },
-      { path: "/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc", cat: "anime" },
-      { path: "/discover/tv?with_genres=16&with_original_language=en&sort_by=popularity.desc", cat: "cartoons" }
+      { path: "/tv/popular?page=2", cat: "tv" },
+      { path: "/tv/popular?page=3", cat: "tv" },
+      // Top Japanese Anime (Pages 1-3)
+      { path: "/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=1", cat: "anime" },
+      { path: "/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=2", cat: "anime" },
+      { path: "/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=3", cat: "anime" },
+      // Cartoons & Animated Features (Pages 1-3)
+      { path: "/discover/tv?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=1", cat: "cartoons" },
+      { path: "/discover/tv?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=2", cat: "cartoons" },
+      { path: "/discover/tv?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=3", cat: "cartoons" }
     ];
 
     const results = await Promise.all(tmdbRequests.map(async ({ path, cat }) => {
@@ -1448,6 +1480,14 @@ async function loadLiveCatalog(isRetry = false) {
 
     const successfulItems = [];
     const seenTitles = new Set();
+
+    // Include DEMO_ITEMS so all 20 curated premier items are always present
+    DEMO_ITEMS.forEach((d) => {
+      const key = d.title.toLowerCase().trim();
+      seenTitles.add(key);
+      successfulItems.push(d);
+    });
+
     results.forEach(({ items }) => {
       items.forEach((item) => {
         const key = item.title.toLowerCase().trim();
@@ -1458,13 +1498,18 @@ async function loadLiveCatalog(isRetry = false) {
       });
     });
 
-    if (successfulItems.length >= 10) {
+    if (successfulItems.length >= 20) {
       catalog = successfulItems;
       setFeatured(successfulItems[0]);
       updateStatusBadge(true, successfulItems.length);
       clearErrorState();
       render();
-      showToast(`Loaded ${successfulItems.length} live trending titles`);
+      try {
+        localStorage.setItem("ustream-catalog-cache", JSON.stringify(catalog.slice(0, 300)));
+      } catch {}
+      if (!cachedCatalogStr) {
+        showToast(`Loaded ${successfulItems.length} titles across all categories`);
+      }
       return;
     }
 
@@ -1473,6 +1518,174 @@ async function loadLiveCatalog(isRetry = false) {
   } catch (error) {
     console.error("[Ustream Unhandled Catalog Error]", error);
     loadShowcaseCatalog();
+  }
+}
+
+/* ==========================================================================
+   Infinite Scroll & Endless Pagination (GaiaFlix replicate)
+   ========================================================================== */
+const sectionPages = {
+  home: 2,
+  movies: 3,
+  series: 3,
+  anime: 3,
+  cartoons: 3,
+};
+let isLoadingMore = false;
+let hasMoreContent = true;
+
+async function loadMoreTitles() {
+  if (isLoadingMore || !hasMoreContent) return;
+  const targetSection = state.section;
+  if (["sports", "explore", "profile", "my-list"].includes(targetSection)) return;
+
+  isLoadingMore = true;
+  const loader = $("#catalog-infinite-loader");
+  const loadMoreBtn = $("#load-more-btn");
+  if (loader) loader.hidden = false;
+  if (loadMoreBtn) {
+    loadMoreBtn.disabled = true;
+    loadMoreBtn.classList.add("loading");
+  }
+
+  try {
+    const nextPage = (sectionPages[targetSection] || 1) + 1;
+    sectionPages[targetSection] = nextPage;
+
+    let paths = [];
+    if (targetSection === "movies") {
+      paths = [
+        { path: `/movie/popular?page=${nextPage}`, cat: "movie" },
+        { path: `/discover/movie?sort_by=popularity.desc&page=${nextPage}`, cat: "movie" }
+      ];
+    } else if (targetSection === "series") {
+      paths = [
+        { path: `/tv/popular?page=${nextPage}`, cat: "tv" },
+        { path: `/discover/tv?sort_by=popularity.desc&page=${nextPage}`, cat: "tv" }
+      ];
+    } else if (targetSection === "anime") {
+      paths = [
+        { path: `/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=${nextPage}`, cat: "anime" },
+        { path: `/discover/movie?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=${nextPage}`, cat: "anime" }
+      ];
+    } else if (targetSection === "cartoons") {
+      paths = [
+        { path: `/discover/tv?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=${nextPage}`, cat: "cartoons" },
+        { path: `/discover/movie?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=${nextPage}`, cat: "cartoons" }
+      ];
+    } else {
+      // "home"
+      paths = [
+        { path: `/trending/all/day?page=${nextPage}`, cat: "trending" },
+        { path: `/movie/now_playing?page=${nextPage}`, cat: "movie" }
+      ];
+    }
+
+    const fetchedBatches = await Promise.all(paths.map(async ({ path, cat }) => {
+      // 1. Try local proxy
+      try {
+        const proxyRes = await fetch(`/api/tmdb${path}`);
+        if (proxyRes.ok) {
+          const data = await proxyRes.json();
+          if (Array.isArray(data?.results) && data.results.length) {
+            return data.results.map((i) => normalizeTmdbItem(i, cat));
+          }
+        }
+      } catch {}
+
+      // 2. Direct TMDB fallback
+      for (const apiKey of TMDB_API_KEYS) {
+        try {
+          const sep = path.includes("?") ? "&" : "?";
+          const directUrl = `https://api.themoviedb.org/3${path}${sep}api_key=${apiKey}`;
+          const directRes = await fetch(directUrl);
+          if (directRes.ok) {
+            const data = await directRes.json();
+            if (Array.isArray(data?.results) && data.results.length) {
+              return data.results.map((i) => normalizeTmdbItem(i, cat));
+            }
+          }
+        } catch {}
+      }
+
+      // 3. Fallback /api/catalog
+      try {
+        const catRes = await fetch(`/api/catalog?category=${cat}&page=${nextPage}`);
+        if (catRes.ok) {
+          const catData = await catRes.json();
+          const items = catData?.data?.items;
+          if (Array.isArray(items) && items.length) {
+            return items.map((i) => (i.tmdbId ? i : normalizeApiItem(i, cat)));
+          }
+        }
+      } catch {}
+
+      return [];
+    }));
+
+    const newItems = [];
+    const seen = new Set(catalog.map((c) => (c.title || "").toLowerCase().trim()));
+    fetchedBatches.flat().forEach((item) => {
+      const key = (item.title || "").toLowerCase().trim();
+      if (!seen.has(key)) {
+        seen.add(key);
+        newItems.push(item);
+      }
+    });
+
+    if (newItems.length > 0) {
+      catalog.push(...newItems);
+      // Smoothly append new cards to the DOM without re-rendering everything
+      const grid = $("#card-grid");
+      if (grid) {
+        const currentVisibleKeys = new Set([...grid.querySelectorAll(".media-card")].map((el) => el.dataset.title));
+        const appendable = getVisibleCards().filter((card) => !currentVisibleKeys.has(card.title));
+        if (appendable.length > 0) {
+          const tempDiv = document.createElement("div");
+          tempDiv.innerHTML = appendable.map(renderCard).join("");
+          while (tempDiv.firstChild) {
+            grid.appendChild(tempDiv.firstChild);
+          }
+        }
+      }
+      updateStatusBadge(true, catalog.length);
+      try {
+        localStorage.setItem("ustream-catalog-cache", JSON.stringify(catalog.slice(0, 300)));
+      } catch {}
+    } else {
+      if (nextPage > 25) {
+        hasMoreContent = false;
+        if (loadMoreBtn) loadMoreBtn.textContent = "All titles loaded";
+      }
+    }
+  } catch (err) {
+    console.warn("[Ustream LoadMore]", err);
+  } finally {
+    isLoadingMore = false;
+    if (loader) loader.hidden = true;
+    if (loadMoreBtn) {
+      loadMoreBtn.disabled = false;
+      loadMoreBtn.classList.remove("loading");
+    }
+  }
+}
+
+function initInfiniteScroll() {
+  const sentinel = $("#catalog-sentinel");
+  const loadMoreBtn = $("#load-more-btn");
+  if (loadMoreBtn) {
+    loadMoreBtn.addEventListener("click", () => void loadMoreTitles());
+  }
+
+  if (sentinel && "IntersectionObserver" in window) {
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && !isLoadingMore && hasMoreContent) {
+        void loadMoreTitles();
+      }
+    }, {
+      rootMargin: "600px 0px"
+    });
+    observer.observe(sentinel);
   }
 }
 
@@ -1772,7 +1985,16 @@ function setSection(section, updateHash = true) {
 
   window.scrollTo({ top: 0, behavior: "smooth" });
   render();
+  hasMoreContent = true;
+  isLoadingMore = false;
+  const loadMoreWrap = $("#catalog-load-more-wrap");
+  if (loadMoreWrap) {
+    loadMoreWrap.hidden = ["sports", "explore", "profile", "my-list"].includes(target);
+  }
   const visible = getVisibleCards();
+  if (visible.length < 24 && !["sports", "explore", "profile", "my-list"].includes(target)) {
+    void loadMoreTitles();
+  }
   if (visible.length > 0) {
     setFeatured(visible[0]);
   } else if (catalog.length > 0 && target === "home") {
@@ -5767,6 +5989,7 @@ void initAuth();
 initAppearanceSettings();
 initSearchModal();
 initRouter();
+initInfiniteScroll();
 void loadLiveCatalog();
 void loadNewestRecommendations();
 hideStartupLoader();
