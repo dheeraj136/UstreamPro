@@ -2401,6 +2401,15 @@ function getVisibleCards() {
     const matchesYear = state.filters.year === "All" || matchesYearFilter(card.year, state.filters.year);
     const matchesRating = (card.rating || 0) >= (state.filters.rateMin ?? 0) && (card.rating || 0) <= (state.filters.rateMax ?? 10);
 
+    // Kids Mode & Maturity Rating Restrictions
+    if (state.auth?.activeProfile?.isKids) {
+      const matureGenres = ["horror", "crime", "thriller", "war", "erotic"];
+      if ((card.genre || []).some((g) => matureGenres.includes(String(g).toLowerCase()))) return false;
+    }
+    const maturity = state.auth?.activeProfile?.maturityRating;
+    if (maturity === "G" && (card.rating || 0) > 7.5) return false;
+    if (maturity === "PG" && (card.genre || []).some((g) => ["horror", "erotic"].includes(String(g).toLowerCase()))) return false;
+
     return (
       matchesSection &&
       matchesGenre &&
@@ -2413,7 +2422,60 @@ function getVisibleCards() {
     );
   });
 
+  if (state.filters.sort === "Hottest") visible.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+  if (state.filters.sort === "Latest") visible.sort((a, b) => (b.year || 0) - (a.year || 0));
+
   return visible;
+}
+
+function matchesYearFilter(year, filter) {
+  if (!filter || filter === "All") return true;
+  if (/^\d{4}$/.test(filter)) return Number(year) === Number(filter);
+  if (/^\d{4}s$/.test(filter)) return Math.floor(Number(year) / 10) * 10 === Number(filter.slice(0, 4));
+  return true;
+}
+
+function renderContinue() {
+  const section = $(".quick-picks");
+  const row = $("#continue-row");
+  if (!section || !row) return;
+
+  const isDark = isDarkModeActive();
+  const visibleItems = continuation.filter((item) => isDark || !isAdultContent(item));
+
+  if (visibleItems.length === 0) {
+    row.innerHTML = `
+      <div class="continue-empty-state">
+        <span class="empty-icon" aria-hidden="true">${renderIcon("play", "icon-sm")}</span>
+        <div>
+          <strong>Start watching to build your queue</strong>
+          <p>Stream any movie, series, or anime to keep track of your progress and pick up right where you left off.</p>
+        </div>
+      </div>
+    `;
+    section.hidden = false;
+    return;
+  }
+
+  section.hidden = false;
+  row.innerHTML = visibleItems.map((item) => `
+    <button class="continue-card" style="--card-gradient:${item.gradient}" data-action="details" data-title="${escapeHtml(item.title)}" aria-label="Continue watching ${escapeHtml(item.title)}">
+      <span class="card-label">Continue watching</span><strong>${escapeHtml(item.title)}</strong>
+      <span class="watch-progress"><span style="width:${item.progress}%"></span></span>
+    </button>
+  `).join("");
+}
+
+function renderRecommendations() {
+  const section = $("#recommendations-section");
+  const row = $("#recommendation-row");
+  if (!section || !row) return;
+  const isDark = isDarkModeActive();
+  const visibleRecs = recommendations.filter((item) => isDark || !isAdultContent(item));
+  section.hidden = visibleRecs.length === 0;
+  row.innerHTML = visibleRecs.map(renderCard).join("");
+  const update = $("#recommendation-update");
+  if (update) update.textContent = visibleRecs.length ? `Updated today · ${visibleRecs.length} picks` : "";
 }
 
 function renderCard(card) {
@@ -7095,7 +7157,7 @@ async function loadCategoryTmdb(category) {
 }
 
 function initSectionButtons() {
-  $("[data-section]").forEach((button) => {
+  $$("[data-section]").forEach((button) => {
     button.addEventListener("click", (e) => {
       e.preventDefault();
       const sec = button.dataset.section;
