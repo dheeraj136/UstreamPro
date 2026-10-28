@@ -5991,6 +5991,389 @@ async function executeModalSearch(query) {
 /* ==========================================================================
    Live Sports Match Centre Engine (BinTV Integration)
    ========================================================================== */
+const FALLBACK_SPORTS_CHANNELS = [
+  {
+    "id": "channel-sky-sports-main-event",
+    "name": "Sky Sports Main Event",
+    "category": "24/7 Channels",
+    "poster": "https://e0.365dm.com/17/07/1600x900/skysports-all-new-rebrand-f1-premier-league-golf-cricket_4001810.jpg",
+    "streams": [
+      {
+        "name": "Sky Sports Main Event",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvbjU4YWpnZngtNDcy"
+      },
+      {
+        "name": "4K HEVC",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvaXk1MDBoenEtNzY1MQ"
+      }
+    ]
+  },
+  {
+    "id": "channel-sky-sports-premier-league",
+    "name": "Sky Sports Premier League",
+    "category": "24/7 Channels",
+    "poster": "https://e0.365dm.com/25/06/2048x1152/skysports-premier-league-fixtures_6937276.jpg",
+    "streams": [
+      {
+        "name": "Sky Sports Premier League",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYva3pkM2hycXotNDMxNA"
+      }
+    ]
+  },
+  {
+    "id": "channel-sky-sports-cricket",
+    "name": "Sky Sports Cricket",
+    "category": "24/7 Channels",
+    "poster": "https://e0.365dm.com/17/07/2048x1152/skysports-sky-sports-cricket-podcast-sky-cricket-podcast_4004801.jpg",
+    "streams": [
+      {
+        "name": "Sky Sports Cricket",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvcWZ4NDAzOHAtOTU"
+      }
+    ]
+  },
+  {
+    "id": "channel-sky-sports-f1",
+    "name": "Sky Sports F1",
+    "category": "24/7 Channels",
+    "poster": "https://e0.365dm.com/21/03/1600x900/skysports-f1-2021-graphic_5299452.png",
+    "streams": [
+      {
+        "name": "English",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvZjU5NmY5OHItNjk3Nw"
+      },
+      {
+        "name": "Italian",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvdDVtcG4xOTItNjUwNA"
+      },
+      {
+        "name": "German",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvNzhoeTY2bjYtODE5OA"
+      },
+      {
+        "name": "4K HEVC",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvYzg5dnhydmMtNTA4Nw"
+      }
+    ]
+  },
+  {
+    "id": "channel-tnt-sports-1",
+    "name": "TNT Sports 1",
+    "category": "24/7 Channels",
+    "poster": "https://cdn.mos.cms.futurecdn.net/y3oPitXYAwGJnyTHFYo5qB.jpeg",
+    "streams": [
+      {
+        "name": "TNT Sports 1",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvZTBseXJraHItMTAwMg"
+      },
+      {
+        "name": "4K HEVC (Select Events Only)",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvZDlkYjRnbnQtNDAzOQ"
+      }
+    ]
+  },
+  {
+    "id": "channel-tnt-sports-2",
+    "name": "TNT Sports 2",
+    "category": "24/7 Channels",
+    "poster": "https://cdn.mos.cms.futurecdn.net/y3oPitXYAwGJnyTHFYo5qB.jpeg",
+    "streams": [
+      {
+        "name": "TNT Sports 2",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvaXQ3YXl0cWgtMTU0MA"
+      }
+    ]
+  },
+  {
+    "id": "channel-willow-cricket",
+    "name": "Willow Cricket",
+    "category": "24/7 Channels",
+    "poster": "https://mgpindia.com/wp-content/uploads/2021/10/willow-logo.jpg",
+    "streams": [
+      {
+        "name": "Willow Cricket",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvc3BkOGdwb2gtNjU4Ng"
+      }
+    ]
+  },
+  {
+    "id": "channel-willow-cricket-2",
+    "name": "Willow Cricket 2",
+    "category": "24/7 Channels",
+    "poster": "https://d229kpbsb5jevy.cloudfront.net/tv/1920/1080/languages/WILLOW-2.jpg",
+    "streams": [
+      {
+        "name": "Willow Cricket 2",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvMTRxdWF3ZDUtODgxOQ"
+      }
+    ]
+  },
+  {
+    "id": "channel-espn",
+    "name": "ESPN",
+    "category": "24/7 Channels",
+    "poster": "https://a1.espncdn.com/combiner/i?img=%2Fi%2Fespn%2Fespn_logos%2Fespn_red.png",
+    "streams": [
+      {
+        "name": "ESPN",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvbzlibDhjYWktNzIyMw"
+      }
+    ]
+  },
+  {
+    "id": "channel-espn-deportes",
+    "name": "ESPN Deportes",
+    "category": "24/7 Channels",
+    "poster": "https://i.ibb.co/Y7zHmbbz/i.png",
+    "streams": [
+      {
+        "name": "ESPN Deportes",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvNnRyc2FudDctMTQyMQ"
+      }
+    ]
+  },
+  {
+    "id": "channel-espn2",
+    "name": "ESPN2",
+    "category": "24/7 Channels",
+    "poster": "https://discgolf.ultiworld.com/wp-content/uploads/2020/10/ESPN2.png",
+    "streams": [
+      {
+        "name": "ESPN2",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvMzNqaHB6ZnItOTM2"
+      }
+    ]
+  },
+  {
+    "id": "channel-espnews",
+    "name": "ESPNEWS",
+    "category": "24/7 Channels",
+    "poster": "https://i.ibb.co/5h4LGFHq/image.png",
+    "streams": [
+      {
+        "name": "ESPNEWS",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvbWZ0c2xlejQtMzM2NA"
+      }
+    ]
+  },
+  {
+    "id": "channel-espnu",
+    "name": "ESPNU",
+    "category": "24/7 Channels",
+    "poster": "https://i.ibb.co/Lh5jHVDm/ESPNU-logo-1-jpg.webp",
+    "streams": [
+      {
+        "name": "ESPNU",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvd3Fid2pqaGYtOTc3MQ"
+      }
+    ]
+  },
+  {
+    "id": "channel-dazn-1-germany",
+    "name": "DAZN 1 Germany",
+    "category": "24/7 Channels",
+    "poster": "https://image.discovery.indazn.com/ca/v2/ca/image?id=12dpnhddhmpm71228raanhyxs2_image-header_pDach_1723627450000&amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;quality=70",
+    "streams": [
+      {
+        "name": "DAZN 1 Germany",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvM2RrOHJ4dWktNjIxMg"
+      }
+    ]
+  },
+  {
+    "id": "channel-dazn-1-italia",
+    "name": "DAZN 1 Italia",
+    "category": "24/7 Channels",
+    "poster": "https://image.discovery.indazn.com/ca/v2/ca/image?id=pterrit4f2xu1pa2r6x87y5e9_image-header_pIt_1724315365000&amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;quality=70",
+    "streams": [
+      {
+        "name": "DAZN 1 Italia",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvZ21vcW96N2ItNDk0NQ"
+      }
+    ]
+  },
+  {
+    "id": "channel-dazn-1-portugal",
+    "name": "DAZN 1 Portugal",
+    "category": "24/7 Channels",
+    "poster": "https://image.discovery.indazn.com/ca/v2/ca/image?id=1o4eamzb4env61ddc8wv4ra06l_image-header_pRow_1720521601000&amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;quality=70",
+    "streams": [
+      {
+        "name": "DAZN 1 Portugal",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvM3poY3p6YmwtOTA4Ng"
+      }
+    ]
+  },
+  {
+    "id": "channel-dazn-1-spain",
+    "name": "DAZN 1 Spain",
+    "category": "24/7 Channels",
+    "poster": "https://image.discovery.indazn.com/ca/v2/ca/image?id=hn9vkic8rbfi1ndrym8sw2qh7_image-header_pEs_1723035920000",
+    "streams": [
+      {
+        "name": "DAZN 1 Spain",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvc3EyNmlueWYtMjY2MA"
+      }
+    ]
+  },
+  {
+    "id": "channel-dazn-1-usa",
+    "name": "DAZN 1 USA",
+    "category": "24/7 Channels",
+    "poster": "https://image.discovery.indazn.com/ca/v2/ca/image?id=1owzb99m9mnzy15hjxolpukwul_image-header_pUs_1771501796000&amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;quality=70",
+    "streams": [
+      {
+        "name": "DAZN 1 USA",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvanlxemV0MGItMjkwMQ"
+      }
+    ]
+  },
+  {
+    "id": "channel-dazn-2-germany",
+    "name": "DAZN 2 Germany",
+    "category": "24/7 Channels",
+    "poster": "https://image.discovery.indazn.com/ca/v2/ca/image?id=1ni1lpwjtnxmr1xklfoptrt2mz_image-header_pDach_1723628653000",
+    "streams": [
+      {
+        "name": "DAZN 2 Germany",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvdG5pZnNwajYtODUy"
+      }
+    ]
+  },
+  {
+    "id": "channel-dazn-2-spain",
+    "name": "DAZN 2 Spain",
+    "category": "24/7 Channels",
+    "poster": "https://image.discovery.indazn.com/ca/v2/ca/image?id=2ouwtae8ad7l1fxviow9bowpk_image-header_pEs_1723118632000&amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;quality=70",
+    "streams": [
+      {
+        "name": "DAZN 2 Spain",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvMG8zdmxhYmstNDA4OA"
+      }
+    ]
+  },
+  {
+    "id": "channel-dazn-f1",
+    "name": "DAZN F1",
+    "category": "24/7 Channels",
+    "poster": "https://image.discovery.indazn.com/ca/v2/ca/image?id=14ln25pmjdv031ejxsmg8dczsu_image-header_pEs_1723117975000&amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;quality=70",
+    "streams": [
+      {
+        "name": "DAZN F1",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvNXJ2YXpzenotNjk4Mw"
+      }
+    ]
+  },
+  {
+    "id": "channel-dazn-laliga",
+    "name": "DAZN LaLiga",
+    "category": "24/7 Channels",
+    "poster": "https://image.discovery.indazn.com/ca/v2/ca/image?id=1weziux6zy5mb16pev002ax1yu_image-header_pEs_1723118324000",
+    "streams": [
+      {
+        "name": "DAZN LaLiga",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvZncyanJ1bTktNDQ4"
+      }
+    ]
+  },
+  {
+    "id": "channel-bein-max-4-francais",
+    "name": "beIN Max 4 Francais",
+    "category": "24/7 Channels",
+    "poster": "https://i.postimg.cc/MG3RnXzm/Frame-12-(1).png",
+    "streams": [
+      {
+        "name": "beIN Max 4 Francais",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvZzhmMHdwcWMtMjY5Ng"
+      }
+    ]
+  },
+  {
+    "id": "channel-bein-max-5-francais",
+    "name": "beIN Max 5 Francais",
+    "category": "24/7 Channels",
+    "poster": "https://i.postimg.cc/MG3RnXzm/Frame-12-(1).png",
+    "streams": [
+      {
+        "name": "beIN Max 5 Francais",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYva2Nra29lZHYtMjU5NA"
+      }
+    ]
+  },
+  {
+    "id": "channel-bein-max-6",
+    "name": "beIN Max 6 Francais",
+    "category": "24/7 Channels",
+    "poster": "https://i.postimg.cc/MG3RnXzm/Frame-12-(1).png",
+    "streams": [
+      {
+        "name": "beIN Max 6 Francais",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvd3FqbGJ3bGwtMjI1OA"
+      }
+    ]
+  },
+  {
+    "id": "channel-bein-max-7-francais",
+    "name": "beIN Max 7 Francais",
+    "category": "24/7 Channels",
+    "poster": "https://i.postimg.cc/MG3RnXzm/Frame-12-(1).png",
+    "streams": [
+      {
+        "name": "beIN Max 7 Francais",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvbnA0Yml3ZjMtMzA5Nw"
+      }
+    ]
+  },
+  {
+    "id": "channel-bein-sports",
+    "name": "beIN Sports",
+    "category": "24/7 Channels",
+    "poster": "https://assets-us-01.kc-usercontent.com/31dbcbc6-da4c-0033-328a-d7621d0fa726/1318873e-8501-4f79-bb69-182d741cf9ad/beIN%20SPORTS%20Portada.jpg?ver=03-06-2025?w=3840&amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;q=75",
+    "streams": [
+      {
+        "name": "beIN Sports",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvdTM2ZnRmY3ktNzEwMQ"
+      }
+    ]
+  },
+  {
+    "id": "channel-bein-sports-francais-1",
+    "name": "beIN Sports Francais 1",
+    "category": "24/7 Channels",
+    "poster": "https://cdn.jsdelivr.net/gh/willthequeencome/img-cdn/beinsports.png",
+    "streams": [
+      {
+        "name": "beIN Sports Francais 1",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvZ2J3MDlhbm4tOTgz"
+      }
+    ]
+  },
+  {
+    "id": "channel-bein-sports-francais-2",
+    "name": "beIN Sports Francais 2",
+    "category": "24/7 Channels",
+    "poster": "https://cdn.jsdelivr.net/gh/willthequeencome/img-cdn/beinsports.png",
+    "streams": [
+      {
+        "name": "beIN Sports Francais 2",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvYWhsNzdjZ28tMzU5Nw"
+      }
+    ]
+  },
+  {
+    "id": "channel-bein-sports-francais-3",
+    "name": "beIN Sports Francais 3",
+    "category": "24/7 Channels",
+    "poster": "https://cdn.jsdelivr.net/gh/willthequeencome/img-cdn/beinsports.png",
+    "streams": [
+      {
+        "name": "beIN Sports Francais 3",
+        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvZmN4cGViMmktOTI3NQ"
+      }
+    ]
+  }
+];
+
 const sportsState = {
   tab: "live",
   query: "",
@@ -6005,32 +6388,79 @@ const sportsState = {
   initialized: false,
 };
 
+function decodeSportsStreamUrl(url) {
+  try {
+    if (!url) return "";
+    if (url.includes("id=")) {
+      const parsed = new URL(url);
+      const id = parsed.searchParams.get("id");
+      if (id) {
+        const b = id.replace(/-/g, "+").replace(/_/g, "/");
+        const dec = atob(b);
+        if (/^https?:\/\//i.test(dec)) return dec;
+      }
+    }
+  } catch {}
+  return "";
+}
+
 async function fetchSportsCatalog() {
   if (sportsState.cache && Date.now() - (sportsState.cache.timestamp || 0) < 45000) {
     return sportsState.cache;
   }
+
   let raw = null;
+
+  // 1. Direct fetch to Lovable public sports endpoint (fastest, CORS-enabled, 6s timeout)
   try {
-    const res = await fetch("/api/sports").catch(() => null);
-    if (res?.ok) raw = await res.json();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch("https://bintvjson.lovable.app/api/public/bintvjson", {
+      signal: controller.signal
+    }).catch(() => null);
+    clearTimeout(timer);
+    if (res?.ok) {
+      const parsed = await res.json().catch(() => null);
+      if (parsed && (Array.isArray(parsed["Live Events"]) || Array.isArray(parsed["24/7 Channels"]))) {
+        raw = parsed;
+      }
+    }
   } catch {}
-  if (!raw?.success) {
+
+  // 2. Fallback to /api/sports proxy with 6s timeout
+  if (!raw) {
     try {
-      const res = await fetch("https://bintvjson.lovable.app/api/public/bintvjson").catch(() => null);
-      if (res?.ok) raw = await res.json();
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 6000);
+      const res = await fetch("/api/sports", { signal: controller.signal }).catch(() => null);
+      clearTimeout(timer);
+      if (res?.ok) {
+        const parsed = await res.json().catch(() => null);
+        if (parsed && (Array.isArray(parsed["Live Events"]) || Array.isArray(parsed["24/7 Channels"]))) {
+          raw = parsed;
+        }
+      }
     } catch {}
   }
-  if (!raw) throw new Error("BinTV sports feed unavailable");
 
   const normalizeEvent = (item, fallbackStatus) => {
     if (!item?.id || !item?.name) return null;
     const streams = (Array.isArray(item.streams) ? item.streams : []).map((st, idx) => {
-      const url = String(st?.url || "");
-      if (!url.includes("bintv-sources.pages.dev")) return null;
-      const name = String(st?.name || `Feed ${idx + 1}`);
-      return { embedUrl: url, name, hd: /(?:hd|4k|1080|720)/i.test(name), streamNo: idx + 1 };
+      const url = String(st?.url || "").trim();
+      if (!url) return null;
+      const name = String(st?.name || `Feed ${idx + 1}`).trim();
+      const decodedUrl = decodeSportsStreamUrl(url);
+      return {
+        embedUrl: url,
+        rawUrl: url,
+        decodedUrl: decodedUrl || url,
+        name,
+        hd: /(?:hd|4k|1080|720)/i.test(name),
+        streamNo: idx + 1
+      };
     }).filter(Boolean);
     if (!streams.length) return null;
+
     const title = String(item.name).trim();
     const versus = title.split(/\s+(?:vs\.?|v|@)\s+/i);
     const poster = item.poster ? String(item.poster).replace(/^http:/i, "https:") : "";
@@ -6047,38 +6477,21 @@ async function fetchSportsCatalog() {
     };
   };
 
-  const parseList = (key, fallback) => (Array.isArray(raw[key]) ? raw[key] : []).map(i => normalizeEvent(i, fallback)).filter(Boolean);
-  const live = parseList("Live Events", "live");
-  const upcoming = parseList("Upcoming Events", "upcoming");
-  const channels = parseList("24/7 Channels", "24/7");
+  let live = [];
+  let upcoming = [];
+  let channels = [];
 
-  // Integrate LIVE TV API from RapidAPI Hub (live-tv-api1.p.rapidapi.com)
-  try {
-    const liveTvRes = await fetch("/api/livetv").catch(() => null);
-    if (liveTvRes?.ok) {
-      const liveTvData = await liveTvRes.json();
-      if (Array.isArray(liveTvData.channels) && liveTvData.channels.length) {
-        const rapidChannels = liveTvData.channels.map((ch, idx) => {
-          const name = String(ch.name || ch.title || ch.station || `Live Channel ${idx + 1}`);
-          const streamUrl = String(ch.streamUrl || ch.streamUrls?.[0] || ch.url || (Array.isArray(ch.streams) ? ch.streams[0]?.url : "") || "");
-          return {
-            id: `rapidtv-${ch.id || idx}`,
-            title: name,
-            category: "RapidAPI Live TV",
-            poster: ch.logo || ch.image || ch.poster || "",
-            status: "24/7",
-            _live: true,
-            teams: null,
-            sources: streamUrl ? [{ name: "Live Broadcast", embedUrl: streamUrl, hd: true, streamNo: 1 }] : [{ name: "Stream 1", embedUrl: "about:blank", hd: true, streamNo: 1 }],
-            date: 0
-          };
-        });
-        if (rapidChannels.length) {
-          channels.unshift(...rapidChannels);
-        }
-      }
-    }
-  } catch {}
+  if (raw) {
+    const parseList = (key, fallback) => (Array.isArray(raw[key]) ? raw[key] : []).map(i => normalizeEvent(i, fallback)).filter(Boolean);
+    live = parseList("Live Events", "live");
+    upcoming = parseList("Upcoming Events", "upcoming");
+    channels = parseList("24/7 Channels", "24/7");
+  }
+
+  // If 24/7 channels is empty or offline, populate with verified fallback channels
+  if (!channels.length && Array.isArray(FALLBACK_SPORTS_CHANNELS)) {
+    channels = FALLBACK_SPORTS_CHANNELS.map(i => normalizeEvent(i, "24/7")).filter(Boolean);
+  }
 
   const categories = [...new Set([...live, ...upcoming, ...channels].map(i => i.category).filter(Boolean))].sort();
 
@@ -6109,6 +6522,28 @@ function initSportsSection() {
     $("#close-sports-player")?.addEventListener("click", closeSportsPlayer);
     $("#sports-player-backdrop")?.addEventListener("click", (e) => {
       if (e.target.id === "sports-player-backdrop") closeSportsPlayer();
+    });
+
+    // Popout button: opens the active stream directly in a new window/tab
+    $("#sports-popout-btn")?.addEventListener("click", () => {
+      const match = sportsState.activeMatch;
+      const idx = sportsState.activeFeedIndex;
+      const src = match?.sources?.[idx]?.embedUrl || match?.sources?.[0]?.embedUrl;
+      if (src && src !== "about:blank") {
+        window.open(src, "_blank", "noopener,noreferrer");
+      }
+    });
+
+    // Reload button: reloads the active iframe feed safely
+    $("#sports-reload-btn")?.addEventListener("click", () => {
+      const frame = $("#sports-stream-frame");
+      const match = sportsState.activeMatch;
+      const idx = sportsState.activeFeedIndex;
+      const src = match?.sources?.[idx]?.embedUrl || match?.sources?.[0]?.embedUrl;
+      if (frame && src) {
+        frame.src = "about:blank";
+        setTimeout(() => { frame.src = src; }, 80);
+      }
     });
   }
 
@@ -6251,10 +6686,36 @@ function renderSportsSection() {
   if (!grid) return;
 
   if (!displayItems.length) {
+    if (sportsState.tab === "live" && !sportsState.query && sportsState.category === "all") {
+      grid.innerHTML = `
+        <div class="sports-loading-state" style="grid-column: 1 / -1; padding: 36px 20px; text-align: center; background: var(--surface-1); border-radius: 14px; border: 1px solid var(--line);">
+          <div style="font-size: 20px; font-weight: 800; color: var(--text); margin-bottom: 8px;">No Live Matches In Play Right Now</div>
+          <p style="color: var(--muted); font-size: 14px; max-width: 540px; margin: 0 auto 18px; line-height: 1.5;">Check the upcoming match schedule for upcoming fixtures today, or stream over <strong>${data.channels.length} 24/7 Live Sports TV Channels</strong> broadcasting right now.</p>
+          <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+            <button class="primary-button" id="switch-to-channels-tab-btn" type="button">Browse 24/7 Channels (${data.channels.length})</button>
+            <button class="secondary-button" id="switch-to-upcoming-tab-btn" type="button">View Upcoming Schedule (${data.upcoming.length})</button>
+          </div>
+        </div>
+      `;
+      $("#switch-to-channels-tab-btn")?.addEventListener("click", () => {
+        $$("[data-sports-tab]").forEach(b => b.classList.toggle("active", b.dataset.sportsTab === "channels"));
+        sportsState.tab = "channels";
+        sportsState.channelPage = 0;
+        sportsState.channelLetter = "";
+        renderSportsSection();
+      });
+      $("#switch-to-upcoming-tab-btn")?.addEventListener("click", () => {
+        $$("[data-sports-tab]").forEach(b => b.classList.toggle("active", b.dataset.sportsTab === "upcoming"));
+        sportsState.tab = "upcoming";
+        renderSportsSection();
+      });
+      return;
+    }
+
     grid.innerHTML = `
-      <div class="sports-loading-state">
+      <div class="sports-loading-state" style="grid-column: 1 / -1;">
         <p>No ${sportsState.tab === "channels" ? "channels" : "matches"} match your criteria.</p>
-        <button class="text-button" id="reset-sports-filters" type="button">Clear filters</button>
+        <button class="text-button" id="reset-sports-filters" type="button" style="margin-top: 8px;">Clear filters</button>
       </div>
     `;
     $("#reset-sports-filters")?.addEventListener("click", () => {
@@ -6267,7 +6728,7 @@ function renderSportsSection() {
     return;
   }
 
-  grid.innerHTML = displayItems.map(match => {
+  let html = displayItems.map(match => {
     const teams = match.teams;
     const isChannel = match.status === "24/7";
     const timing = match.date ? (() => {
@@ -6294,7 +6755,7 @@ function renderSportsSection() {
                 <span class="sports-team-name">${escapeHtml(teams.away?.name || "Away")}</span>
               </div>
             ` : `
-              <div style="font-size: 18px; font-weight: 900; color: var(--accent);">${escapeHtml(match.title.slice(0, 16))}</div>
+              <div style="font-size: 18px; font-weight: 900; color: var(--accent); text-align: center; padding: 0 12px;">${escapeHtml(match.title.slice(0, 22))}</div>
             `}
           </div>
         </div>
@@ -6309,12 +6770,34 @@ function renderSportsSection() {
     `;
   }).join("");
 
+  if (sportsState.tab === "live" && data.channels.length > 0 && !sportsState.query && sportsState.category === "all") {
+    html += `
+      <div style="grid-column: 1 / -1; margin-top: 20px; padding: 20px 24px; background: linear-gradient(135deg, rgba(230,57,70,0.1), rgba(20,20,30,0.8)); border: 1px solid rgba(230,57,70,0.25); border-radius: 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+        <div>
+          <strong style="font-size: 16px; color: var(--text); display: block; margin-bottom: 4px;">Looking for 24/7 Live Sports Channels?</strong>
+          <span style="color: var(--muted); font-size: 13px;">Tune into Sky Sports, ESPN, TNT Sports, Willow Cricket, DAZN, beIN Sports and ${data.channels.length} channels available 24/7.</span>
+        </div>
+        <button class="primary-button" id="live-bottom-channels-btn" type="button" style="white-space: nowrap;">Explore 24/7 TV Channels →</button>
+      </div>
+    `;
+  }
+
+  grid.innerHTML = html;
+
   grid.querySelectorAll("[data-sports-id]").forEach(card => {
     card.addEventListener("click", () => {
       const id = card.dataset.sportsId;
       const match = displayItems.find(m => m.id === id);
       if (match) openSportsPlayer(match);
     });
+  });
+
+  $("#live-bottom-channels-btn")?.addEventListener("click", () => {
+    $$("[data-sports-tab]").forEach(b => b.classList.toggle("active", b.dataset.sportsTab === "channels"));
+    sportsState.tab = "channels";
+    sportsState.channelPage = 0;
+    sportsState.channelLetter = "";
+    renderSportsSection();
   });
 }
 
@@ -6332,22 +6815,29 @@ function openSportsPlayer(match) {
 
   const sources = match.sources || [];
   if (feedsBar) {
-    feedsBar.innerHTML = sources.map((s, idx) => `
-      <button class="sports-feed-btn ${idx === 0 ? "active" : ""}" data-feed-idx="${idx}" type="button">
-        ${escapeHtml(s.name || `Feed ${idx + 1}`)} ${s.hd ? "· HD" : ""}
-      </button>
-    `).join("");
+    if (sources.length > 1) {
+      feedsBar.style.display = "flex";
+      feedsBar.innerHTML = sources.map((s, idx) => `
+        <button class="sports-feed-btn ${idx === 0 ? "active" : ""}" data-feed-idx="${idx}" type="button">
+          ${escapeHtml(s.name || `Feed ${idx + 1}`)} ${s.hd ? "· HD" : ""}
+        </button>
+      `).join("");
 
-    feedsBar.querySelectorAll("[data-feed-idx]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const idx = Number(btn.dataset.feedIdx);
-        sportsState.activeFeedIndex = idx;
-        feedsBar.querySelectorAll("[data-feed-idx]").forEach(b => b.classList.toggle("active", b === btn));
-        if (sources[idx]?.embedUrl) {
-          frame.src = sources[idx].embedUrl;
-        }
+      feedsBar.querySelectorAll("[data-feed-idx]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const idx = Number(btn.dataset.feedIdx);
+          sportsState.activeFeedIndex = idx;
+          feedsBar.querySelectorAll("[data-feed-idx]").forEach(b => b.classList.toggle("active", b === btn));
+          if (sources[idx]?.embedUrl) {
+            frame.src = "about:blank";
+            setTimeout(() => { frame.src = sources[idx].embedUrl; }, 60);
+          }
+        });
       });
-    });
+    } else {
+      feedsBar.style.display = "none";
+      feedsBar.innerHTML = "";
+    }
   }
 
   if (sources[0]?.embedUrl) {
@@ -6360,6 +6850,7 @@ function closeSportsPlayer() {
   const frame = $("#sports-stream-frame");
   if (frame) frame.src = "about:blank";
   if (modal) modal.setAttribute("hidden", "true");
+  sportsState.activeMatch = null;
 }
 
 /* ==========================================================================
