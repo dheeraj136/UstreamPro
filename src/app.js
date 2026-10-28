@@ -2696,6 +2696,23 @@ const TMDB_API_KEYS = [
 ];
 const TMDB_CACHE = new Map();
 
+function isItemSeries(item) {
+  if (!item) return false;
+  if (item.mediaType === "tv") return true;
+  if (item.mediaType === "movie") return false;
+  if (item.type === "series" || item.category === "series" || item.category === "tv") return true;
+  if (item.type === "cartoons" || item.category === "cartoons") return true;
+  if (Number(item.seNum) > 0 || (Array.isArray(item.seasons) && item.seasons.length > 0)) return true;
+  if (item.runtime && /season|episode/i.test(item.runtime)) return true;
+  if (item.type === "anime" || item.category === "anime") {
+    if (item.duration && /^\d+\s*min/i.test(item.duration) && !item.seNum && !/season|ep/i.test(item.runtime || "")) {
+      return false;
+    }
+    return true;
+  }
+  return false;
+}
+
 async function fetchTmdbSeriesSeasons(tmdbId) {
   if (!isValidTmdbId(tmdbId)) return null;
   for (const apiKey of TMDB_API_KEYS) {
@@ -2709,6 +2726,7 @@ async function fetchTmdbSeriesSeasons(tmdbId) {
       return validSeasons.map((s) => ({
         season: s.season_number,
         title: s.name || `Season ${s.season_number}`,
+        episodesCount: s.episode_count,
         episodes: Array.from({ length: s.episode_count }, (_, i) => ({
           season: s.season_number,
           episode: i + 1,
@@ -2733,6 +2751,8 @@ async function fetchTmdbSeasonEpisodes(tmdbId, seasonNumber) {
           season: seasonNumber,
           episode: ep.episode_number,
           title: ep.name || `Episode ${ep.episode_number}`,
+          overview: ep.overview || "",
+          still: ep.still_path ? `https://image.tmdb.org/t/p/w300${ep.still_path}` : "",
           resourceLink: ""
         }));
       }
@@ -2790,18 +2810,23 @@ async function resolveTmdbId(item) {
   }
 
   // Dynamic TMDB Search API with working keys and sanitized query
+  const isSeries = isItemSeries(item);
   const searchQuery = sanitized || normalized || cleanTitle;
   if (searchQuery) {
     for (const apiKey of TMDB_API_KEYS) {
       try {
-        const searchUrl = `https://api.themoviedb.org/3/search/multi?api_key=${apiKey}&query=${encodeURIComponent(searchQuery)}`;
+        const searchPath = isSeries ? "search/tv" : "search/multi";
+        const searchUrl = `https://api.themoviedb.org/3/${searchPath}?api_key=${apiKey}&query=${encodeURIComponent(searchQuery)}`;
         const res = await fetch(searchUrl);
         if (res.ok) {
           const data = await res.json();
-          const top = (data?.results || []).find(r => r.media_type === "movie" || r.media_type === "tv") || data?.results?.[0];
+          const results = data?.results || [];
+          const top = isSeries
+            ? (results.find(r => r.media_type === "tv" || (!r.media_type && r.first_air_date)) || results[0])
+            : (results.find(r => r.media_type === "movie" || (!r.media_type && r.release_date)) || results[0]);
           if (top?.id && isValidTmdbId(top.id)) {
             const foundId = String(top.id);
-            const mediaType = top.media_type === "tv" ? "tv" : "movie";
+            const mediaType = isSeries ? "tv" : (top.media_type || (top.first_air_date ? "tv" : "movie"));
             item.mediaType = mediaType;
             item.tmdbId = foundId;
             if (top.backdrop_path && !item.backdrop) {
@@ -2831,15 +2856,15 @@ async function resolveTmdbId(item) {
   }
 
   // Safe fallback default IDs that always stream without crash
-  const isTv = item.type === "series" || (item.type === "anime" && (Number(item.seNum) > 0));
-  const fallbackId = isTv ? "30093" : (item.type === "anime" ? "916192" : "27205");
+  const isTv = isSeries;
+  const fallbackId = isTv ? "1396" : (item.type === "anime" ? "916192" : "27205");
   TMDB_CACHE.set(cacheKey, { id: fallbackId, mediaType: isTv ? "tv" : "movie" });
   return fallbackId;
 }
 
 function getEmbedStreamUrl(tmdbId, item, season = 1, episode = 1, serverKey = currentServerKey) {
   const server = STREAM_SERVERS[serverKey] || STREAM_SERVERS.vidstuck;
-  const isSeries = item.mediaType === "tv" || item.type === "series" || (item.type === "anime" && item.mediaType !== "movie" && (Number(item.seNum) > 0 || (item.seasons && item.seasons.length > 0)));
+  const isSeries = isItemSeries(item);
   let url = isSeries
     ? server.getTvUrl(tmdbId, Math.max(1, Number(season) || 1), Math.max(1, Number(episode) || 1))
     : server.getMovieUrl(tmdbId);
@@ -3531,7 +3556,72 @@ function updatePlayerSelectionUI(message = "") {
 }
 
 async function fetchEpisodeList(subjectId, preferredResolution = null) {
-  // 1. Check EPISODE_MAP first
+  // 1. Resolve TMDB ID for series/anime to fetch full seasons and all episodes
+  let tmdbId = (state.player?.tmdbId && isValidTmdbId(state.player.tmdbId)) ? String(state.player.tmdbId) : null;
+  if (!tmdbId) {
+    if (TMDB_MAP[subjectId]?.tmdbId && isValidTmdbId(TMDB_MAP[subjectId].tmdbId)) {
+      tmdbId = String(TMDB_MAP[subjectId].tmdbId);
+    } else if (isValidTmdbId(subjectId)) {
+      tmdbId = String(subjectId);
+    } else {
+      const itemToResolve = state.player?.item || findCatalogItem(subjectId) || findTitle(subjectId);
+      if (itemToResolve) {
+        tmdbId = await resolveTmdbId(itemToResolve);
+      }
+    }
+  }
+
+  // Fetch verified complete season list & all available episode counts from TMDB
+  if (tmdbId && isValidTmdbId(tmdbId)) {
+    const tmdbSeasons = await fetchTmdbSeriesSeasons(tmdbId);
+    if (tmdbSeasons && tmdbSeasons.length > 0) {
+      // Pre-fetch actual episode titles for initial season so they display immediately
+      try {
+        const initialSeasonNum = state.player?.selectedSeason || 1;
+        const targetSeason = tmdbSeasons.find(s => s.season === initialSeasonNum) || tmdbSeasons[0];
+        if (targetSeason) {
+          const seasonEpisodes = await fetchTmdbSeasonEpisodes(tmdbId, targetSeason.season);
+          if (seasonEpisodes && seasonEpisodes.length > 0) {
+            targetSeason.episodes = seasonEpisodes;
+            targetSeason.episodesLoaded = true;
+          }
+        }
+      } catch {}
+      return { seasons: tmdbSeasons, resolution: preferredResolution || 1080 };
+    }
+  }
+
+  // 2. Next, check catalog item metadata (runtime / seNum / epNum)
+  const currentItem = state.player?.item || findCatalogItem(subjectId) || findTitle(subjectId);
+  if (currentItem) {
+    const runtimeStr = currentItem.runtime || currentItem.duration || "";
+    const seasonsMatch = runtimeStr.match(/(\d+)\s*Seasons?/i);
+    const episodesMatch = runtimeStr.match(/(\d+)\s*Episodes?/i);
+    const totalSeasons = seasonsMatch ? Number(seasonsMatch[1]) : (Number(currentItem.seNum) || 1);
+    const totalEpisodes = episodesMatch ? Number(episodesMatch[1]) : (Number(currentItem.epNum) || (totalSeasons * 12));
+
+    if (totalSeasons > 0 && totalEpisodes > 0) {
+      const epsPerSeason = Math.max(1, Math.round(totalEpisodes / totalSeasons));
+      const seasons = Array.from({ length: totalSeasons }, (_, sIdx) => {
+        const sNum = sIdx + 1;
+        const isLast = sNum === totalSeasons;
+        const count = isLast ? Math.max(1, totalEpisodes - (epsPerSeason * (totalSeasons - 1))) : epsPerSeason;
+        return {
+          season: sNum,
+          title: `Season ${sNum}`,
+          episodes: Array.from({ length: count }, (_, eIdx) => ({
+            season: sNum,
+            episode: eIdx + 1,
+            title: `Episode ${eIdx + 1}`,
+            resourceLink: ""
+          }))
+        };
+      });
+      return { seasons, resolution: preferredResolution || 1080 };
+    }
+  }
+
+  // 3. Fallback: EPISODE_MAP only if nothing else returned
   if (subjectId && EPISODE_MAP[subjectId]) {
     const list = EPISODE_MAP[subjectId];
     const seasonsMap = new Map();
@@ -3549,56 +3639,14 @@ async function fetchEpisodeList(subjectId, preferredResolution = null) {
     return { seasons, resolution: preferredResolution || 1080 };
   }
 
-  // 2. Fetch real seasons from TMDB if tmdbId is available
-  const tmdbTargetId = (state.player?.tmdbId && isValidTmdbId(state.player.tmdbId)) ? state.player.tmdbId : (isValidTmdbId(subjectId) ? subjectId : null);
-  if (tmdbTargetId) {
-    const tmdbSeasons = await fetchTmdbSeriesSeasons(tmdbTargetId);
-    if (tmdbSeasons && tmdbSeasons.length > 0) {
-      return { seasons: tmdbSeasons, resolution: preferredResolution || 1080 };
-    }
-  }
-
-  const mergeSeasons = (target, incoming) => {
-    const seasons = new Map(target.map((season) => [season.season, new Map(season.episodes.map((episode) => [episode.episode, episode]))]));
-    incoming.forEach((season) => {
-      if (!seasons.has(season.season)) seasons.set(season.season, new Map());
-      const episodes = seasons.get(season.season);
-      season.episodes.forEach((episode) => {
-        const current = episodes.get(episode.episode);
-        if (!current || (!current.resourceLink && episode.resourceLink)) episodes.set(episode.episode, episode);
-      });
-    });
-    return [...seasons.entries()]
-      .map(([season, episodes]) => ({ season, episodes: [...episodes.values()].sort((a, b) => a.episode - b.episode) }))
-      .sort((a, b) => a.season - b.season);
-  };
-
-  const resolutions = preferredResolution ? [preferredResolution, ...PLAYER_RESOLUTIONS.filter((value) => value !== preferredResolution)] : PLAYER_RESOLUTIONS;
-  for (const resolution of resolutions) {
-    try {
-      const fetchPage = (startPosition, endPosition) =>
-        fetchJson(buildApiUrl("episodes", { id: subjectId, resolution, startPosition, endPosition }));
-      const firstPayload = await fetchPage(1, EPISODE_PAGE_SIZE);
-      let seasons = normalizeEpisodeSeasons(firstPayload);
-      const totalEpisodes = firstNumber(firstPayload?.data?.totalEpisode, firstPayload?.data?.pager?.totalCount, ...seasons.flatMap((season) => season.episodes.map((episode) => episode.episode))) || 0;
-      for (let start = EPISODE_PAGE_SIZE + 1; start <= totalEpisodes; start += EPISODE_PAGE_SIZE) {
-        const payload = await fetchPage(start, Math.min(start + EPISODE_PAGE_SIZE - 1, totalEpisodes));
-        seasons = mergeSeasons(seasons, normalizeEpisodeSeasons(payload));
-      }
-      if (seasons.length) return { seasons, resolution };
-    } catch {
-      // Try next
-    }
-  }
-
-  // 3. Fallback: generate 8 verified playable HD episodes for series/anime
-  const defaultEpisodes = Array.from({ length: 8 }, (_, i) => ({
+  // 4. Default fallback: 1 season with 12 episodes
+  const defaultEpisodes = Array.from({ length: 12 }, (_, i) => ({
     episode: i + 1,
     title: `Episode ${i + 1}`,
-    resourceLink: getStreamForTitle(subjectId || "Series", i + 1),
+    resourceLink: "",
     season: 1
   }));
-  return { seasons: [{ season: 1, episodes: defaultEpisodes }], resolution: preferredResolution || 1080 };
+  return { seasons: [{ season: 1, title: "Season 1", episodes: defaultEpisodes }], resolution: preferredResolution || 1080 };
 }
 
 function chooseEpisode(seasons, preferredSeason, preferredEpisode) {
@@ -3748,7 +3796,8 @@ function clearPlayerSource(message) {
   video.pause();
   video.removeAttribute("src");
   video.load();
-  $("#start-player").disabled = true;
+  const startBtn = $("#start-player");
+  if (startBtn) startBtn.disabled = true;
   setPlayerLoading(message, true);
 }
 
@@ -3761,8 +3810,11 @@ function applyPlayerSource(source) {
   video.dataset.sourceLabel = source.label;
   video.dataset.playerRequestId = String(state.player.requestId);
   video.src = source.url;
-  $("#start-player").disabled = false;
-  $("#start-player").innerHTML = `${renderIcon("play", "icon-sm")} <span>Start playback</span>`;
+  const startBtn = $("#start-player");
+  if (startBtn) {
+    startBtn.disabled = false;
+    startBtn.innerHTML = `${renderIcon("play", "icon-sm")} <span>Start playback</span>`;
+  }
   setPlayerLoading(`${source.label} · press Start playback`, false);
   video.load();
   updatePlayerEpisodeFlow();
@@ -3905,15 +3957,16 @@ async function changePlayerSeason(seasonNumber) {
   state.player.selectedEpisode = selection.episode;
   state.player.requestId += 1;
   const seasonTitle = season.title || `Season ${season.season}`;
-  setPlayerLoading(`Loading ${seasonTitle}...`);
-  updatePlayerSelectionUI(`Loading ${seasonTitle}...`);
+  setPlayerState(PLAYER_STATE.LOADING, `Loading ${seasonTitle}…`);
+  updatePlayerSelectionUI();
   reloadCurrentEmbed();
 
-  // Asynchronously fetch real episode names for this season from TMDB if available and not yet loaded
-  if (state.player.tmdbId && isValidTmdbId(state.player.tmdbId) && season.episodes?.length > 0 && season.episodes[0].title === "Episode 1") {
+  // Asynchronously fetch real episode names for this season from TMDB if not yet loaded
+  if (state.player.tmdbId && isValidTmdbId(state.player.tmdbId) && !season.episodesLoaded) {
     fetchTmdbSeasonEpisodes(state.player.tmdbId, season.season).then((realEps) => {
       if (realEps && realEps.length > 0) {
         season.episodes = realEps;
+        season.episodesLoaded = true;
         updatePlayerSelectionUI();
       }
     });
@@ -3929,8 +3982,8 @@ async function changePlayerEpisode(episodeNumber) {
   state.player.selectedEpisode = episode.episode;
   state.player.requestId += 1;
   const epLabel = `Episode ${episode.episode}${episode.title && episode.title !== `Episode ${episode.episode}` ? `: ${episode.title}` : ""}`;
-  setPlayerLoading(`Loading ${epLabel}...`);
-  updatePlayerSelectionUI(`Loading ${epLabel}...`);
+  setPlayerState(PLAYER_STATE.LOADING, `Loading ${epLabel}…`);
+  updatePlayerSelectionUI();
   reloadCurrentEmbed();
 }
 
@@ -3995,26 +4048,13 @@ async function playTitle(title) {
   const tmdbId = await resolveTmdbId(item);
   state.player.item = item;
   state.player.tmdbId = tmdbId;
-  const isSeries = item.mediaType === "tv" || item.type === "series" || (item.type === "anime" && item.mediaType !== "movie" && (Number(item.seNum) > 0 || (item.seasons && item.seasons.length > 0)));
+  const isSeries = isItemSeries(item);
   state.player.isSeries = isSeries;
   state.player.selectedSeason = 1;
   state.player.selectedEpisode = 1;
 
   if (state.player.isSeries) {
     await loadEpisodeState(item.subjectId || item.title, 1, 1, ++state.player.requestId);
-
-    // Asynchronously fetch episode titles for Season 1 from TMDB
-    if (state.player.tmdbId && isValidTmdbId(state.player.tmdbId)) {
-      const firstSeason = state.player.seasons.find((s) => s.season === 1) || state.player.seasons[0];
-      if (firstSeason && firstSeason.episodes?.length > 0 && firstSeason.episodes[0].title === "Episode 1") {
-        fetchTmdbSeasonEpisodes(state.player.tmdbId, firstSeason.season).then((realEps) => {
-          if (realEps && realEps.length > 0) {
-            firstSeason.episodes = realEps;
-            updatePlayerSelectionUI();
-          }
-        });
-      }
-    }
   } else {
     updatePlayerSelectionUI();
   }
@@ -4354,7 +4394,7 @@ $("#settings-backdrop")?.addEventListener("click", (event) => {
   if (event.target.id === "settings-backdrop") closeSettings();
 });
 
-$("#player-settings").addEventListener("toggle", (event) => {
+$("#player-settings")?.addEventListener("toggle", (event) => {
   $("#player-settings-toggle")?.setAttribute("aria-expanded", String(event.currentTarget.open));
 });
 
