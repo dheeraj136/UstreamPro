@@ -5032,6 +5032,35 @@ async function fetchSportsCatalog() {
   const live = parseList("Live Events", "live");
   const upcoming = parseList("Upcoming Events", "upcoming");
   const channels = parseList("24/7 Channels", "24/7");
+
+  // Integrate LIVE TV API from RapidAPI Hub (live-tv-api1.p.rapidapi.com)
+  try {
+    const liveTvRes = await fetch("/api/livetv").catch(() => null);
+    if (liveTvRes?.ok) {
+      const liveTvData = await liveTvRes.json();
+      if (Array.isArray(liveTvData.channels) && liveTvData.channels.length) {
+        const rapidChannels = liveTvData.channels.map((ch, idx) => {
+          const name = String(ch.name || ch.title || ch.station || `Live Channel ${idx + 1}`);
+          const streamUrl = String(ch.streamUrl || ch.streamUrls?.[0] || ch.url || (Array.isArray(ch.streams) ? ch.streams[0]?.url : "") || "");
+          return {
+            id: `rapidtv-${ch.id || idx}`,
+            title: name,
+            category: "RapidAPI Live TV",
+            poster: ch.logo || ch.image || ch.poster || "",
+            status: "24/7",
+            _live: true,
+            teams: null,
+            sources: streamUrl ? [{ name: "Live Broadcast", embedUrl: streamUrl, hd: true, streamNo: 1 }] : [{ name: "Stream 1", embedUrl: "about:blank", hd: true, streamNo: 1 }],
+            date: 0
+          };
+        });
+        if (rapidChannels.length) {
+          channels.unshift(...rapidChannels);
+        }
+      }
+    }
+  } catch {}
+
   const categories = [...new Set([...live, ...upcoming, ...channels].map(i => i.category).filter(Boolean))].sort();
 
   sportsState.cache = { live, upcoming, channels, categories, timestamp: Date.now() };

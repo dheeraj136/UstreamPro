@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "RapidAPI Hub - LIVE TV API": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.rapidapi.com",
+        "--header",
+        "x-api-host: live-tv-api1.p.rapidapi.com",
+        "--header",
+        "x-api-key: 68d9a25612msh6bb2c17daf102cdp1fe4fbjsnc2adc8510c22"
+      ]
+    }
+  }
+}
