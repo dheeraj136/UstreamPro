@@ -7,11 +7,7 @@
       "destination": "/api/config.json"
     },
     {
-      "source": "/api/test",
-      "destination": "/api/test.js"
-    },
-    {
-      "source": "/api/:path*",
+      "source": "/api/((?!index\\.js$).*)",
       "destination": "/api/index.js"
     }
   ],
