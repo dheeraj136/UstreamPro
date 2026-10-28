@@ -14,7 +14,8 @@ function initAdShield() {
     if (!url || typeof url !== "string") return null;
     try {
       const parsed = new URL(url, window.location.origin);
-      if (parsed.origin === window.location.origin) {
+      const trustedHosts = [window.location.hostname, "discord.com", "discord.gg", "themoviedb.org", "api.themoviedb.org"];
+      if (trustedHosts.some((h) => parsed.hostname === h || parsed.hostname.endsWith("." + h))) {
         return _origOpen.call(window, url, target, features);
       }
     } catch {}
@@ -3877,7 +3878,6 @@ function reloadCurrentEmbed() {
   const season = player.selectedSeason || 1;
   const episode = player.selectedEpisode || 1;
   const url = getEmbedStreamUrl(player.tmdbId, item, season, episode, currentServerKey);
-  embed.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms allow-presentation");
   embed.src = url;
   embed.hidden = false;
   const video = $("#video-player");
@@ -4021,7 +4021,6 @@ async function playTitle(title) {
   // Load embed player with actual content!
   const streamUrl = getEmbedStreamUrl(tmdbId, item, state.player.selectedSeason || 1, state.player.selectedEpisode || 1, currentServerKey);
   if (embed) {
-    embed.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms allow-presentation");
     embed.src = streamUrl;
     embed.hidden = false;
   }
@@ -5985,7 +5984,6 @@ function openSportsPlayer(match) {
 
   if (!modal || !frame) return;
   modal.removeAttribute("hidden");
-  frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms allow-presentation");
   if (titleEl) titleEl.textContent = match.title;
 
   const sources = match.sources || [];
