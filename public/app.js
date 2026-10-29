@@ -1671,28 +1671,13 @@ async function loadLiveCatalog(isRetry = false) {
   if (isRetry) showToast("Connecting to live catalog...");
 
   try {
-    // GaiaFlix-style Multi-Page Deep Load: 15 pages fetched in parallel (~280-300+ titles)
+    // GaiaFlix-style Lean Homescreen Startup: 1 page per category (~100 titles total)
     const tmdbRequests = [
-      // Trending Now (Pages 1 & 2)
       { path: "/trending/all/day?page=1", cat: "trending" },
-      { path: "/trending/all/day?page=2", cat: "trending" },
-      // Popular & Top Rated Movies (Pages 1-3)
       { path: "/movie/popular?page=1", cat: "movie" },
-      { path: "/movie/popular?page=2", cat: "movie" },
-      { path: "/movie/popular?page=3", cat: "movie" },
-      { path: "/movie/top_rated?page=1", cat: "movie" },
-      // Popular TV Series (Pages 1-3)
       { path: "/tv/popular?page=1", cat: "tv" },
-      { path: "/tv/popular?page=2", cat: "tv" },
-      { path: "/tv/popular?page=3", cat: "tv" },
-      // Top Japanese Anime (Pages 1-3)
       { path: "/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=1", cat: "anime" },
-      { path: "/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=2", cat: "anime" },
-      { path: "/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=3", cat: "anime" },
-      // Cartoons & Animated Features (Pages 1-3)
-      { path: "/discover/tv?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=1", cat: "cartoons" },
-      { path: "/discover/tv?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=2", cat: "cartoons" },
-      { path: "/discover/tv?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=3", cat: "cartoons" }
+      { path: "/discover/tv?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=1", cat: "cartoons" }
     ];
 
     const results = await Promise.all(tmdbRequests.map(async ({ path, cat }) => {
@@ -1958,6 +1943,8 @@ function initInfiniteScroll() {
   if (sentinel && "IntersectionObserver" in window) {
     const observer = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting && !isLoadingMore && hasMoreContent) {
+        // Do not auto-infinite-scroll on the homescreen! In GaiaFlix, homescreen only displays a few curated items.
+        if (state.section === "home" && !state.search.trim()) return;
         void loadMoreTitles();
       }
     }, {
@@ -2140,7 +2127,7 @@ function setSection(section, updateHash = true) {
   const target = validSections.includes(section) ? section : "home";
   state.section = target;
   state.genre = "all"; // Reset genre sub-tab so all titles in this section are visible!
-  state.displayLimit = CONTENT_BATCH_SIZE; // Always reset to 35 content items per section
+  state.displayLimit = target === "home" ? 12 : CONTENT_BATCH_SIZE; // On homescreen, only a few content; on full catalogs, 35
   hasMoreContent = true;
 
   if (updateHash) {
@@ -2250,7 +2237,7 @@ function setSection(section, updateHash = true) {
     if (heroSection) heroSection.hidden = false;
     if (quickPicks) quickPicks.hidden = false;
     if (recommendationsSection) recommendationsSection.hidden = recommendations.length === 0;
-    if (catalogSection) catalogSection.hidden = false;
+    if (catalogSection) catalogSection.hidden = !state.search.trim();
     if (profileSection) profileSection.hidden = true;
     if (sportsSection) sportsSection.hidden = true;
     if (exploreSection) exploreSection.hidden = true;
@@ -2549,9 +2536,87 @@ function updateCatalogCounters(visible, displayed) {
   }
 }
 
+function renderHomeRails() {
+  const container = $("#home-rails-container");
+  const catalogSection = $("#catalog");
+  if (!container) return;
+
+  const isHomeView = state.section === "home" && !state.search.trim();
+  container.hidden = !isHomeView;
+  if (catalogSection) {
+    catalogSection.hidden = isHomeView;
+  }
+  if (!isHomeView) return;
+
+  const isDark = isDarkModeActive();
+  const cleanCatalog = catalog.filter((card) => isDark || !isAdultContent(card));
+
+  const isMovie = (c) => (c.type === "movie" || c.category === "movie") && c.type !== "anime" && !c.isJapaneseAnime && c.type !== "cartoon";
+  const isSeries = (c) => (c.type === "series" || c.category === "series" || c.category === "tv") && c.type !== "anime" && !c.isJapaneseAnime && c.type !== "cartoon";
+  const isAnime = (c) => c.type === "anime" || c.isJapaneseAnime || c.category === "anime" || (c.genre || []).includes("anime") || (c.language && /japanese/i.test(c.language));
+  const isCartoon = (c) => !isAnime(c) && (c.type === "cartoon" || c.isCartoon || c.category === "cartoons" || c.category === "cartoon" || (c.genre || []).includes("animation"));
+
+  const rails = [
+    {
+      title: "Top Searches & Trending",
+      items: cleanCatalog.slice(0, 10),
+      moreSection: "movies",
+      moreLabel: "View all"
+    },
+    {
+      title: "Popular Movies",
+      items: cleanCatalog.filter(isMovie).slice(0, 10),
+      moreSection: "movies",
+      moreLabel: "Explore Movies"
+    },
+    {
+      title: "Binge-Worthy Series",
+      items: cleanCatalog.filter(isSeries).slice(0, 10),
+      moreSection: "series",
+      moreLabel: "Explore Series"
+    },
+    {
+      title: "Top Japanese Anime",
+      items: cleanCatalog.filter(isAnime).slice(0, 10),
+      moreSection: "anime",
+      moreLabel: "Explore Anime"
+    },
+    {
+      title: "Western Animation & Cartoons",
+      items: cleanCatalog.filter(isCartoon).slice(0, 10),
+      moreSection: "cartoons",
+      moreLabel: "Explore Cartoons"
+    },
+    {
+      title: "Critically Rated",
+      items: [...cleanCatalog].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 10),
+      moreSection: "movies",
+      moreLabel: "View all"
+    }
+  ];
+
+  container.innerHTML = rails
+    .filter((r) => r.items.length > 0)
+    .map((r) => `
+      <section class="rail-section">
+        <div class="section-heading">
+          <h2>${escapeHtml(r.title)}</h2>
+          <div class="rail-heading-actions">
+            ${r.moreSection ? `<button class="rail-view-all" data-section="${r.moreSection}">${escapeHtml(r.moreLabel)} <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>` : ""}
+            <button class="rail-arrow" data-rail-scroll="left" aria-label="Scroll ${escapeHtml(r.title)} left"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+            <button class="rail-arrow" data-rail-scroll="right" aria-label="Scroll ${escapeHtml(r.title)} right"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+          </div>
+        </div>
+        <div class="media-rail">${r.items.map((card) => renderCard(card)).join("")}</div>
+      </section>
+    `)
+    .join("");
+}
+
 function render() {
   renderContinue();
   renderRecommendations();
+  renderHomeRails();
   const visible = getVisibleCards();
   const displayed = visible.slice(0, state.displayLimit);
   const grid = $("#card-grid");
@@ -5061,6 +5126,15 @@ function closeDrawer() {
 
 if (typeof window !== "undefined" && typeof document !== "undefined") {
 document.addEventListener("click", (event) => {
+  const arrow = event.target.closest("[data-rail-scroll]");
+  if (arrow) {
+    const rail = arrow.closest(".rail-section")?.querySelector(".media-rail");
+    if (rail) {
+      const dir = arrow.dataset.railScroll === "left" ? -1 : 1;
+      rail.scrollBy({ left: dir * rail.clientWidth * 0.8, behavior: "smooth" });
+    }
+    return;
+  }
   const button = event.target.closest("button");
   if (!button) return;
   if (button.dataset.section) return setSection(button.dataset.section, true);
