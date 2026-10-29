@@ -1441,17 +1441,46 @@ const TMDB_GENRE_NAMES = {
   10765: "sci-fi", 10766: "soap", 10767: "talk", 10768: "war"
 };
 
-async function fetchTmdbResults(path) {
+const TMDB_PUBLIC_KEYS = [
+  "16f62d38fec24f4e6c2adc9388da20ce", // GaiaFlix primary TMDB API v3 key
+  "e9e9d8da18ae29fc430845952232787c"  // High availability backup key
+];
+
+async function fetchTmdbApi(path) {
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+
+  // 1. Direct TMDB v3 fetch (Replicating GaiaFlix client-side architecture)
+  // Direct client calls bypass Vercel serverless cold starts, timeouts, and lambda failures
+  for (const key of TMDB_PUBLIC_KEYS) {
+    try {
+      const sep = cleanPath.includes("?") ? "&" : "?";
+      const directUrl = `https://api.themoviedb.org/3${cleanPath}${sep}api_key=${key}`;
+      const res = await fetch(directUrl, {
+        headers: { Accept: "application/json" }
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      // Try next key or proxy fallback
+    }
+  }
+
+  // 2. Secondary fallback: Local server proxy /api/tmdb
   try {
-    const cleanPath = path.startsWith("/") ? path : `/${path}`;
     const res = await fetch(`/api/tmdb${cleanPath}`);
     if (res.ok) {
-      const json = await res.json();
-      if (Array.isArray(json?.results)) return json.results;
+      return await res.json();
     }
-  } catch (err) {
-    console.warn("[TMDB Proxy] Request error:", err);
-  }
+  } catch (e) {}
+
+  return null;
+}
+
+async function fetchTmdbResults(path) {
+  const data = await fetchTmdbApi(path);
+  if (Array.isArray(data?.results)) return data.results;
+  if (Array.isArray(data)) return data;
   return [];
 }
 
@@ -1690,29 +1719,16 @@ async function loadLiveCatalog(isRetry = false) {
     ];
 
     const results = await Promise.all(tmdbRequests.map(async ({ path, cat }) => {
-      // 1. Try /api/tmdb local proxy (backed by server-side TMDB API key)
       try {
-        const proxyRes = await fetch(`/api/tmdb${path}`);
-        if (proxyRes.ok) {
-          const data = await proxyRes.json();
-          if (Array.isArray(data?.results) && data.results.length) {
-            return { ok: true, items: data.results.map((i) => normalizeTmdbItem(i, cat)), cat };
-          }
+        const rawResults = await fetchTmdbResults(path);
+        if (Array.isArray(rawResults) && rawResults.length) {
+          return { ok: true, items: rawResults.map((i) => normalizeTmdbItem(i, cat)), cat };
         }
-      } catch {}
+      } catch (err) {
+        console.warn(`[TMDB Batch fetch error for ${cat}]:`, err);
+      }
 
-      // 2. Try /api?endpoint= query fallback (Vercel rewrite resilience)
-      try {
-        const endRes = await fetch(`/api?endpoint=/tmdb${path}`);
-        if (endRes.ok) {
-          const data = await endRes.json();
-          if (Array.isArray(data?.results) && data.results.length) {
-            return { ok: true, items: data.results.map((i) => normalizeTmdbItem(i, cat)), cat };
-          }
-        }
-      } catch {}
-
-      // 3. Fallback: try /api/catalog endpoint
+      // Fallback: try /api/catalog endpoint
       try {
         const catRes = await fetch(`/api/catalog?category=${cat === "trending" ? "all" : cat}`);
         if (catRes.ok) {
@@ -1817,29 +1833,14 @@ async function fetchNextRemoteBatch(targetSection) {
   }
 
   const fetchedBatches = await Promise.all(paths.map(async ({ path, cat }) => {
-    // 1. Try local proxy
     try {
-      const proxyRes = await fetch(`/api/tmdb${path}`);
-      if (proxyRes.ok) {
-        const data = await proxyRes.json();
-        if (Array.isArray(data?.results) && data.results.length) {
-          return data.results.map((i) => normalizeTmdbItem(i, cat));
-        }
+      const rawResults = await fetchTmdbResults(path);
+      if (Array.isArray(rawResults) && rawResults.length) {
+        return rawResults.map((i) => normalizeTmdbItem(i, cat));
       }
     } catch {}
 
-    // 2. Try Vercel query fallback
-    try {
-      const endRes = await fetch(`/api?endpoint=/tmdb${path}`);
-      if (endRes.ok) {
-        const data = await endRes.json();
-        if (Array.isArray(data?.results) && data.results.length) {
-          return data.results.map((i) => normalizeTmdbItem(i, cat));
-        }
-      }
-    } catch {}
-
-    // 3. Fallback /api/catalog
+    // Fallback: /api/catalog
     try {
       const catRes = await fetch(`/api/catalog?category=${cat}&page=${nextPage}`);
       if (catRes.ok) {
@@ -2018,12 +2019,9 @@ async function loadNewestRecommendations() {
   try {
     let recItems = [];
     try {
-      const recRes = await fetch("/api/tmdb/movie/now_playing?page=1");
-      if (recRes.ok) {
-        const data = await recRes.json();
-        if (Array.isArray(data?.results) && data.results.length) {
-          recItems = data.results.slice(0, 12).map((i) => normalizeTmdbItem(i, "movie"));
-        }
+      const data = await fetchTmdbApi("/movie/now_playing?page=1");
+      if (Array.isArray(data?.results) && data.results.length) {
+        recItems = data.results.slice(0, 12).map((i) => normalizeTmdbItem(i, "movie"));
       }
     } catch {}
 
@@ -2083,12 +2081,8 @@ async function loadSearchResults(query) {
   try {
     let results = [];
     try {
-      const url = `/api/tmdb/search/multi?query=${encodeURIComponent(trimmed)}`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data?.results)) results = data.results;
-      }
+      const data = await fetchTmdbApi(`/search/multi?query=${encodeURIComponent(trimmed)}`);
+      if (Array.isArray(data?.results)) results = data.results;
     } catch {}
 
     if (!results.length) {
@@ -2985,10 +2979,8 @@ function isItemSeries(item) {
 async function fetchTmdbSeriesSeasons(tmdbId) {
   if (!isValidTmdbId(tmdbId)) return null;
   try {
-    const res = await fetch(`/api/tmdb/tv/${tmdbId}`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data.seasons || !Array.isArray(data.seasons)) return null;
+    const data = await fetchTmdbApi(`/tv/${tmdbId}`);
+    if (!data?.seasons || !Array.isArray(data.seasons)) return null;
     const validSeasons = data.seasons.filter((s) => s.season_number > 0 && s.episode_count > 0);
     if (!validSeasons.length) return null;
     return validSeasons.map((s) => ({
@@ -3010,10 +3002,8 @@ async function fetchTmdbSeriesSeasons(tmdbId) {
 async function fetchTmdbSeasonEpisodes(tmdbId, seasonNumber) {
   if (!isValidTmdbId(tmdbId)) return null;
   try {
-    const res = await fetch(`/api/tmdb/tv/${tmdbId}/season/${seasonNumber}`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data.episodes && Array.isArray(data.episodes) && data.episodes.length > 0) {
+    const data = await fetchTmdbApi(`/tv/${tmdbId}/season/${seasonNumber}`);
+    if (data?.episodes && Array.isArray(data.episodes) && data.episodes.length > 0) {
       return data.episodes.map((ep) => ({
         season: seasonNumber,
         episode: ep.episode_number,
@@ -3083,10 +3073,8 @@ async function resolveTmdbId(item) {
   if (searchQuery) {
     try {
       const searchPath = isSeries ? "/search/tv" : "/search/multi";
-      const searchUrl = `/api/tmdb${searchPath}?query=${encodeURIComponent(searchQuery)}`;
-      const res = await fetch(searchUrl);
-      if (res.ok) {
-        const data = await res.json();
+      const data = await fetchTmdbApi(`${searchPath}?query=${encodeURIComponent(searchQuery)}`);
+      if (data) {
         const results = data?.results || [];
         const top = isSeries
           ? (results.find(r => r.media_type === "tv" || (!r.media_type && r.first_air_date)) || results[0])
@@ -6867,13 +6855,11 @@ async function executeModalSearch(query) {
       }).slice(0, 6);
     }
 
-    // 3. TMDB search via secure server-side proxy
+    // 3. TMDB search via direct TMDB / proxy
     let tmdbResults = [];
     try {
-      const tmdbUrl = `/api/tmdb/search/multi?query=${encodeURIComponent(query)}&language=${localStorage.getItem("ustream-lang") || "en-US"}`;
-      const res = await fetch(tmdbUrl, { signal }).catch(() => null);
-      if (res?.ok) {
-        const data = await res.json();
+      const data = await fetchTmdbApi(`/search/multi?query=${encodeURIComponent(query)}&language=${localStorage.getItem("ustream-lang") || "en-US"}`);
+      if (data) {
         tmdbResults = (data.results || []).filter((item) => item.media_type === "movie" || item.media_type === "tv").slice(0, 12).map((item) => {
           const isMovie = item.media_type === "movie";
           const title = isMovie ? item.title : item.name;
@@ -7956,16 +7942,16 @@ async function openProviderCatalog(provider) {
 
   try {
     const lang = localStorage.getItem("ustream-lang") || "en-US";
-    const movieUrl = `/api/tmdb/discover/movie?with_watch_providers=${provider.id}&watch_region=US&language=${lang}&sort_by=popularity.desc`;
-    const tvUrl = `/api/tmdb/discover/tv?with_watch_providers=${provider.id}&watch_region=US&language=${lang}&sort_by=popularity.desc`;
+    const moviePath = `/discover/movie?with_watch_providers=${provider.id}&watch_region=US&language=${lang}&sort_by=popularity.desc`;
+    const tvPath = `/discover/tv?with_watch_providers=${provider.id}&watch_region=US&language=${lang}&sort_by=popularity.desc`;
 
-    const [movieRes, tvRes] = await Promise.all([
-      fetch(movieUrl).catch(() => null),
-      fetch(tvUrl).catch(() => null)
+    const [movieData, tvData] = await Promise.all([
+      fetchTmdbApi(moviePath),
+      fetchTmdbApi(tvPath)
     ]);
 
-    const movies = movieRes?.ok ? (await movieRes.json()).results || [] : [];
-    const tvs = tvRes?.ok ? (await tvRes.json()).results || [] : [];
+    const movies = Array.isArray(movieData?.results) ? movieData.results : [];
+    const tvs = Array.isArray(tvData?.results) ? tvData.results : [];
 
     const normList = [];
     movies.slice(0, 12).forEach(m => {
