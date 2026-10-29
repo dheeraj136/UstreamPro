@@ -1701,7 +1701,18 @@ async function loadLiveCatalog(isRetry = false) {
         }
       } catch {}
 
-      // 2. Fallback: try /api/catalog endpoint
+      // 2. Try /api?endpoint= query fallback (Vercel rewrite resilience)
+      try {
+        const endRes = await fetch(`/api?endpoint=/tmdb${path}`);
+        if (endRes.ok) {
+          const data = await endRes.json();
+          if (Array.isArray(data?.results) && data.results.length) {
+            return { ok: true, items: data.results.map((i) => normalizeTmdbItem(i, cat)), cat };
+          }
+        }
+      } catch {}
+
+      // 3. Fallback: try /api/catalog endpoint
       try {
         const catRes = await fetch(`/api/catalog?category=${cat === "trending" ? "all" : cat}`);
         if (catRes.ok) {
@@ -1817,7 +1828,18 @@ async function fetchNextRemoteBatch(targetSection) {
       }
     } catch {}
 
-    // 2. Fallback /api/catalog
+    // 2. Try Vercel query fallback
+    try {
+      const endRes = await fetch(`/api?endpoint=/tmdb${path}`);
+      if (endRes.ok) {
+        const data = await endRes.json();
+        if (Array.isArray(data?.results) && data.results.length) {
+          return data.results.map((i) => normalizeTmdbItem(i, cat));
+        }
+      }
+    } catch {}
+
+    // 3. Fallback /api/catalog
     try {
       const catRes = await fetch(`/api/catalog?category=${cat}&page=${nextPage}`);
       if (catRes.ok) {
@@ -1847,9 +1869,9 @@ async function fetchNextRemoteBatch(targetSection) {
     catalog.push(...newItems);
     updateStatusBadge(true, catalog.length);
     try {
-      localStorage.setItem("ustream-catalog-cache", JSON.stringify(catalog.slice(0, 500)));
+      localStorage.setItem("ustream-catalog-cache", JSON.stringify(catalog.slice(0, 1000)));
     } catch {}
-  } else if (flatItems.length === 0) {
+  } else if (flatItems.length === 0 && nextPage >= 50) {
     hasMoreContent = false;
   }
 
@@ -1942,6 +1964,22 @@ async function loadMoreTitles() {
   }
 }
 
+let scrollThrottleTimer = null;
+function handleAutoInfiniteScroll() {
+  if (isLoadingMore || !hasMoreContent) return;
+  const targetSection = state.section;
+  if (["sports", "explore", "profile", "my-list"].includes(targetSection)) return;
+
+  const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+  const docHeight = document.documentElement.scrollHeight || document.body.scrollHeight;
+
+  // Auto infinity load: as soon as user is within 1000px of bottom, automatically load next 35 content!
+  if (docHeight - (scrollY + viewportHeight) <= 1000) {
+    void loadMoreTitles();
+  }
+}
+
 function initInfiniteScroll() {
   const sentinel = $("#catalog-sentinel");
   const loadMoreBtn = $("#load-more-btn");
@@ -1949,16 +1987,31 @@ function initInfiniteScroll() {
     loadMoreBtn.addEventListener("click", () => void loadMoreTitles());
   }
 
+  // 1. Dual-trigger IntersectionObserver with generous 800px root margin
   if (sentinel && "IntersectionObserver" in window) {
     const observer = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting && !isLoadingMore && hasMoreContent) {
         void loadMoreTitles();
       }
     }, {
-      rootMargin: "600px 0px"
+      rootMargin: "800px 0px"
     });
     observer.observe(sentinel);
   }
+
+  // 2. Continuous passive window scroll listener (guarantees auto infinity loading on all mobile & desktop browsers)
+  window.addEventListener("scroll", () => {
+    if (scrollThrottleTimer) return;
+    scrollThrottleTimer = window.setTimeout(() => {
+      scrollThrottleTimer = null;
+      handleAutoInfiniteScroll();
+    }, 80);
+  }, { passive: true });
+
+  // 3. Window resize listener
+  window.addEventListener("resize", () => {
+    handleAutoInfiniteScroll();
+  }, { passive: true });
 }
 
 async function loadNewestRecommendations() {

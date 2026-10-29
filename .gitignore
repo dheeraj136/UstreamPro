@@ -3,6 +3,8 @@
 *.err
 node_modules/
 nul
+.agents/
+demostream/
 data/*.db*
 data/uploads/videos/*
 data/uploads/thumbnails/*

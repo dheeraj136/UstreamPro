@@ -25,8 +25,7 @@ for (const file of assets) {
 for (const iconFile of ["favicon.svg", "favicon.png", "apple-touch-icon.png"]) {
   if (existsSync(join(assetsDir, iconFile))) {
     await copyFile(join(assetsDir, iconFile), join(publicDir, iconFile));
-    await copyFile(join(assetsDir, iconFile), join(root, iconFile));
-  }
+      }
 }
 
 await writeFile(

@@ -16,14 +16,7 @@
     },
     {
       "source": "/api/(.+)",
-      "destination": "/api"
-    }
-  ],
-  "redirects": [
-    {
-      "source": "/",
-      "destination": "/index.html",
-      "permanent": false
+      "destination": "/api?endpoint=/$1"
     }
   ]
 }
