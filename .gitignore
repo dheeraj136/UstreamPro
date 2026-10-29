@@ -3,3 +3,8 @@
 *.err
 node_modules/
 nul
+data/*.db*
+data/uploads/videos/*
+data/uploads/thumbnails/*
+!data/uploads/videos/.gitkeep
+!data/uploads/thumbnails/.gitkeep

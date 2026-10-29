@@ -1429,12 +1429,6 @@ const normalizeSearchItem = (item) => {
   return normalizeApiItem(item, category);
 };
 
-const TMDB_API_KEYS = [
-  "e9e9d8da18ae29fc430845952232787c",
-  "3fd2be6f0c70a2a598f084ddfb75487c",
-  "16f62d38fec24f4e6c2adc9388da20ce"
-];
-
 const TMDB_GENRE_NAMES = {
   28: "action", 12: "adventure", 16: "animation", 35: "comedy", 80: "crime",
   99: "documentary", 18: "drama", 10751: "family", 14: "fantasy", 36: "history",
@@ -1445,16 +1439,15 @@ const TMDB_GENRE_NAMES = {
 };
 
 async function fetchTmdbResults(path) {
-  const sep = path.includes("?") ? "&" : "?";
-  for (const apiKey of TMDB_API_KEYS) {
-    try {
-      const directUrl = `https://api.themoviedb.org/3${path}${sep}api_key=${apiKey}`;
-      const res = await fetch(directUrl);
-      if (res.ok) {
-        const json = await res.json();
-        if (Array.isArray(json?.results)) return json.results;
-      }
-    } catch {}
+  try {
+    const cleanPath = path.startsWith("/") ? path : `/${path}`;
+    const res = await fetch(`/api/tmdb${cleanPath}`);
+    if (res.ok) {
+      const json = await res.json();
+      if (Array.isArray(json?.results)) return json.results;
+    }
+  } catch (err) {
+    console.warn("[TMDB Proxy] Request error:", err);
   }
   return [];
 }
@@ -2214,6 +2207,7 @@ function setSection(section, updateHash = true) {
     if (profileSection) {
       profileSection.hidden = false;
       updateProfileStats();
+      void loadUserUploads();
     }
   } else if (target === "my-list") {
     if (heroSection) heroSection.hidden = true;
@@ -2826,48 +2820,47 @@ function isItemSeries(item) {
 
 async function fetchTmdbSeriesSeasons(tmdbId) {
   if (!isValidTmdbId(tmdbId)) return null;
-  for (const apiKey of TMDB_API_KEYS) {
-    try {
-      const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${apiKey}`);
-      if (!res.ok) continue;
-      const data = await res.json();
-      if (!data.seasons || !Array.isArray(data.seasons)) continue;
-      const validSeasons = data.seasons.filter((s) => s.season_number > 0 && s.episode_count > 0);
-      if (!validSeasons.length) continue;
-      return validSeasons.map((s) => ({
+  try {
+    const res = await fetch(`/api/tmdb/tv/${tmdbId}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.seasons || !Array.isArray(data.seasons)) return null;
+    const validSeasons = data.seasons.filter((s) => s.season_number > 0 && s.episode_count > 0);
+    if (!validSeasons.length) return null;
+    return validSeasons.map((s) => ({
+      season: s.season_number,
+      title: s.name || `Season ${s.season_number}`,
+      episodesCount: s.episode_count,
+      episodes: Array.from({ length: s.episode_count }, (_, i) => ({
         season: s.season_number,
-        title: s.name || `Season ${s.season_number}`,
-        episodesCount: s.episode_count,
-        episodes: Array.from({ length: s.episode_count }, (_, i) => ({
-          season: s.season_number,
-          episode: i + 1,
-          title: `Episode ${i + 1}`,
-          resourceLink: ""
-        }))
-      }));
-    } catch {}
+        episode: i + 1,
+        title: `Episode ${i + 1}`,
+        resourceLink: ""
+      }))
+    }));
+  } catch {
+    return null;
   }
-  return null;
 }
 
 async function fetchTmdbSeasonEpisodes(tmdbId, seasonNumber) {
   if (!isValidTmdbId(tmdbId)) return null;
-  for (const apiKey of TMDB_API_KEYS) {
-    try {
-      const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}/season/${seasonNumber}?api_key=${apiKey}`);
-      if (!res.ok) continue;
-      const data = await res.json();
-      if (data.episodes && Array.isArray(data.episodes) && data.episodes.length > 0) {
-        return data.episodes.map((ep) => ({
-          season: seasonNumber,
-          episode: ep.episode_number,
-          title: ep.name || `Episode ${ep.episode_number}`,
-          overview: ep.overview || "",
-          still: ep.still_path ? `https://image.tmdb.org/t/p/w300${ep.still_path}` : "",
-          resourceLink: ""
-        }));
-      }
-    } catch {}
+  try {
+    const res = await fetch(`/api/tmdb/tv/${tmdbId}/season/${seasonNumber}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.episodes && Array.isArray(data.episodes) && data.episodes.length > 0) {
+      return data.episodes.map((ep) => ({
+        season: seasonNumber,
+        episode: ep.episode_number,
+        title: ep.name || `Episode ${ep.episode_number}`,
+        overview: ep.overview || "",
+        still: ep.still_path ? `https://image.tmdb.org/t/p/w300${ep.still_path}` : "",
+        resourceLink: ""
+      }));
+    }
+  } catch {
+    return null;
   }
   return null;
 }
@@ -4234,6 +4227,7 @@ function handlePlaybackError() {
 function closePlayer() {
   const embed = $("#embed-player");
   const video = $("#video-player");
+  const customWrapper = $("#custom-player-wrapper");
   state.player.requestId += 1;
   togglePlayerSettings(false);
   if (embed) {
@@ -4247,6 +4241,15 @@ function closePlayer() {
     video.load();
     video.hidden = true;
   }
+  if (customWrapper) customWrapper.hidden = true;
+  if (window._currentHlsInstance) {
+    try {
+      window._currentHlsInstance.destroy();
+    } catch {}
+    window._currentHlsInstance = null;
+  }
+  const resumeBanner = $("#player-resume-banner");
+  if (resumeBanner) resumeBanner.hidden = true;
   const episodesSection = $("#player-episodes-section");
   if (episodesSection) episodesSection.hidden = true;
   const seasonBarField = $("#player-season-bar-field");
@@ -4255,6 +4258,727 @@ function closePlayer() {
   if (episodeBarField) episodeBarField.hidden = true;
   $("#player-backdrop").hidden = true;
   setPlayerState(PLAYER_STATE.IDLE);
+}
+
+function playNativeVideo(streamUrl, title, poster = "", { videoId = null, resumeTime = 0 } = {}) {
+  const embed = $("#embed-player");
+  const video = $("#video-player");
+  const customWrapper = $("#custom-player-wrapper");
+  const playerBackdrop = $("#player-backdrop");
+  if (!video || !customWrapper) return;
+
+  if (embed) {
+    embed.src = "about:blank";
+    embed.hidden = true;
+  }
+  customWrapper.hidden = false;
+  video.hidden = false;
+  video.poster = poster || "";
+  $("#player-title").textContent = title || "Now Playing";
+  playerBackdrop.hidden = false;
+
+  // HLS stream support if URL ends in .m3u8
+  if (streamUrl.includes(".m3u8") && typeof window.Hls !== "undefined" && window.Hls.isSupported()) {
+    if (window._currentHlsInstance) {
+      window._currentHlsInstance.destroy();
+    }
+    const hls = new window.Hls();
+    window._currentHlsInstance = hls;
+    hls.loadSource(streamUrl);
+    hls.attachMedia(video);
+  } else {
+    video.src = streamUrl;
+  }
+
+  video.load();
+  setPlayerState(PLAYER_STATE.LOADING, `Streaming: ${title}`);
+
+  // Resume playback check
+  const savedKey = `ustream-pos-${videoId || title}`;
+  const savedPos = parseFloat(localStorage.getItem(savedKey) || "0");
+  const banner = $("#player-resume-banner");
+  if (savedPos > 15 && (!resumeTime || resumeTime < 1)) {
+    const resumeLabel = $("#resume-time-label");
+    if (resumeLabel) resumeLabel.textContent = formatTime(savedPos);
+    if (banner) {
+      banner.hidden = false;
+      const acceptBtn = $("#resume-accept-btn");
+      const dismissBtn = $("#resume-dismiss-btn");
+      if (acceptBtn) {
+        acceptBtn.onclick = () => {
+          video.currentTime = savedPos;
+          banner.hidden = true;
+          video.play().catch(() => {});
+        };
+      }
+      if (dismissBtn) {
+        dismissBtn.onclick = () => {
+          localStorage.removeItem(savedKey);
+          banner.hidden = true;
+          video.currentTime = 0;
+          video.play().catch(() => {});
+        };
+      }
+    }
+  } else if (resumeTime > 0) {
+    video.currentTime = resumeTime;
+  }
+
+  // Safe playback start
+  video.play().then(() => {
+    setPlayerState(PLAYER_STATE.PLAYING, `Playing: ${title}`);
+  }).catch(() => {
+    setPlayerState(PLAYER_STATE.READY, `Ready to play: ${title}`);
+  });
+
+  // Track continuation row
+  const item = {
+    title,
+    image: poster,
+    type: "video",
+    streamUrl,
+    videoId
+  };
+  const idx = continuation.findIndex((c) => c.title === title);
+  if (idx >= 0) {
+    continuation[idx].progress = Math.min(95, (continuation[idx].progress || 20) + 15);
+  } else {
+    continuation.unshift({ ...item, progress: 15 });
+    if (continuation.length > 6) continuation.pop();
+  }
+  try {
+    localStorage.setItem("ustream-continuation", JSON.stringify(continuation));
+  } catch {}
+  renderContinue();
+}
+
+function initCustomVideoPlayer() {
+  const video = $("#video-player");
+  const wrapper = $("#custom-player-wrapper");
+  const controls = $("#custom-player-controls");
+  const centerPlay = $("#player-center-play");
+  const playPauseBtn = $("#ctrl-play-pause-btn");
+  const skipBackBtn = $("#ctrl-skip-back-btn");
+  const skipFwdBtn = $("#ctrl-skip-forward-btn");
+  const muteBtn = $("#ctrl-mute-btn");
+  const volumeSlider = $("#ctrl-volume-slider");
+  const currentTimeEl = $("#player-current-time");
+  const durationEl = $("#player-total-duration");
+  const scrubberWrap = $("#player-scrubber-wrap");
+  const scrubberProgress = $("#scrubber-progress");
+  const scrubberBuffer = $("#scrubber-buffer");
+  const scrubberHandle = $("#scrubber-handle");
+  const hoverTimeEl = $("#scrubber-hover-time");
+  const speedBtn = $("#ctrl-speed-btn");
+  const speedMenu = $("#ctrl-speed-menu");
+  const speedLabel = $("#ctrl-speed-label");
+  const pipBtn = $("#ctrl-pip-btn");
+  const fullscreenBtn = $("#ctrl-fullscreen-btn");
+  const bufferingSpinner = $("#player-buffering-spinner");
+  const tapLeft = $("#tap-seek-left");
+  const tapRight = $("#tap-seek-right");
+
+  if (!video || !wrapper) return;
+
+  let controlsTimeout = null;
+  const showControls = () => {
+    controls?.classList.remove("controls-hidden");
+    clearTimeout(controlsTimeout);
+    if (!video.paused) {
+      controlsTimeout = setTimeout(() => {
+        controls?.classList.add("controls-hidden");
+        speedMenu?.setAttribute("hidden", "true");
+      }, 3500);
+    }
+  };
+
+  wrapper.addEventListener("mousemove", showControls);
+  wrapper.addEventListener("click", (e) => {
+    if (e.target.closest("#custom-player-controls") || e.target.closest(".player-resume-banner")) return;
+    showControls();
+  });
+
+  // Play / Pause toggle
+  const togglePlay = () => {
+    if (video.paused || video.ended) {
+      video.play().catch(() => {});
+    } else {
+      video.pause();
+    }
+  };
+
+  centerPlay?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    togglePlay();
+  });
+  playPauseBtn?.addEventListener("click", togglePlay);
+
+  video.addEventListener("play", () => {
+    centerPlay?.classList.add("playing");
+    if (playPauseBtn) {
+      playPauseBtn.innerHTML = `<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>`;
+      playPauseBtn.setAttribute("aria-label", "Pause");
+    }
+    showControls();
+  });
+
+  video.addEventListener("pause", () => {
+    centerPlay?.classList.remove("playing");
+    if (playPauseBtn) {
+      playPauseBtn.innerHTML = `<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>`;
+      playPauseBtn.setAttribute("aria-label", "Play");
+    }
+    controls?.classList.remove("controls-hidden");
+  });
+
+  video.addEventListener("waiting", () => {
+    bufferingSpinner?.removeAttribute("hidden");
+  });
+  video.addEventListener("playing", () => {
+    bufferingSpinner?.setAttribute("hidden", "true");
+  });
+  video.addEventListener("canplay", () => {
+    bufferingSpinner?.setAttribute("hidden", "true");
+  });
+
+  // Time & Scrubber Update
+  video.addEventListener("timeupdate", () => {
+    if (!video.duration) return;
+    const current = video.currentTime;
+    const dur = video.duration;
+    const pct = (current / dur) * 100;
+
+    if (currentTimeEl) currentTimeEl.textContent = formatTime(current);
+    if (durationEl) durationEl.textContent = formatTime(dur);
+    if (scrubberProgress) scrubberProgress.style.width = `${pct}%`;
+    if (scrubberHandle) scrubberHandle.style.left = `${pct}%`;
+    if (scrubberWrap) scrubberWrap.setAttribute("aria-valuenow", String(Math.round(pct)));
+
+    // Update buffer progress
+    if (video.buffered.length > 0 && scrubberBuffer) {
+      try {
+        const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+        const bufPct = Math.min(100, (bufferedEnd / dur) * 100);
+        scrubberBuffer.style.width = `${bufPct}%`;
+      } catch {}
+    }
+
+    // Save playback position periodically
+    if (current > 5 && Math.floor(current) % 5 === 0) {
+      const vidKey = video.dataset.itemTitle || state.player?.item?.title;
+      if (vidKey) {
+        localStorage.setItem(`ustream-pos-${vidKey}`, String(Math.floor(current)));
+      }
+    }
+  });
+
+  video.addEventListener("loadedmetadata", () => {
+    if (durationEl && video.duration) {
+      durationEl.textContent = formatTime(video.duration);
+    }
+  });
+
+  // Scrubber seeking
+  let isDraggingScrubber = false;
+  const seekFromEvent = (e) => {
+    if (!scrubberWrap || !video.duration) return;
+    const rect = scrubberWrap.getBoundingClientRect();
+    const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    video.currentTime = pos * video.duration;
+  };
+
+  scrubberWrap?.addEventListener("mousedown", (e) => {
+    isDraggingScrubber = true;
+    seekFromEvent(e);
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (isDraggingScrubber) seekFromEvent(e);
+  });
+  window.addEventListener("mouseup", () => {
+    isDraggingScrubber = false;
+  });
+
+  // Hover preview timestamp
+  scrubberWrap?.addEventListener("mousemove", (e) => {
+    if (!hoverTimeEl || !video.duration) return;
+    const rect = scrubberWrap.getBoundingClientRect();
+    const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const hoverSeconds = pos * video.duration;
+    hoverTimeEl.textContent = formatTime(hoverSeconds);
+    hoverTimeEl.style.left = `${pos * 100}%`;
+    hoverTimeEl.removeAttribute("hidden");
+  });
+  scrubberWrap?.addEventListener("mouseleave", () => {
+    hoverTimeEl?.setAttribute("hidden", "true");
+  });
+
+  // Skip buttons (-10s / +10s)
+  skipBackBtn?.addEventListener("click", () => {
+    video.currentTime = Math.max(0, video.currentTime - 10);
+    showControls();
+  });
+  skipFwdBtn?.addEventListener("click", () => {
+    video.currentTime = Math.min(video.duration || Infinity, video.currentTime + 10);
+    showControls();
+  });
+
+  // Volume & Mute
+  const updateVolumeIcon = () => {
+    const volIcon = $("#ctrl-volume-icon");
+    if (!volIcon) return;
+    if (video.muted || video.volume === 0) {
+      volIcon.innerHTML = `<line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>`;
+    } else {
+      volIcon.innerHTML = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>`;
+    }
+  };
+
+  muteBtn?.addEventListener("click", () => {
+    video.muted = !video.muted;
+    if (volumeSlider) volumeSlider.value = video.muted ? 0 : video.volume;
+    updateVolumeIcon();
+    showControls();
+  });
+
+  volumeSlider?.addEventListener("input", (e) => {
+    const val = parseFloat(e.target.value);
+    video.volume = val;
+    video.muted = val === 0;
+    updateVolumeIcon();
+  });
+
+  // Speed Menu
+  speedBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (speedMenu?.hasAttribute("hidden")) {
+      speedMenu.removeAttribute("hidden");
+    } else {
+      speedMenu?.setAttribute("hidden", "true");
+    }
+  });
+
+  $$(".speed-option").forEach((opt) => {
+    opt.addEventListener("click", () => {
+      const speed = parseFloat(opt.dataset.speed || "1");
+      video.playbackRate = speed;
+      if (speedLabel) speedLabel.textContent = `${speed}x`;
+      $$(".speed-option").forEach((o) => o.classList.toggle("active", o === opt));
+      speedMenu?.setAttribute("hidden", "true");
+      showControls();
+    });
+  });
+
+  // Picture in Picture
+  pipBtn?.addEventListener("click", async () => {
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      } else if (video.requestPictureInPicture) {
+        await video.requestPictureInPicture();
+      }
+    } catch (err) {
+      console.warn("PIP error:", err);
+    }
+  });
+
+  // Fullscreen
+  fullscreenBtn?.addEventListener("click", () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    } else if (wrapper.requestFullscreen) {
+      wrapper.requestFullscreen().catch(() => {});
+    }
+  });
+
+  document.addEventListener("fullscreenchange", () => {
+    const isFull = Boolean(document.fullscreenElement);
+    const fsIcon = $("#ctrl-fullscreen-icon");
+    if (fsIcon) {
+      fsIcon.innerHTML = isFull
+        ? `<path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>`
+        : `<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>`;
+    }
+  });
+
+  // Mobile double-tap rewind/fast-forward
+  let lastTapTime = 0;
+  wrapper.addEventListener("touchend", (e) => {
+    const now = Date.now();
+    const diff = now - lastTapTime;
+    lastTapTime = now;
+    if (diff < 320 && diff > 50) {
+      const touch = e.changedTouches[0];
+      const rect = wrapper.getBoundingClientRect();
+      const xPct = (touch.clientX - rect.left) / rect.width;
+      if (xPct < 0.4) {
+        // Rewind 10s
+        video.currentTime = Math.max(0, video.currentTime - 10);
+        if (tapLeft) {
+          tapLeft.removeAttribute("hidden");
+          setTimeout(() => tapLeft.setAttribute("hidden", "true"), 650);
+        }
+      } else if (xPct > 0.6) {
+        // Forward 10s
+        video.currentTime = Math.min(video.duration || Infinity, video.currentTime + 10);
+        if (tapRight) {
+          tapRight.removeAttribute("hidden");
+          setTimeout(() => tapRight.setAttribute("hidden", "true"), 650);
+        }
+      }
+    }
+  });
+
+  // Global Keyboard shortcuts when video player is active
+  window.addEventListener("keydown", (e) => {
+    if ($("#player-backdrop")?.hidden || wrapper.hidden) return;
+    if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
+
+    if (e.code === "Space" || e.key === "k") {
+      e.preventDefault();
+      togglePlay();
+    } else if (e.key === "ArrowLeft" || e.key === "j") {
+      e.preventDefault();
+      video.currentTime = Math.max(0, video.currentTime - 10);
+      showControls();
+    } else if (e.key === "ArrowRight" || e.key === "l") {
+      e.preventDefault();
+      video.currentTime = Math.min(video.duration || Infinity, video.currentTime + 10);
+      showControls();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      video.volume = Math.min(1, video.volume + 0.1);
+      video.muted = false;
+      if (volumeSlider) volumeSlider.value = video.volume;
+      updateVolumeIcon();
+      showControls();
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      video.volume = Math.max(0, video.volume - 0.1);
+      if (volumeSlider) volumeSlider.value = video.volume;
+      updateVolumeIcon();
+      showControls();
+    } else if (e.key === "m") {
+      e.preventDefault();
+      video.muted = !video.muted;
+      if (volumeSlider) volumeSlider.value = video.muted ? 0 : video.volume;
+      updateVolumeIcon();
+      showControls();
+    } else if (e.key === "f") {
+      e.preventDefault();
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      } else if (wrapper.requestFullscreen) {
+        wrapper.requestFullscreen().catch(() => {});
+      }
+    } else if (e.key >= "0" && e.key <= "9") {
+      e.preventDefault();
+      if (video.duration) {
+        const pct = parseInt(e.key, 10) / 10;
+        video.currentTime = pct * video.duration;
+        showControls();
+      }
+    }
+  });
+}
+
+function initCreatorStudioAndUploads() {
+  const uploadBackdrop = $("#upload-modal-backdrop");
+  const uploadForm = $("#upload-form");
+  const fileInput = $("#upload-file-input");
+  const dropzone = $("#upload-dropzone");
+  const dropzonePrompt = $("#dropzone-prompt");
+  const dropzoneFileInfo = $("#dropzone-file-info");
+  const fileNameEl = $("#selected-file-name");
+  const fileSizeEl = $("#selected-file-size");
+  const changeFileBtn = $("#change-file-btn");
+  const titleInput = $("#upload-title");
+  const descInput = $("#upload-description");
+  const categorySelect = $("#upload-category");
+  const feedbackEl = $("#upload-feedback");
+  const progressContainer = $("#upload-progress-container");
+  const progressFill = $("#upload-progress-fill");
+  const progressText = $("#upload-progress-text");
+  const statusText = $("#upload-status-text");
+  const submitBtn = $("#submit-upload-btn");
+
+  let selectedFile = null;
+
+  const openUploadModal = () => {
+    if (!state.auth?.user) {
+      showToast("Please sign in or create an account to upload videos.");
+      openAuthModal("signin");
+      return;
+    }
+    uploadBackdrop?.removeAttribute("hidden");
+    resetUploadForm();
+  };
+
+  const closeUploadModal = () => {
+    uploadBackdrop?.setAttribute("hidden", "true");
+  };
+
+  const resetUploadForm = () => {
+    selectedFile = null;
+    if (fileInput) fileInput.value = "";
+    if (dropzonePrompt) dropzonePrompt.hidden = false;
+    if (dropzoneFileInfo) dropzoneFileInfo.hidden = true;
+    if (titleInput) titleInput.value = "";
+    if (descInput) descInput.value = "";
+    if (categorySelect) categorySelect.value = "entertainment";
+    if (feedbackEl) feedbackEl.hidden = true;
+    if (progressContainer) progressContainer.hidden = true;
+    if (progressFill) progressFill.style.width = "0%";
+    if (submitBtn) submitBtn.disabled = false;
+  };
+
+  const handleSelectedFile = (file) => {
+    if (!file) return;
+    const validExtensions = [".mp4", ".webm", ".mov", ".mkv", ".ogg"];
+    const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
+    if (!validExtensions.includes(ext) && !file.type.startsWith("video/")) {
+      showToast("Invalid file type. Please select an MP4, WebM, QuickTime, or MKV video.");
+      return;
+    }
+    if (file.size > 150 * 1024 * 1024) {
+      showToast("File size exceeds 150MB limit.");
+      return;
+    }
+
+    selectedFile = file;
+    if (dropzonePrompt) dropzonePrompt.hidden = true;
+    if (dropzoneFileInfo) dropzoneFileInfo.hidden = false;
+    if (fileNameEl) fileNameEl.textContent = file.name;
+    const mbSize = (file.size / (1024 * 1024)).toFixed(1);
+    if (fileSizeEl) fileSizeEl.textContent = `${mbSize} MB`;
+
+    // Auto-populate title if empty
+    if (titleInput && !titleInput.value.trim()) {
+      const cleanTitle = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
+      titleInput.value = cleanTitle;
+    }
+  };
+
+  // Triggers
+  $("#topbar-upload-btn")?.addEventListener("click", openUploadModal);
+  $("#profile-upload-btn")?.addEventListener("click", openUploadModal);
+  $("#community-upload-btn")?.addEventListener("click", openUploadModal);
+  $("#close-upload-modal")?.addEventListener("click", closeUploadModal);
+  $("#cancel-upload-btn")?.addEventListener("click", closeUploadModal);
+  uploadBackdrop?.addEventListener("click", (e) => {
+    if (e.target.id === "upload-modal-backdrop") closeUploadModal();
+  });
+
+  // Dropzone drag-and-drop
+  dropzone?.addEventListener("click", () => fileInput?.click());
+  changeFileBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    fileInput?.click();
+  });
+
+  fileInput?.addEventListener("change", (e) => {
+    const file = e.target.files?.[0];
+    if (file) handleSelectedFile(file);
+  });
+
+  dropzone?.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropzone.classList.add("dragover");
+  });
+  dropzone?.addEventListener("dragleave", () => {
+    dropzone.classList.remove("dragover");
+  });
+  dropzone?.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropzone.classList.remove("dragover");
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleSelectedFile(file);
+  });
+
+  // Form submission with live streaming upload
+  uploadForm?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!selectedFile) {
+      showToast("Please choose a video file to upload.");
+      return;
+    }
+    const title = titleInput?.value.trim();
+    if (!title) {
+      showToast("Please enter a title for your video.");
+      titleInput?.focus();
+      return;
+    }
+    const description = descInput?.value.trim() || "";
+    const category = categorySelect?.value || "entertainment";
+
+    if (feedbackEl) feedbackEl.hidden = true;
+    if (progressContainer) progressContainer.hidden = false;
+    if (submitBtn) submitBtn.disabled = true;
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/videos/upload", true);
+    xhr.withCredentials = true;
+
+    xhr.setRequestHeader("Content-Type", selectedFile.type || "video/mp4");
+    xhr.setRequestHeader("X-Filename", encodeURIComponent(selectedFile.name));
+    xhr.setRequestHeader("X-Title", encodeURIComponent(title));
+    xhr.setRequestHeader("X-Category", encodeURIComponent(category));
+    xhr.setRequestHeader("X-Description", encodeURIComponent(description));
+
+    const startTime = Date.now();
+
+    xhr.upload.onprogress = (evt) => {
+      if (evt.lengthComputable) {
+        const pct = Math.round((evt.loaded / evt.total) * 100);
+        if (progressFill) progressFill.style.width = `${pct}%`;
+        const elapsedSec = (Date.now() - startTime) / 1000;
+        const speedMb = elapsedSec > 0 ? ((evt.loaded / (1024 * 1024)) / elapsedSec).toFixed(1) : "0.0";
+        if (progressText) progressText.textContent = `Uploading: ${pct}% (${speedMb} MB/s)`;
+        if (statusText) statusText.textContent = pct < 100 ? "Streaming video segments..." : "Processing video format...";
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        showToast("Video uploaded & published successfully! 🎉");
+        closeUploadModal();
+        loadCommunityVideos();
+        loadUserUploads();
+      } else {
+        let errMessage = "Upload failed. Please try again.";
+        try {
+          const res = JSON.parse(xhr.responseText);
+          if (res.error) errMessage = res.error;
+        } catch {}
+        if (feedbackEl) {
+          feedbackEl.textContent = errMessage;
+          feedbackEl.hidden = false;
+        }
+        if (submitBtn) submitBtn.disabled = false;
+      }
+    };
+
+    xhr.onerror = () => {
+      if (feedbackEl) {
+        feedbackEl.textContent = "Network error during upload. Please check connection.";
+        feedbackEl.hidden = false;
+      }
+      if (submitBtn) submitBtn.disabled = false;
+    };
+
+    xhr.send(selectedFile);
+  });
+}
+
+async function loadCommunityVideos() {
+  try {
+    const res = await fetch("/api/videos?limit=12&status=ready");
+    if (!res.ok) return;
+    const data = await res.json();
+    const section = $("#community-section");
+    const row = $("#community-row");
+    if (!section || !row) return;
+
+    if (!data.videos || data.videos.length === 0) {
+      section.hidden = true;
+      return;
+    }
+
+    section.hidden = false;
+    row.innerHTML = data.videos.map((v) => `
+      <div class="community-card" data-video-id="${v.id}" tabindex="0" role="button" aria-label="Play ${escapeHtml(v.title)}">
+        <img src="${v.thumbnailPath || `/api/videos/thumbnail/${v.id}`}" alt="${escapeHtml(v.title)}" loading="lazy" />
+        <div class="community-card-overlay">
+          <strong>${escapeHtml(v.title)}</strong>
+          <span>${v.views || 0} views · ${escapeHtml(v.category)}</span>
+        </div>
+      </div>
+    `).join("");
+
+    row.querySelectorAll("[data-video-id]").forEach((card) => {
+      card.addEventListener("click", () => {
+        const id = card.dataset.videoId;
+        const v = data.videos.find((item) => item.id === id);
+        if (v) {
+          playNativeVideo(`/api/videos/stream/${v.id}`, v.title, v.thumbnailPath, { videoId: v.id });
+        }
+      });
+      card.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          card.click();
+        }
+      });
+    });
+  } catch (err) {
+    console.warn("Failed to load community videos:", err);
+  }
+}
+
+async function loadUserUploads() {
+  if (!state.auth?.user) return;
+  const listEl = $("#my-uploads-list");
+  const emptyEl = $("#my-uploads-empty");
+  if (!listEl || !emptyEl) return;
+
+  try {
+    const res = await fetch(`/api/videos?userId=${encodeURIComponent(state.auth.user.id)}&limit=20&status=all`, { credentials: "include" });
+    if (!res.ok) return;
+    const data = await res.json();
+    const videos = data.videos || [];
+
+    if (videos.length === 0) {
+      listEl.hidden = true;
+      emptyEl.hidden = false;
+      return;
+    }
+
+    emptyEl.hidden = true;
+    listEl.hidden = false;
+    listEl.innerHTML = videos.map((v) => `
+      <div class="my-upload-item">
+        <div class="my-upload-info">
+          <img class="my-upload-thumb" src="${v.thumbnailPath || `/api/videos/thumbnail/${v.id}`}" alt="" />
+          <div class="my-upload-details">
+            <strong>${escapeHtml(v.title)}</strong>
+            <span>${v.views || 0} views · ${v.status} · ${(v.fileSize / (1024 * 1024)).toFixed(1)} MB</span>
+          </div>
+        </div>
+        <div class="my-upload-actions">
+          <button class="primary-button btn-xs play-user-video-btn" data-video-id="${v.id}"><span>Watch</span></button>
+          <button class="sign-out-button btn-xs delete-user-video-btn" data-video-id="${v.id}"><span>Delete</span></button>
+        </div>
+      </div>
+    `).join("");
+
+    listEl.querySelectorAll(".play-user-video-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.videoId;
+        const v = videos.find((item) => item.id === id);
+        if (v) playNativeVideo(`/api/videos/stream/${v.id}`, v.title, v.thumbnailPath, { videoId: v.id });
+      });
+    });
+
+    listEl.querySelectorAll(".delete-user-video-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.videoId;
+        if (!confirm("Are you sure you want to delete this video?")) return;
+        try {
+          const delRes = await fetch(`/api/videos/${id}`, { method: "DELETE", credentials: "include" });
+          if (delRes.ok) {
+            showToast("Video deleted successfully.");
+            loadUserUploads();
+            loadCommunityVideos();
+          } else {
+            showToast("Failed to delete video.");
+          }
+        } catch {
+          showToast("Network error deleting video.");
+        }
+      });
+    });
+  } catch (err) {
+    console.warn("Failed to load user uploads:", err);
+  }
 }
 
 function closeDetails() {
@@ -5925,6 +6649,8 @@ function initSearchModal() {
   });
 }
 
+let searchAbortController = null;
+
 async function executeModalSearch(query) {
   const resultsEl = $("#modal-search-results");
   if (!resultsEl) return;
@@ -5934,6 +6660,12 @@ async function executeModalSearch(query) {
       <p style="margin-top: 10px;">Searching titles &amp; events for “${escapeHtml(query)}”…</p>
     </div>
   `;
+
+  if (searchAbortController) {
+    searchAbortController.abort();
+  }
+  searchAbortController = new AbortController();
+  const signal = searchAbortController.signal;
 
   try {
     const qLower = query.toLowerCase();
@@ -5961,14 +6693,11 @@ async function executeModalSearch(query) {
       }).slice(0, 6);
     }
 
-    // 3. TMDB search proxy or direct
+    // 3. TMDB search via secure server-side proxy
     let tmdbResults = [];
     try {
       const tmdbUrl = `/api/tmdb/search/multi?query=${encodeURIComponent(query)}&language=${localStorage.getItem("ustream-lang") || "en-US"}`;
-      let res = await fetch(tmdbUrl).catch(() => null);
-      if (!res?.ok) {
-        res = await fetch(`https://api.themoviedb.org/3/search/multi?api_key=16f62d38fec24f4e6c2adc9388da20ce&query=${encodeURIComponent(query)}&language=${localStorage.getItem("ustream-lang") || "en-US"}`).catch(() => null);
-      }
+      const res = await fetch(tmdbUrl, { signal }).catch(() => null);
       if (res?.ok) {
         const data = await res.json();
         tmdbResults = (data.results || []).filter((item) => item.media_type === "movie" || item.media_type === "tv").slice(0, 12).map((item) => {
@@ -7057,8 +7786,8 @@ async function openProviderCatalog(provider) {
     const tvUrl = `/api/tmdb/discover/tv?with_watch_providers=${provider.id}&watch_region=US&language=${lang}&sort_by=popularity.desc`;
 
     const [movieRes, tvRes] = await Promise.all([
-      fetch(movieUrl).catch(() => fetch(`https://api.themoviedb.org/3/discover/movie?api_key=16f62d38fec24f4e6c2adc9388da20ce&with_watch_providers=${provider.id}&watch_region=US&sort_by=popularity.desc`).catch(() => null)),
-      fetch(tvUrl).catch(() => fetch(`https://api.themoviedb.org/3/discover/tv?api_key=16f62d38fec24f4e6c2adc9388da20ce&with_watch_providers=${provider.id}&watch_region=US&sort_by=popularity.desc`).catch(() => null))
+      fetch(movieUrl).catch(() => null),
+      fetch(tvUrl).catch(() => null)
     ]);
 
     const movies = movieRes?.ok ? (await movieRes.json()).results || [] : [];
@@ -7227,6 +7956,9 @@ setupAuthEventListeners();
 void initAuth();
 initAppearanceSettings();
 initSearchModal();
+initCustomVideoPlayer();
+initCreatorStudioAndUploads();
+void loadCommunityVideos();
 initRouter();
 initInfiniteScroll();
 void loadLiveCatalog();

@@ -1,0 +1,28 @@
+/* YouTube UI Ad & Clutter Suppression */
+ytd-promoted-video-renderer,
+ytd-display-ad-renderer,
+ytd-statement-banner-renderer,
+ytd-in-feed-ad-layout-renderer,
+ytd-ad-slot-renderer,
+ytm-promoted-sparkles-web-renderer,
+ytm-promoted-video-renderer,
+ytm-promoted-sparkles-text-search-web-renderer,
+ytm-ad-slot-renderer,
+#masthead-ad,
+.ytp-ad-overlay-container,
+.ytp-ad-message-container,
+.ytp-ad-progress-list,
+.ytp-ad-preview-container,
+ytd-banner-promo-renderer,
+#premium-container,
+tp-yt-paper-dialog[aria-label*="ad blockers" i],
+ytd-enforcement-message-view-model,
+.standalone-collection-badge-renderer-text {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    width: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
