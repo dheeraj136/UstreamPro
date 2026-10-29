@@ -1671,13 +1671,22 @@ async function loadLiveCatalog(isRetry = false) {
   if (isRetry) showToast("Connecting to live catalog...");
 
   try {
-    // GaiaFlix-style Lean Homescreen Startup: 1 page per category (~100 titles total)
+    // Full Content Catalog: Multi-page parallel batches across all categories (~300 titles total)
     const tmdbRequests = [
       { path: "/trending/all/day?page=1", cat: "trending" },
+      { path: "/trending/all/day?page=2", cat: "trending" },
       { path: "/movie/popular?page=1", cat: "movie" },
+      { path: "/movie/popular?page=2", cat: "movie" },
+      { path: "/movie/popular?page=3", cat: "movie" },
       { path: "/tv/popular?page=1", cat: "tv" },
+      { path: "/tv/popular?page=2", cat: "tv" },
+      { path: "/tv/popular?page=3", cat: "tv" },
       { path: "/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=1", cat: "anime" },
-      { path: "/discover/tv?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=1", cat: "cartoons" }
+      { path: "/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=2", cat: "anime" },
+      { path: "/discover/movie?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=1", cat: "anime" },
+      { path: "/discover/tv?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=1", cat: "cartoons" },
+      { path: "/discover/tv?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=2", cat: "cartoons" },
+      { path: "/discover/movie?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=1", cat: "cartoons" }
     ];
 
     const results = await Promise.all(tmdbRequests.map(async ({ path, cat }) => {
@@ -1943,8 +1952,6 @@ function initInfiniteScroll() {
   if (sentinel && "IntersectionObserver" in window) {
     const observer = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting && !isLoadingMore && hasMoreContent) {
-        // Do not auto-infinite-scroll on the homescreen! In GaiaFlix, homescreen only displays a few curated items.
-        if (state.section === "home" && !state.search.trim()) return;
         void loadMoreTitles();
       }
     }, {
@@ -2127,7 +2134,7 @@ function setSection(section, updateHash = true) {
   const target = validSections.includes(section) ? section : "home";
   state.section = target;
   state.genre = "all"; // Reset genre sub-tab so all titles in this section are visible!
-  state.displayLimit = target === "home" ? 12 : CONTENT_BATCH_SIZE; // On homescreen, only a few content; on full catalogs, 35
+  state.displayLimit = CONTENT_BATCH_SIZE; // Always start with 35 content at a time
   hasMoreContent = true;
 
   if (updateHash) {
@@ -2153,7 +2160,7 @@ function setSection(section, updateHash = true) {
   const exploreSection = $("#explore-section");
 
   const titles = {
-    home: ["Explore the collection", "Trending now"],
+    home: ["Explore the collection", "All Content & Trending"],
     movies: ["Feature-length stories", "Top movies"],
     series: ["Your next obsession", "Binge-worthy series"],
     anime: ["Anime Collection", "Anime picks"],
@@ -2227,17 +2234,13 @@ function setSection(section, updateHash = true) {
     if (profileSection) profileSection.hidden = true;
     if (sportsSection) sportsSection.hidden = true;
     if (exploreSection) exploreSection.hidden = true;
-    if (target === "cartoons") {
-      loadCategoryTmdb("cartoons");
-    } else if (target === "anime") {
-      loadCategoryTmdb("anime");
-    }
+    loadCategoryTmdb(target);
   } else {
     // "home"
     if (heroSection) heroSection.hidden = false;
     if (quickPicks) quickPicks.hidden = false;
     if (recommendationsSection) recommendationsSection.hidden = recommendations.length === 0;
-    if (catalogSection) catalogSection.hidden = !state.search.trim();
+    if (catalogSection) catalogSection.hidden = false;
     if (profileSection) profileSection.hidden = true;
     if (sportsSection) sportsSection.hidden = true;
     if (exploreSection) exploreSection.hidden = true;
@@ -2544,7 +2547,7 @@ function renderHomeRails() {
   const isHomeView = state.section === "home" && !state.search.trim();
   container.hidden = !isHomeView;
   if (catalogSection) {
-    catalogSection.hidden = isHomeView;
+    catalogSection.hidden = false;
   }
   if (!isHomeView) return;
 
@@ -2559,37 +2562,37 @@ function renderHomeRails() {
   const rails = [
     {
       title: "Top Searches & Trending",
-      items: cleanCatalog.slice(0, 10),
+      items: cleanCatalog.slice(0, 15),
       moreSection: "movies",
       moreLabel: "View all"
     },
     {
       title: "Popular Movies",
-      items: cleanCatalog.filter(isMovie).slice(0, 10),
+      items: cleanCatalog.filter(isMovie).slice(0, 15),
       moreSection: "movies",
       moreLabel: "Explore Movies"
     },
     {
       title: "Binge-Worthy Series",
-      items: cleanCatalog.filter(isSeries).slice(0, 10),
+      items: cleanCatalog.filter(isSeries).slice(0, 15),
       moreSection: "series",
       moreLabel: "Explore Series"
     },
     {
       title: "Top Japanese Anime",
-      items: cleanCatalog.filter(isAnime).slice(0, 10),
+      items: cleanCatalog.filter(isAnime).slice(0, 15),
       moreSection: "anime",
       moreLabel: "Explore Anime"
     },
     {
       title: "Western Animation & Cartoons",
-      items: cleanCatalog.filter(isCartoon).slice(0, 10),
+      items: cleanCatalog.filter(isCartoon).slice(0, 15),
       moreSection: "cartoons",
       moreLabel: "Explore Cartoons"
     },
     {
       title: "Critically Rated",
-      items: [...cleanCatalog].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 10),
+      items: [...cleanCatalog].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 15),
       moreSection: "movies",
       moreLabel: "View all"
     }
@@ -7970,31 +7973,53 @@ async function loadCategoryTmdb(category) {
   categoryCache.add(category);
 
   try {
-    const isCartoons = category === "cartoons";
-    const lang = isCartoons ? "en" : "ja";
     const langCode = localStorage.getItem("ustream-lang") || "en-US";
-    const tvPath = `/discover/tv?with_genres=16&with_original_language=${lang}&language=${langCode}&sort_by=popularity.desc&page=1`;
-    const moviePath = `/discover/movie?with_genres=16&with_original_language=${lang}&language=${langCode}&sort_by=popularity.desc&page=1`;
+    let paths = [];
 
-    const [tvResults, movieResults] = await Promise.all([
-      fetchTmdbResults(tvPath),
-      fetchTmdbResults(moviePath)
-    ]);
+    if (category === "movies") {
+      paths = [
+        `/movie/popular?page=4&language=${langCode}`,
+        `/movie/top_rated?page=1&language=${langCode}`,
+        `/movie/now_playing?page=1&language=${langCode}`,
+        `/discover/movie?sort_by=popularity.desc&page=4&language=${langCode}`
+      ];
+    } else if (category === "series") {
+      paths = [
+        `/tv/popular?page=4&language=${langCode}`,
+        `/tv/top_rated?page=1&language=${langCode}`,
+        `/tv/on_the_air?page=1&language=${langCode}`,
+        `/discover/tv?sort_by=popularity.desc&page=4&language=${langCode}`
+      ];
+    } else if (category === "anime") {
+      paths = [
+        `/discover/tv?with_genres=16&with_original_language=ja&language=${langCode}&sort_by=popularity.desc&page=3`,
+        `/discover/tv?with_genres=16&with_original_language=ja&language=${langCode}&sort_by=popularity.desc&page=4`,
+        `/discover/movie?with_genres=16&with_original_language=ja&language=${langCode}&sort_by=popularity.desc&page=2`,
+        `/discover/movie?with_genres=16&with_original_language=ja&language=${langCode}&sort_by=popularity.desc&page=3`
+      ];
+    } else if (category === "cartoons") {
+      paths = [
+        `/discover/tv?with_genres=16&with_original_language=en&language=${langCode}&sort_by=popularity.desc&page=3`,
+        `/discover/tv?with_genres=16&with_original_language=en&language=${langCode}&sort_by=popularity.desc&page=4`,
+        `/discover/movie?with_genres=16&with_original_language=en&language=${langCode}&sort_by=popularity.desc&page=2`,
+        `/discover/movie?with_genres=16&with_original_language=en&language=${langCode}&sort_by=popularity.desc&page=3`
+      ];
+    }
 
-    const newCards = [
-      ...tvResults.slice(0, 20).map(t => normalizeTmdbItem(t, category)),
-      ...movieResults.slice(0, 20).map(m => normalizeTmdbItem(m, category))
-    ];
+    if (paths.length) {
+      const results = await Promise.all(paths.map(fetchTmdbResults));
+      const newCards = results.flat().map(t => normalizeTmdbItem(t, category));
 
-    if (newCards.length) {
-      const seen = new Set(catalog.map(c => (c.title || "").toLowerCase().trim()));
-      const filtered = newCards.filter(c => !seen.has((c.title || "").toLowerCase().trim()));
-      if (filtered.length) {
-        catalog = [...catalog, ...filtered];
-        render();
-        const vis = getVisibleCards();
-        if (vis.length > 0 && state.section === category) {
-          setFeatured(vis[0]);
+      if (newCards.length) {
+        const seen = new Set(catalog.map(c => (c.title || "").toLowerCase().trim()));
+        const filtered = newCards.filter(c => !seen.has((c.title || "").toLowerCase().trim()));
+        if (filtered.length) {
+          catalog = [...catalog, ...filtered];
+          render();
+          const vis = getVisibleCards();
+          if (vis.length > 0 && state.section === category) {
+            setFeatured(vis[0]);
+          }
         }
       }
     }
