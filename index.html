@@ -1,0 +1,1138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0b0b11" />
+    <meta name="description" content="Stream movies, series, and anime on Ustream" />
+    <title>Ustream — watch what moves you</title>
+    <link rel="canonical" href="https://ustream-pro.vercel.app" />
+    <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./assets/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://ustream-pro.vercel.app" />
+    <meta property="og:title" content="Ustream — Watch What Moves You" />
+    <meta property="og:description" content="Stream movies, series, and anime on Ustream" />
+    <meta property="og:image" content="https://ustream-pro.vercel.app/assets/brand-banner.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Ustream — Watch What Moves You" />
+    <meta name="twitter:description" content="Stream movies, series, and anime on Ustream" />
+    <meta name="twitter:image" content="https://ustream-pro.vercel.app/assets/brand-banner.jpg" />
+    <link rel="stylesheet" href="./styles.css?v=20261028-episodes-fix-v5" />
+  </head>
+  <body>
+    <div id="startup-loader" class="startup-loader" aria-label="Loading Ustream">
+      <span></span><span></span><span></span>
+    </div>
+    <a href="#main-content" class="skip-to-content">Skip to content</a>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#main-content" aria-label="Ustream home">
+          <img class="brand-logo-img" src="./assets/logo.png" alt="Ustream" height="34" />
+        </a>
+
+        <nav class="desktop-nav" role="navigation" aria-label="Primary navigation">
+          <button class="nav-link active" data-section="home">Home</button>
+          <button class="nav-link" data-section="movies">Movies</button>
+          <button class="nav-link" data-section="series">Series</button>
+          <button class="nav-link" data-section="anime">Anime</button>
+          <button class="nav-link" data-section="cartoons">Cartoons</button>
+          <button class="nav-link" data-section="sports">Sports</button>
+          <button class="nav-link" data-section="explore">Explore</button>
+          <button class="nav-link" data-section="my-list">My List</button>
+          <button class="nav-link" data-section="profile">Profile</button>
+        </nav>
+
+        <div class="topbar-actions">
+          <button class="status-pill" id="status-pill" type="button" aria-label="Server status">
+            <span class="status-dot" id="status-dot"></span>
+            <span id="status-label">Demo Active</span>
+          </button>
+          <a class="icon-button" id="topbar-discord-btn" href="https://discord.com/channels/1564928608877936841/1564928609309696092" target="_blank" rel="noopener noreferrer" aria-label="Join Discord Community" title="Discord Community">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+          </a>
+          <button class="icon-button" id="search-modal-trigger" aria-label="Search titles and matches" title="Search (/)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+          </button>
+          <button class="icon-button" id="appearance-btn" aria-label="Appearance &amp; Settings" title="Appearance Settings">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+          </button>
+          <button class="icon-button desktop-only" id="topbar-favorites-btn" data-section="my-list" aria-label="My List" title="My List">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+          </button>
+          <button class="icon-button" id="topbar-upload-btn" aria-label="Upload Video" title="Upload Video">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </button>
+          <button class="primary-button topbar-login-btn" id="topbar-login-btn" type="button" aria-label="Sign in"><span>Sign in</span></button>
+          <div class="profile-menu-wrap" id="profile-menu-wrap" hidden>
+            <button class="avatar" id="profile-button" aria-label="Account Profile" aria-haspopup="true" aria-expanded="false" title="Viewer Profile"></button>
+            <div class="profile-dropdown" id="profile-dropdown" hidden role="menu" aria-label="Profile menu">
+              <div class="profile-dropdown-header">
+                <div class="profile-dropdown-avatar" id="dropdown-active-avatar"></div>
+                <div class="profile-dropdown-user">
+                  <strong id="dropdown-active-name">Viewer</strong>
+                  <span id="dropdown-active-email" class="dropdown-email">user@ustream.tv</span>
+                  <span id="dropdown-kids-tag" class="kids-badge" hidden>KIDS</span>
+                </div>
+              </div>
+              <div class="profile-dropdown-divider"></div>
+              <div class="profile-dropdown-switch-label">Switch Profile</div>
+              <div class="profile-dropdown-list" id="dropdown-profiles-list"></div>
+              <div class="profile-dropdown-divider"></div>
+              <button class="profile-dropdown-item" id="dropdown-manage-profiles" role="menuitem" type="button"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Manage Profiles</button>
+              <button class="profile-dropdown-item" id="dropdown-account-settings" role="menuitem" type="button"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg> Account &amp; Security</button>
+              <div class="profile-dropdown-divider"></div>
+              <button class="profile-dropdown-item signout-item" id="dropdown-signout" role="menuitem" type="button"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Sign Out</button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main id="main-content" tabindex="-1">
+        <section class="hero" aria-labelledby="hero-title">
+          <div class="hero-backdrop" id="hero-backdrop" role="img" aria-label="Featured premiere banner"></div>
+          <div class="hero-content">
+            <div class="eyebrow"><span class="live-dot"></span> Featured premiere</div>
+            <h1 id="hero-title">Live<br /><em>catalog</em></h1>
+            <div class="hero-meta" id="hero-meta"><span class="rating">★ 9.4</span><span>Movies · Series · Anime</span><span>Ultra HD</span></div>
+            <p id="hero-description">Stream the latest movies, series, and anime in high definition.</p>
+            <div class="hero-actions">
+              <button class="primary-button" id="hero-play" data-action="play" data-title="" aria-label="Play featured title"><svg class="icon icon-sm icon-play icon-filled" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg> <span>Play now</span></button>
+              <button class="secondary-button" id="hero-details" data-action="details" data-title="" aria-label="More information"><svg class="icon icon-sm icon-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg> <span>More info</span></button>
+            </div>
+            <div class="hero-credit" id="hero-credit"><span>Featured Premiere</span> · Updated today</div>
+          </div>
+          <div class="hero-art" aria-hidden="true">
+            <div class="orb orb-one"></div>
+            <div class="orb orb-two"></div>
+            <div class="signal-lines"></div>
+            <span class="hero-number">01</span>
+          </div>
+          <div class="hero-progress"><span></span></div>
+        </section>
+
+        <section class="content-section quick-picks">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">Curated for you</p>
+              <h2>Pick up where you left off</h2>
+            </div>
+            <button class="text-button" data-section="my-list">View all <svg class="icon icon-sm icon-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+          </div>
+          <div class="continue-row" id="continue-row" aria-live="polite"></div>
+        </section>
+
+        <section class="content-section community-section" id="community-section" hidden>
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">Original Creators</p>
+              <h2>Community Uploads</h2>
+            </div>
+            <button class="text-button" id="community-upload-btn">Upload your video <svg class="icon icon-sm icon-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+          </div>
+          <div class="continue-row community-row" id="community-row" aria-live="polite"></div>
+        </section>
+
+        <section class="content-section recommendations-section" id="recommendations-section" hidden>
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">Fresh from the latest update</p>
+              <h2>New on Ustream</h2>
+            </div>
+            <span class="recommendation-update" id="recommendation-update">Updated today</span>
+          </div>
+          <div class="recommendation-row" id="recommendation-row" aria-live="polite"></div>
+        </section>
+
+        <!-- GaiaFlix-Style Curated Rails on Home Screen (only a few content per category) -->
+        <div id="home-rails-container" class="home-rails-container"></div>
+
+        <section class="content-section catalog-section" id="catalog">
+          <div class="section-heading catalog-heading">
+            <div>
+              <p class="section-kicker" id="catalog-kicker">Explore the collection</p>
+              <h2 id="catalog-title">Trending now</h2>
+            </div>
+            <div class="catalog-tools">
+              <div class="view-toggle" aria-label="View options">
+                <button class="view-button active" data-view="grid" aria-label="Grid view"><svg class="icon icon-md icon-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg></button>
+                <button class="view-button" data-view="compact" aria-label="Compact view"><svg class="icon icon-md icon-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/><path d="M14 4h7"/><path d="M14 9h7"/><path d="M14 15h7"/><path d="M14 20h7"/></svg></button>
+              </div>
+              <button class="filter-button" id="filter-button" aria-label="Filter titles"><svg class="icon icon-sm icon-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg> <span>Filters</span><b id="filter-count" class="is-hidden" hidden>0</b></button>
+            </div>
+          </div>
+
+          <div class="genre-tabs" id="genre-tabs" role="tablist" aria-label="Browse categories">
+            <button class="genre-tab active" data-genre="all">For you</button>
+            <button class="genre-tab" data-genre="action">Action</button>
+            <button class="genre-tab" data-genre="drama">Drama</button>
+            <button class="genre-tab" data-genre="sci-fi">Sci-fi</button>
+            <button class="genre-tab" data-genre="comedy">Comedy</button>
+            <button class="genre-tab" data-genre="anime">Anime</button>
+          </div>
+
+          <div class="active-filters" id="active-filters" aria-live="polite"></div>
+          <div id="catalog-live-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+          <div class="card-grid" id="card-grid" role="region" aria-live="polite" aria-label="Catalog results"></div>
+          <div class="catalog-infinite-loader" id="catalog-infinite-loader" aria-live="polite" hidden>
+            <div class="infinite-spinner" aria-hidden="true"></div>
+            <span>Loading more titles...</span>
+          </div>
+          <div class="catalog-load-more-wrap" id="catalog-load-more-wrap">
+            <button class="secondary-button load-more-btn" id="load-more-btn" type="button" aria-label="Explore more content">
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+              <span>Explore More Content</span>
+            </button>
+          </div>
+          <div id="catalog-sentinel" class="catalog-sentinel" aria-hidden="true"></div>
+          <div class="empty-state" id="empty-state" role="status" aria-live="polite" hidden>
+            <div class="empty-icon" aria-hidden="true"><svg class="icon icon-lg icon-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div>
+            <h3>No titles found</h3>
+            <p>Try another search or clear your filters.</p>
+            <button class="secondary-button" id="clear-filters" aria-label="Clear filters">Clear filters</button>
+          </div>
+          <div class="error-state" id="error-state" role="alert" aria-live="polite" hidden>
+            <div class="error-icon" aria-hidden="true">⚠️</div>
+            <h3 id="error-title">Unable to load titles</h3>
+            <p id="error-message">Unable to connect to the streaming service. Please check your internet connection.</p>
+            <div class="error-details-box" id="error-details-box" hidden>
+              <code id="error-details-text"></code>
+            </div>
+            <div class="error-actions">
+              <button class="primary-button" id="retry-button" type="button" aria-label="Retry connection"><svg class="icon icon-sm icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg> <span>Retry connection</span></button>
+              <button class="secondary-button" id="load-fallback-button" type="button" aria-label="Load showcase catalog"><span>Load showcase catalog</span></button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Live Sports Match Centre Section (GaiaFlix replicate) -->
+        <section class="content-section sports-section" id="sports-section" hidden>
+          <div class="sports-header">
+            <div>
+              <span class="eyebrow"><span class="live-dot"></span> Match Centre</span>
+              <h2>Live &amp; Upcoming Sports</h2>
+              <p class="section-kicker">Live streams, schedules, and 24/7 channels worldwide powered by BinTV.</p>
+            </div>
+            <div class="sports-search-box">
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+              <input type="search" id="sports-search-input" placeholder="Search teams, channels, or events…" aria-label="Search sports">
+            </div>
+          </div>
+
+          <div class="sports-nav-tabs">
+            <button class="sports-tab active" data-sports-tab="live" type="button">
+              <span class="live-dot"></span> Live Now <b id="sports-live-count">0</b>
+            </button>
+            <button class="sports-tab" data-sports-tab="upcoming" type="button">
+              Upcoming <b id="sports-upcoming-count">0</b>
+            </button>
+            <button class="sports-tab" data-sports-tab="channels" type="button">
+              Live TV (24/7) <b id="sports-channels-count">0</b>
+            </button>
+          </div>
+
+          <div class="sports-categories-pills" id="sports-categories-pills"></div>
+          <div class="sports-channel-letters" id="sports-channel-letters" hidden></div>
+
+          <div class="sports-match-grid" id="sports-match-grid" aria-live="polite">
+            <div class="sports-loading-state">
+              <span class="player-loading-indicator"></span>
+              <span>Loading live matches…</span>
+            </div>
+          </div>
+
+          <div class="sports-pagination" id="sports-pagination" hidden></div>
+        </section>
+
+        <!-- Explore / Watch Providers Section (GaiaFlix replicate) -->
+        <section class="content-section explore-section" id="explore-section" hidden>
+          <div class="section-heading">
+            <div>
+              <span class="eyebrow">Streaming Network Directory</span>
+              <h2 id="explore-title">Explore by Service</h2>
+              <p class="section-kicker" id="explore-kicker">Browse catalogs of top global streaming networks.</p>
+            </div>
+            <button class="secondary-button" id="explore-back-btn" type="button" hidden><span>← All Networks</span></button>
+          </div>
+
+          <div class="providers-grid" id="providers-grid">
+            <div class="sports-loading-state"><span class="player-loading-indicator"></span> <span>Loading streaming services…</span></div>
+          </div>
+
+          <div class="provider-catalog-view" id="provider-catalog-view" hidden>
+            <div class="catalog-grid" id="provider-titles-grid"></div>
+          </div>
+        </section>
+
+        <section class="content-section profile-section" id="profile-section" hidden>
+          <!-- Guest placeholder when not logged in -->
+          <div class="profile-guest-state" id="profile-guest-state" hidden>
+            <div class="guest-card">
+              <div class="guest-icon"><svg class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+              <h2>Sign in to Ustream</h2>
+              <p>Create viewer profiles, sync your watchlist across devices, and keep track of where you left off.</p>
+              <button class="primary-button" id="guest-signin-btn" type="button"><span>Sign In / Create Account</span></button>
+            </div>
+          </div>
+
+          <!-- Authenticated profile container -->
+          <div class="profile-container" id="profile-auth-state">
+            <div class="profile-card profile-hero-card">
+              <div class="profile-avatar-wrap">
+                <div class="profile-avatar-large" id="profile-hero-avatar">U</div>
+                <span class="profile-badge-vip" id="profile-hero-badge">Viewer Profile</span>
+              </div>
+              <div class="profile-details">
+                <div class="profile-heading-row">
+                  <div>
+                    <h2 class="profile-name" id="profile-hero-name">Viewer</h2>
+                    <p class="profile-email" id="profile-hero-email">user@ustream.tv</p>
+                  </div>
+                  <div class="profile-badge-group">
+                    <span class="email-verify-badge" id="profile-verify-badge">Checking status...</span>
+                    <button class="text-button verify-resend-btn" id="profile-resend-verify-btn" type="button" hidden>Resend Email</button>
+                  </div>
+                </div>
+                <div class="profile-stats-row">
+                  <div class="profile-stat">
+                    <span class="profile-stat-number" id="profile-watch-count">0</span>
+                    <span class="profile-stat-label">In Continue Queue</span>
+                  </div>
+                  <div class="profile-stat">
+                    <span class="profile-stat-number" id="profile-list-count">0</span>
+                    <span class="profile-stat-label">Saved to My List</span>
+                  </div>
+                  <div class="profile-stat">
+                    <span class="profile-stat-number" id="profile-stat-quality">1080p</span>
+                    <span class="profile-stat-label">Streaming Quality</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Viewer Profiles Row -->
+            <div class="profile-card profiles-management-card">
+              <div class="profiles-card-header">
+                <div>
+                  <h3 class="profile-card-title">Viewer Profiles</h3>
+                  <p class="profile-card-desc">Up to 5 viewer profiles for your household with personalized queues, maturity ratings, and optional PIN locks.</p>
+                </div>
+                <div class="profiles-card-actions">
+                  <button class="secondary-button" id="card-manage-profiles-btn" type="button"><span>Switch / Manage</span></button>
+                  <button class="primary-button" id="card-add-profile-btn" type="button"><span>+ Add Profile</span></button>
+                </div>
+              </div>
+              <div class="profiles-inline-list" id="profiles-inline-list"></div>
+            </div>
+
+            <div class="profile-grid">
+              <!-- Creator Studio & Uploads -->
+              <div class="profile-card creator-studio-card">
+                <div class="profile-card-header-row" style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px;">
+                  <div>
+                    <h3 class="profile-card-title">Creator Studio</h3>
+                    <p class="profile-card-desc">Publish your videos, track view counts, and share streamable media.</p>
+                  </div>
+                  <button class="primary-button" id="profile-upload-btn" type="button">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <span>Upload Video</span>
+                  </button>
+                </div>
+                <div class="my-uploads-container" id="my-uploads-container">
+                  <div class="empty-state-small" id="my-uploads-empty">
+                    <p>No uploaded videos yet. Share your creations with the Ustream community!</p>
+                  </div>
+                  <div class="my-uploads-list" id="my-uploads-list" hidden></div>
+                </div>
+              </div>
+
+              <div class="profile-card">
+                <h3 class="profile-card-title">Playback Preferences</h3>
+                <p class="profile-card-desc">Customize streaming quality and preferences for this profile.</p>
+                <div class="profile-form-group">
+                  <label for="profile-quality-select">Default Streaming Quality</label>
+                  <select id="profile-quality-select" class="player-select">
+                    <option value="1080" selected>1080p Ultra HD (Recommended)</option>
+                    <option value="720">720p High Definition</option>
+                    <option value="480">480p Standard</option>
+                    <option value="auto">Auto (Adaptive)</option>
+                  </select>
+                </div>
+                <div class="profile-form-group">
+                  <label for="profile-language-pref">Preferred Audio Language</label>
+                  <select id="profile-language-pref" class="player-select">
+                    <option value="original" selected>Original Audio</option>
+                    <option value="english">English</option>
+                    <option value="hindi">Hindi</option>
+                    <option value="spanish">Spanish</option>
+                    <option value="japanese">Japanese</option>
+                  </select>
+                </div>
+                <div class="profile-toggle-row">
+                  <div>
+                    <strong>Autoplay Next Episode</strong>
+                    <p>Automatically play the next episode when the current one finishes.</p>
+                  </div>
+                  <button class="profile-toggle-btn active" id="profile-autoplay-toggle" type="button" aria-pressed="true">ON</button>
+                </div>
+                <div class="profile-actions-box">
+                  <button class="secondary-button" id="profile-save-btn" type="button"><span>Save Preferences</span></button>
+                </div>
+              </div>
+
+              <!-- Security: Change Password & Sessions -->
+              <div class="profile-card">
+                <h3 class="profile-card-title">Account &amp; Security</h3>
+                <p class="profile-card-desc">Manage account password, active sessions, and multi-device access.</p>
+
+                <!-- Change Password Form -->
+                <form id="change-password-form" class="account-security-form" novalidate>
+                  <h4 class="form-subheading">Change Password</h4>
+                  <div class="profile-form-group">
+                    <label for="current-password-input">Current Password</label>
+                    <input type="password" id="current-password-input" class="player-select form-text-input" autocomplete="current-password" required />
+                  </div>
+                  <div class="profile-form-group">
+                    <label for="new-password-input">New Password</label>
+                    <input type="password" id="new-password-input" class="player-select form-text-input" autocomplete="new-password" minlength="8" required />
+                  </div>
+                  <div class="profile-form-group">
+                    <label for="confirm-password-input">Confirm New Password</label>
+                    <input type="password" id="confirm-password-input" class="player-select form-text-input" autocomplete="new-password" minlength="8" required />
+                  </div>
+                  <div class="form-feedback" id="change-password-feedback" role="alert" hidden></div>
+                  <button class="secondary-button" id="update-password-btn" type="submit"><span>Update Password</span></button>
+                </form>
+
+                <div class="profile-dropdown-divider" style="margin: 20px 0;"></div>
+
+                <!-- Active Devices / Sessions -->
+                <h4 class="form-subheading">Active Devices &amp; Sessions</h4>
+                <div class="sessions-list" id="sessions-list">
+                  <div class="session-item-loading">Loading sessions...</div>
+                </div>
+
+                <div class="profile-actions-box" style="margin-top: 16px; gap: 8px; flex-wrap: wrap;">
+                  <button class="secondary-button" id="signout-all-btn" type="button"><span>Sign Out All Devices</span></button>
+                  <button class="sign-out-button" id="profile-signout-btn" type="button"><span>Sign out</span></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer" role="contentinfo">
+        <div class="footer-brand" role="img" aria-label="Ustream logo">
+          <img class="footer-logo-img" src="./assets/logo.png" alt="Ustream" height="30" />
+        </div>
+        <span>Original stories. One beautiful stream.</span>
+        <div class="footer-social-links" style="margin: 12px 0; display: flex; align-items: center; justify-content: center; gap: 12px;">
+          <a class="footer-community-link" href="https://discord.com/channels/1564928608877936841/1564928609309696092" target="_blank" rel="noopener noreferrer" aria-label="Join our Discord Community" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px; border-radius: 20px; background: rgba(88, 101, 242, 0.15); border: 1px solid rgba(88, 101, 242, 0.4); color: #8ea1e1; font-weight: 700; font-size: 13px; text-decoration: none; transition: all .2s ease;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+            <span>Join Discord Community</span>
+          </a>
+        </div>
+        <span class="footer-note">© 2026 Ustream. All rights reserved.</span>
+      </footer>
+
+      <nav class="mobile-nav" role="navigation" aria-label="Mobile navigation">
+        <button class="mobile-nav-item active" data-section="home" aria-label="Home"><svg class="icon icon-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><small>Home</small></button>
+        <button class="mobile-nav-item" data-section="movies" aria-label="Movies"><svg class="icon icon-movies" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18"/><path d="M3 7.5h4"/><path d="M3 12h18"/><path d="M3 16.5h4"/><path d="M17 3v18"/><path d="M17 7.5h4"/><path d="M17 16.5h4"/></svg><small>Movies</small></button>
+        <button class="mobile-nav-item" id="mobile-search-btn" aria-label="Search"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><small>Search</small></button>
+        <button class="mobile-nav-item" data-section="series" aria-label="Series"><svg class="icon icon-series" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="15" x="2" y="7" rx="2"/><polyline points="17 2 12 7 7 2"/></svg><small>Series</small></button>
+        <button class="mobile-nav-item" data-section="anime" aria-label="Anime"><svg class="icon icon-anime" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg><small>Anime</small></button>
+        <button class="mobile-nav-item" data-section="sports" aria-label="Sports"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v3a4 4 0 0 1-8 0V4Z"/><path d="M8 6H4v1a5 5 0 0 0 5 5M16 6h4v1a5 5 0 0 1-5 5M12 11v5M8 20h8M10 16h4"/></svg><small>Sports</small></button>
+      </nav>
+    </div>
+
+    <aside class="filter-drawer" id="filter-drawer" aria-hidden="true">
+      <div class="drawer-scrim" id="drawer-scrim"></div>
+      <div class="drawer-panel">
+        <div class="drawer-head">
+          <div><p class="section-kicker" id="filter-channel-kicker">Anime Collection</p><h2>Filter titles</h2></div>
+          <button class="close-button" id="close-drawer" aria-label="Close filters"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        <div id="filter-groups" class="filter-groups"></div>
+        <div class="drawer-foot">
+          <button class="text-button" id="reset-filters" aria-label="Reset all filters">Reset all</button>
+          <button class="primary-button" id="apply-filters" aria-label="Apply filters and show titles">Show titles <span id="result-count">12</span></button>
+        </div>
+      </div>
+    </aside>
+
+    <div class="modal-backdrop" id="modal-backdrop" hidden>
+      <article class="detail-modal" id="detail-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <button class="close-button modal-close" id="close-modal" aria-label="Close details"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        <div class="modal-art" id="modal-art" role="img" aria-label="Title poster"></div>
+        <div class="modal-copy">
+          <p class="section-kicker">Now streaming</p>
+          <h2 id="modal-title">Title</h2>
+          <div class="hero-meta" id="modal-meta"></div>
+          <p id="modal-description"></p>
+          <div class="hero-actions"><button class="primary-button" id="modal-play" aria-label="Play title now"><svg class="icon icon-sm icon-play icon-filled" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg> <span>Play now</span></button><button class="secondary-button" id="modal-list" aria-label="Add to watchlist"><svg class="icon icon-sm icon-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg> <span>Add to list</span></button></div>
+        </div>
+      </article>
+    </div>
+
+    <div class="player-backdrop" id="player-backdrop" hidden>
+      <section class="player-modal" role="dialog" aria-modal="true" aria-labelledby="player-title">
+        <div class="player-head">
+          <div>
+            <p class="section-kicker">Ustream player</p>
+            <h2 id="player-title">Now playing</h2>
+          </div>
+          <span class="player-live-label" id="player-live-label" hidden><span class="live-dot"></span> <span id="player-live-text">Ready to watch</span></span>
+          <button class="close-button" id="close-player" aria-label="Close player"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        <div class="player-media-container" id="player-media-container">
+          <iframe id="embed-player" class="embed-player" src="about:blank" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true" allow="autoplay; fullscreen; picture-in-picture; encrypted-media"></iframe>
+          <div class="custom-player-wrapper" id="custom-player-wrapper" hidden>
+            <video id="video-player" playsinline preload="metadata"></video>
+            
+            <!-- Buffering / Loading Ring -->
+            <div class="player-buffering-spinner" id="player-buffering-spinner" hidden>
+              <div class="spinner-ring"></div>
+            </div>
+
+            <!-- Large Center Play / Pause Indicator -->
+            <button class="player-center-play" id="player-center-play" aria-label="Play or pause video">
+              <svg class="icon icon-play-fill" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+            </button>
+
+            <!-- Touch Seek Ripple (Mobile) -->
+            <div class="tap-seek-ripple left" id="tap-seek-left" hidden>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/></svg>
+              <span>10s</span>
+            </div>
+            <div class="tap-seek-ripple right" id="tap-seek-right" hidden>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 17l5-5-5-5M6 17l5-5-5-5"/></svg>
+              <span>10s</span>
+            </div>
+
+            <!-- Resume Playback Prompt -->
+            <div class="player-resume-banner" id="player-resume-banner" hidden>
+              <div class="resume-info">
+                <span>Resume from <strong id="resume-time-label">00:00</strong>?</span>
+              </div>
+              <div class="resume-actions">
+                <button class="primary-button btn-xs" id="resume-accept-btn" type="button"><span>Resume</span></button>
+                <button class="secondary-button btn-xs" id="resume-dismiss-btn" type="button"><span>Start Over</span></button>
+              </div>
+            </div>
+
+            <!-- Custom Bottom Controls Bar -->
+            <div class="custom-player-controls" id="custom-player-controls">
+              <!-- Scrubber Track -->
+              <div class="player-scrubber-wrap" id="player-scrubber-wrap" tabindex="0" role="slider" aria-label="Seek time" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <div class="player-scrubber-bar">
+                  <div class="scrubber-buffer" id="scrubber-buffer" style="width: 0%;"></div>
+                  <div class="scrubber-progress" id="scrubber-progress" style="width: 0%;"></div>
+                  <div class="scrubber-handle" id="scrubber-handle" style="left: 0%;"></div>
+                </div>
+                <div class="scrubber-hover-time" id="scrubber-hover-time" hidden>00:00</div>
+              </div>
+
+              <div class="player-controls-bottom">
+                <div class="controls-left">
+                  <!-- Play / Pause -->
+                  <button class="control-btn" id="ctrl-play-pause-btn" aria-label="Play" title="Play / Pause (Space / k)">
+                    <svg class="icon" id="ctrl-play-icon" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+                  </button>
+
+                  <!-- Rewind 10s -->
+                  <button class="control-btn" id="ctrl-skip-back-btn" aria-label="Rewind 10 seconds" title="Rewind 10s (Left Arrow / j)">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/></svg>
+                  </button>
+
+                  <!-- Forward 10s -->
+                  <button class="control-btn" id="ctrl-skip-forward-btn" aria-label="Forward 10 seconds" title="Forward 10s (Right Arrow / l)">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 17l5-5-5-5M6 17l5-5-5-5"/></svg>
+                  </button>
+
+                  <!-- Volume & Mute -->
+                  <div class="volume-control-group">
+                    <button class="control-btn" id="ctrl-mute-btn" aria-label="Mute" title="Mute / Unmute (m)">
+                      <svg class="icon" id="ctrl-volume-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                    </button>
+                    <input type="range" class="volume-slider" id="ctrl-volume-slider" min="0" max="1" step="0.05" value="1" aria-label="Volume" />
+                  </div>
+
+                  <!-- Time readout -->
+                  <div class="player-time-display">
+                    <span id="player-current-time">0:00</span>
+                    <span class="time-divider">/</span>
+                    <span id="player-total-duration">0:00</span>
+                  </div>
+                </div>
+
+                <div class="controls-right">
+                  <!-- Speed selector -->
+                  <div class="speed-menu-wrap">
+                    <button class="control-btn text-control" id="ctrl-speed-btn" aria-label="Playback speed" title="Playback speed">
+                      <span id="ctrl-speed-label">1x</span>
+                    </button>
+                    <div class="speed-menu" id="ctrl-speed-menu" hidden>
+                      <button class="speed-option" data-speed="0.5" type="button">0.5x</button>
+                      <button class="speed-option" data-speed="0.75" type="button">0.75x</button>
+                      <button class="speed-option active" data-speed="1" type="button">Normal (1x)</button>
+                      <button class="speed-option" data-speed="1.25" type="button">1.25x</button>
+                      <button class="speed-option" data-speed="1.5" type="button">1.5x</button>
+                      <button class="speed-option" data-speed="2" type="button">2x</button>
+                    </div>
+                  </div>
+
+                  <!-- Picture in Picture -->
+                  <button class="control-btn" id="ctrl-pip-btn" aria-label="Picture-in-Picture" title="Picture in Picture (p)">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><rect width="7" height="6" x="12" y="13" rx="1"/></svg>
+                  </button>
+
+                  <!-- Fullscreen -->
+                  <button class="control-btn" id="ctrl-fullscreen-btn" aria-label="Toggle Fullscreen" title="Fullscreen (f)">
+                    <svg class="icon" id="ctrl-fullscreen-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="player-action-bar" aria-label="Player actions">
+          <div class="player-server-selector">
+            <select id="player-server-select" class="player-server-select" aria-label="Stream Server">
+              <option value="vidstuck" selected>Server 1 · Vidstuck HD (Fast &amp; Reliable)</option>
+              <option value="vidlink">Server 2 · VidLink Cloud</option>
+              <option value="vidsrc">Server 3 · VidSrc VIP</option>
+              <option value="aniembed">Server 4 · AniEmbed (Anime)</option>
+              <option value="smashy">Server 5 · SmashyStream</option>
+              <option value="autoembed">Server 6 · AutoEmbed</option>
+            </select>
+          </div>
+          <div class="player-season-selector" id="player-season-bar-field" hidden>
+            <select id="player-season-bar-select" class="player-server-select" aria-label="Select Season">
+              <option value="1">Season 1</option>
+            </select>
+          </div>
+          <div class="player-episode-selector" id="player-episode-bar-field" hidden>
+            <select id="player-episode-bar-select" class="player-server-select" aria-label="Select Episode">
+              <option value="1">Episode 1</option>
+            </select>
+          </div>
+          <button class="player-action player-action-primary player-action-retry" id="player-retry-button" type="button" aria-label="Retry playback" hidden><svg class="icon icon-sm icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg> <span>Retry</span></button>
+        </div>
+        <div class="player-episodes-section" id="player-episodes-section" hidden>
+          <div class="player-episodes-header">
+            <div class="player-episodes-title-row">
+              <span class="section-kicker">Episodes</span>
+              <strong id="player-episodes-season-title">Season 1</strong>
+            </div>
+            <div class="player-season-pills" id="player-season-pills" role="tablist" aria-label="Seasons"></div>
+          </div>
+          <div class="player-episodes-grid" id="player-episodes-grid" aria-label="Episode list"></div>
+        </div>
+        <details class="player-up-next" id="player-up-next" open>
+          <summary class="player-up-next-heading">
+            <span><span class="section-kicker">Coming up</span><strong>Up next</strong></span>
+            <span class="player-up-next-chevron" aria-hidden="true"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+          </summary>
+          <div class="player-up-next-content" id="player-up-next-content">
+            <div class="player-up-next-art" id="player-up-next-art" aria-hidden="true"><svg class="icon icon-md icon-play icon-filled" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg></div>
+             <div class="player-up-next-copy">
+               <span class="player-up-next-label" id="player-up-next-label">Up next</span>
+               <h3 id="player-up-next-title">Start watching to build your queue</h3>
+               <p id="player-up-next-description">Select any title to begin streaming.</p>
+            </div>
+            <button class="secondary-button player-up-next-button" id="player-up-next-button" type="button" aria-label="Play next episode"><span>Play next</span><svg class="icon icon-sm icon-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+          </div>
+        </details>
+        <div class="player-controls-row">
+          <div class="player-status-region" id="player-status-region" data-player-status-region role="status" aria-live="polite" aria-atomic="true" aria-busy="false">
+            <div class="player-status" id="player-status" data-player-status>Choose a title to start watching</div>
+            <div class="player-loading" id="player-loading" data-player-loading hidden>
+              <span class="player-loading-indicator" aria-hidden="true"></span>
+              <span id="player-loading-text" data-player-loading-label>Loading stream…</span>
+            </div>
+            <div class="player-error" id="player-error-indicator" hidden>
+              <span class="player-error-text" id="player-error-text">Playback failed</span>
+              <button class="player-inline-retry" id="player-inline-retry" type="button" aria-label="Retry playback"><svg class="icon icon-sm icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg> <span>Retry</span></button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="settings-backdrop" hidden>
+      <section class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <div class="settings-head">
+          <div>
+            <p class="section-kicker">Preferences</p>
+            <h2 id="settings-title">Service Settings</h2>
+          </div>
+          <button class="close-button" id="close-settings" aria-label="Close settings"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        <div class="settings-content">
+          <div class="settings-card">
+            <div class="settings-card-header">
+              <span class="status-dot large" id="settings-status-dot"></span>
+              <div>
+                <h3 id="settings-status-title">Showcase Catalog</h3>
+                <p id="settings-status-info">Curated original streaming collection with multi-resolution playback and episodic support.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <span class="section-kicker">Appearance &amp; Content Access</span>
+            <div class="setting-row" style="margin-top: 10px; display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+              <div>
+                <strong>Dark Mode &amp; 18+ Content</strong>
+                <small id="service-theme-mode-desc" style="display: block; color: var(--muted); font-size: 12px; margin-top: 4px; line-height: 1.4;">When Dark Mode is ON, 18+ &amp; adult content is unlocked across all categories. When OFF, all adult content is strictly hidden.</small>
+              </div>
+              <button class="profile-toggle-btn active" id="settings-dark-mode-toggle" type="button" aria-pressed="true" aria-describedby="service-theme-mode-desc">DARK (18+ ON)</button>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <span class="section-kicker">Catalog &amp; Playback</span>
+            <p class="field-hint">Manage your streaming preferences, connection mode, and saved watchlist.</p>
+            <div class="settings-actions-row">
+              <button class="primary-button" id="refresh-catalog-btn" type="button" aria-label="Refresh live catalog"><svg class="icon icon-sm icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg> <span>Refresh Live Catalog</span></button>
+              <button class="secondary-button" id="revert-demo-btn" type="button" aria-label="Switch to showcase mode"><span>Showcase Mode</span></button>
+              <button class="secondary-button" id="clear-watchlist-btn" type="button" aria-label="Clear watchlist"><span>Clear Watchlist</span></button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Authentication Modal -->
+    <div class="modal-backdrop" id="auth-backdrop" hidden>
+      <div class="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+        <button class="close-button" id="close-auth-modal" aria-label="Close dialog"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+
+        <div class="auth-head">
+          <div class="auth-brand"><img class="auth-logo-img" src="./assets/logo.png" alt="Ustream" height="34" /></div>
+          <h2 id="auth-modal-title">Welcome to Ustream</h2>
+          <p id="auth-modal-desc">Sign in to sync your watch history, watchlist, and personalized viewer profiles.</p>
+        </div>
+
+        <div class="auth-tabs" id="auth-tabs" role="tablist">
+          <button class="auth-tab active" id="tab-signin" role="tab" aria-selected="true" type="button">Sign In</button>
+          <button class="auth-tab" id="tab-signup" role="tab" aria-selected="false" type="button">Create Account</button>
+        </div>
+
+        <!-- 1. Sign In Form -->
+        <form class="auth-form" id="form-signin" novalidate>
+          <div class="form-feedback" id="signin-feedback" role="alert" hidden></div>
+          <div class="auth-field">
+            <label for="signin-email">Email Address</label>
+            <input type="email" id="signin-email" class="auth-input" placeholder="you@example.com" autocomplete="email" required />
+          </div>
+          <div class="auth-field">
+            <div class="field-label-row">
+              <label for="signin-password">Password</label>
+              <button class="text-link" id="forgot-password-link" type="button">Forgot password?</button>
+            </div>
+            <input type="password" id="signin-password" class="auth-input" placeholder="••••••••" autocomplete="current-password" required />
+          </div>
+          <div class="auth-checkbox-row">
+            <label class="custom-checkbox">
+              <input type="checkbox" id="signin-remember" checked />
+              <span class="checkbox-indicator"></span>
+              <span>Remember me for 30 days</span>
+            </label>
+          </div>
+          <button class="primary-button auth-submit-btn" id="signin-submit-btn" type="submit"><span>Sign In</span></button>
+
+          <div class="auth-divider"><span>OR</span></div>
+          <a class="oauth-button google-oauth-btn" id="google-login-link" href="/api/auth/google">
+            <svg class="google-icon" width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+            <span>Continue with Google</span>
+          </a>
+        </form>
+
+        <!-- 2. Sign Up Form -->
+        <form class="auth-form" id="form-signup" hidden novalidate>
+          <div class="form-feedback" id="signup-feedback" role="alert" hidden></div>
+          <div class="auth-field">
+            <label for="signup-name">Your Name</label>
+            <input type="text" id="signup-name" class="auth-input" placeholder="e.g. Alex" autocomplete="name" required />
+          </div>
+          <div class="auth-field">
+            <label for="signup-email">Email Address</label>
+            <input type="email" id="signup-email" class="auth-input" placeholder="you@example.com" autocomplete="email" required />
+          </div>
+          <div class="auth-field">
+            <label for="signup-password">Password</label>
+            <input type="password" id="signup-password" class="auth-input" placeholder="At least 8 characters, 1 uppercase, 1 digit" autocomplete="new-password" minlength="8" required />
+            <span class="field-hint">Must contain at least 8 characters with letters and numbers.</span>
+          </div>
+          <button class="primary-button auth-submit-btn" id="signup-submit-btn" type="submit"><span>Create Account</span></button>
+
+          <div class="auth-divider"><span>OR</span></div>
+          <a class="oauth-button google-oauth-btn" href="/api/auth/google">
+            <svg class="google-icon" width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+            <span>Continue with Google</span>
+          </a>
+        </form>
+
+        <!-- 3. Forgot Password Form -->
+        <form class="auth-form" id="form-forgot" hidden novalidate>
+          <div class="form-feedback" id="forgot-feedback" role="alert" hidden></div>
+          <div class="auth-field">
+            <label for="forgot-email">Account Email</label>
+            <input type="email" id="forgot-email" class="auth-input" placeholder="you@example.com" autocomplete="email" required />
+          </div>
+          <button class="primary-button auth-submit-btn" id="forgot-submit-btn" type="submit"><span>Send Reset Instructions</span></button>
+          <button class="text-button" id="forgot-back-btn" type="button" style="margin-top: 12px; align-self: center;">Back to Sign In</button>
+        </form>
+
+        <!-- 4. Reset Password Form -->
+        <form class="auth-form" id="form-reset" hidden novalidate>
+          <div class="form-feedback" id="reset-feedback" role="alert" hidden></div>
+          <div class="auth-field">
+            <label for="reset-token-input">Reset Token</label>
+            <input type="text" id="reset-token-input" class="auth-input" placeholder="Paste your reset token" required />
+          </div>
+          <div class="auth-field">
+            <label for="reset-new-password">New Password</label>
+            <input type="password" id="reset-new-password" class="auth-input" placeholder="Minimum 8 characters" minlength="8" required />
+          </div>
+          <div class="auth-field">
+            <label for="reset-confirm-password">Confirm New Password</label>
+            <input type="password" id="reset-confirm-password" class="auth-input" placeholder="Re-enter password" minlength="8" required />
+          </div>
+          <button class="primary-button auth-submit-btn" id="reset-submit-btn" type="submit"><span>Reset Password</span></button>
+          <button class="text-button" id="reset-back-btn" type="button" style="margin-top: 12px; align-self: center;">Back to Sign In</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- "Who's Watching?" Profiles Selection Modal -->
+    <div class="modal-backdrop" id="profiles-backdrop" hidden>
+      <div class="profiles-modal" role="dialog" aria-modal="true" aria-labelledby="profiles-modal-title">
+        <div class="profiles-modal-head">
+          <h2 id="profiles-modal-title">Who's watching?</h2>
+          <p id="profiles-modal-subtitle">Choose your viewer profile to personalize recommendations and watchlist.</p>
+        </div>
+
+        <div class="profiles-grid-large" id="profiles-grid"></div>
+
+        <div class="profiles-modal-foot">
+          <button class="secondary-button" id="manage-profiles-toggle-btn" type="button"><span>Manage Profiles</span></button>
+          <button class="text-button" id="close-profiles-modal-btn" type="button">Done</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Profile Add / Edit Modal -->
+    <div class="modal-backdrop" id="profile-edit-backdrop" hidden>
+      <div class="profile-edit-modal" role="dialog" aria-modal="true" aria-labelledby="profile-edit-title">
+        <button class="close-button" id="close-profile-edit-modal" aria-label="Close dialog"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        <div class="auth-head">
+          <h2 id="profile-edit-title">Edit Profile</h2>
+          <p>Personalize avatar, family-friendly restrictions, and optional profile lock.</p>
+        </div>
+
+        <form id="profile-edit-form" class="auth-form" novalidate>
+          <div class="form-feedback" id="profile-edit-feedback" role="alert" hidden></div>
+
+          <!-- Avatar Selector -->
+          <div class="auth-field">
+            <label>Choose Avatar</label>
+            <div class="avatar-picker-grid" id="avatar-picker-grid">
+              <button type="button" class="avatar-choice selected" data-avatar="🦊">🦊</button>
+              <button type="button" class="avatar-choice" data-avatar="🐼">🐼</button>
+              <button type="button" class="avatar-choice" data-avatar="🐯">🐯</button>
+              <button type="button" class="avatar-choice" data-avatar="🦁">🦁</button>
+              <button type="button" class="avatar-choice" data-avatar="🚀">🚀</button>
+              <button type="button" class="avatar-choice" data-avatar="⚡">⚡</button>
+            </div>
+          </div>
+
+          <div class="auth-field">
+            <label for="edit-profile-name">Profile Name</label>
+            <input type="text" id="edit-profile-name" class="auth-input" placeholder="e.g. Alex" maxlength="30" required />
+          </div>
+
+          <div class="auth-field">
+            <label class="custom-checkbox">
+              <input type="checkbox" id="edit-profile-kids" />
+              <span class="checkbox-indicator"></span>
+              <span><strong>Kids Mode</strong> (Family-friendly content only)</span>
+            </label>
+          </div>
+
+          <div class="auth-field" id="maturity-select-group">
+            <label for="edit-profile-maturity">Maturity Rating Ceiling</label>
+            <select id="edit-profile-maturity" class="player-select">
+              <option value="ALL">All Maturity Ratings (Unlimited)</option>
+              <option value="PG-13">PG-13 / TV-14 and below</option>
+              <option value="PG">PG / TV-PG and below</option>
+              <option value="G">G / TV-Y only</option>
+            </select>
+          </div>
+
+          <div class="auth-field">
+            <label for="edit-profile-language">Default Audio Language</label>
+            <select id="edit-profile-language" class="player-select">
+              <option value="en">English</option>
+              <option value="original">Original Audio</option>
+              <option value="hi">Hindi</option>
+              <option value="ja">Japanese</option>
+              <option value="es">Spanish</option>
+            </select>
+          </div>
+
+          <div class="auth-field">
+            <label for="edit-profile-pin">Profile Lock (4-digit PIN)</label>
+            <input type="password" id="edit-profile-pin" class="auth-input" placeholder="Optional 4-digit PIN" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" />
+            <span class="field-hint">Leave blank to allow switching without a PIN.</span>
+          </div>
+
+          <div class="profile-modal-actions">
+            <button class="primary-button" id="save-profile-btn" type="submit"><span>Save Profile</span></button>
+            <button class="secondary-button" id="cancel-profile-edit-btn" type="button"><span>Cancel</span></button>
+            <button class="sign-out-button" id="delete-profile-btn" type="button" hidden><span>Delete Profile</span></button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Profile PIN Prompt Modal -->
+    <div class="modal-backdrop" id="pin-prompt-backdrop" hidden>
+      <div class="pin-prompt-modal" role="dialog" aria-modal="true" aria-labelledby="pin-prompt-title">
+        <button class="close-button" id="close-pin-modal" aria-label="Close dialog"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        <div class="auth-head">
+          <div class="pin-avatar" id="pin-prompt-avatar">🔒</div>
+          <h2 id="pin-prompt-title">Profile Protected</h2>
+          <p id="pin-prompt-desc">Enter the 4-digit PIN to switch to this profile.</p>
+        </div>
+
+        <form id="pin-prompt-form" class="auth-form" novalidate>
+          <div class="form-feedback" id="pin-prompt-feedback" role="alert" hidden></div>
+          <div class="pin-input-container">
+            <input type="password" id="pin-input" class="pin-input-box" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" autocomplete="off" autofocus required />
+          </div>
+          <div class="profile-modal-actions" style="justify-content: center; margin-top: 16px;">
+            <button class="primary-button" type="submit"><span>Unlock</span></button>
+            <button class="secondary-button" id="cancel-pin-btn" type="button"><span>Cancel</span></button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Video Upload Modal (Creator Studio) -->
+    <div class="modal-backdrop" id="upload-modal-backdrop" hidden>
+      <div class="upload-modal" role="dialog" aria-modal="true" aria-labelledby="upload-modal-title">
+        <div class="modal-head" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <div>
+            <span class="eyebrow">Creator Studio</span>
+            <h2 id="upload-modal-title" style="margin: 4px 0 0; font-size: 22px;">Upload Video</h2>
+          </div>
+          <button class="close-button" id="close-upload-modal" aria-label="Close upload dialog"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+
+        <form id="upload-form" class="upload-form" novalidate>
+          <div class="form-feedback" id="upload-feedback" role="alert" hidden></div>
+
+          <div class="upload-dropzone" id="upload-dropzone" tabindex="0" role="button" aria-label="Select or drop video file">
+            <input type="file" id="upload-file-input" accept="video/mp4,video/webm,video/ogg,video/quicktime,.mkv" hidden />
+            <div class="dropzone-content" id="dropzone-prompt">
+              <svg class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <p><strong>Click to browse</strong> or drag &amp; drop video file</p>
+              <span class="dropzone-hint">MP4, WebM, MOV, or MKV (up to 150MB)</span>
+            </div>
+            <div class="dropzone-file-info" id="dropzone-file-info" hidden>
+              <div class="file-info-badge">
+                <svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+                <div>
+                  <strong class="file-name" id="selected-file-name">filename.mp4</strong>
+                  <span class="file-size" id="selected-file-size">0 MB</span>
+                </div>
+              </div>
+              <button type="button" class="text-button" id="change-file-btn">Change file</button>
+            </div>
+          </div>
+
+          <div class="auth-field" style="margin-top: 16px;">
+            <label for="upload-title">Title *</label>
+            <input type="text" id="upload-title" class="auth-input" placeholder="Give your video a catchy title" maxlength="150" required />
+          </div>
+
+          <div class="auth-field">
+            <label for="upload-description">Description</label>
+            <textarea id="upload-description" class="auth-input auth-textarea" placeholder="Describe your video…" rows="3" maxlength="1000" style="resize: vertical; min-height: 80px;"></textarea>
+          </div>
+
+          <div class="auth-field">
+            <label for="upload-category">Category</label>
+            <select id="upload-category" class="player-select">
+              <option value="entertainment" selected>Entertainment</option>
+              <option value="movies">Movies</option>
+              <option value="series">Series</option>
+              <option value="anime">Anime</option>
+              <option value="sports">Sports</option>
+              <option value="gaming">Gaming</option>
+              <option value="music">Music</option>
+              <option value="documentary">Documentary</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <div class="upload-progress-container" id="upload-progress-container" hidden>
+            <div class="progress-bar-track">
+              <div class="progress-bar-fill" id="upload-progress-fill" style="width: 0%;"></div>
+            </div>
+            <div class="progress-stats">
+              <span id="upload-progress-text">Uploading: 0%</span>
+              <span id="upload-status-text">Streaming to server…</span>
+            </div>
+          </div>
+
+          <div class="profile-modal-actions" style="margin-top: 20px;">
+            <button class="primary-button" id="submit-upload-btn" type="submit"><span>Publish Video</span></button>
+            <button class="secondary-button" id="cancel-upload-btn" type="button"><span>Cancel</span></button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Global Search Modal (GaiaFlix replicate) -->
+    <div class="modal-backdrop" id="search-backdrop" hidden>
+      <div class="search-modal" role="dialog" aria-modal="true" aria-labelledby="search-dialog-title">
+        <div class="search-modal-head">
+          <div class="search-modal-bar">
+            <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+            <input type="search" id="modal-search-input" placeholder="Search movies, TV shows, anime, sports…" autocomplete="off" aria-label="Search catalog">
+            <button class="close-button" id="close-search-modal" aria-label="Close search"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+          </div>
+          <div class="search-type-filters">
+            <button class="search-type-pill active" data-search-type="all" type="button">All</button>
+            <button class="search-type-pill" data-search-type="movie" type="button">Movies</button>
+            <button class="search-type-pill" data-search-type="tv" type="button">TV Shows</button>
+            <button class="search-type-pill" data-search-type="anime" type="button">Anime</button>
+            <button class="search-type-pill" data-search-type="cartoon" type="button">Cartoons</button>
+          </div>
+          <div class="search-popular-tags">
+            <span>Popular:</span>
+            <button class="tag-btn" data-search-tag="Reacher" type="button">Reacher</button>
+            <button class="tag-btn" data-search-tag="Spider-Man" type="button">Spider-Man</button>
+            <button class="tag-btn" data-search-tag="Anime" type="button">Anime</button>
+            <button class="tag-btn" data-search-tag="Inception" type="button">Inception</button>
+            <button class="tag-btn" data-search-tag="Batman" type="button">Batman</button>
+          </div>
+        </div>
+        <div class="search-modal-body" id="modal-search-results">
+          <div class="search-empty-prompt">Start typing to search titles, genres, and live events.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Appearance & Personalization Settings Modal (GaiaFlix replicate) -->
+    <div class="modal-backdrop" id="appearance-backdrop" hidden>
+      <div class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="appearance-title">
+        <div class="settings-head">
+          <div>
+            <span class="eyebrow">Personalize</span>
+            <h2 id="appearance-title">Appearance &amp; Settings</h2>
+          </div>
+          <button class="close-button" id="close-appearance-btn" aria-label="Close settings"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        <div class="appearance-settings-content">
+          <div class="setting-row">
+            <div>
+              <strong>Dark Mode &amp; 18+ Content</strong>
+              <small id="theme-mode-desc">When Dark Mode is ON, 18+ &amp; adult content is unlocked across all categories. When OFF, all adult content is strictly hidden.</small>
+            </div>
+            <button class="profile-toggle-btn active" id="theme-toggle-btn" type="button" aria-pressed="true" aria-describedby="theme-mode-desc">DARK (18+ ON)</button>
+          </div>
+          <div class="setting-block">
+            <strong>Accent Color</strong>
+            <p class="field-hint">Select your preferred interface accent highlight</p>
+            <div class="accent-color-choices" id="accent-color-choices">
+              <button class="color-swatch active" data-color="#e7ff51" style="background:#e7ff51;" title="Neon Lime" type="button"></button>
+              <button class="color-swatch" data-color="#00e5ff" style="background:#00e5ff;" title="Cyber Cyan" type="button"></button>
+              <button class="color-swatch" data-color="#ff9100" style="background:#ff9100;" title="Sunset Amber" type="button"></button>
+              <button class="color-swatch" data-color="#d500f9" style="background:#d500f9;" title="Electric Purple" type="button"></button>
+              <button class="color-swatch" data-color="#e50914" style="background:#e50914;" title="Gaia Crimson" type="button"></button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div>
+              <strong>Metadata Language</strong>
+              <small>Display language for catalog overviews and titles</small>
+            </div>
+            <select id="appearance-language-select" class="player-select">
+              <option value="en" selected>English</option>
+              <option value="es">Español</option>
+              <option value="fr">Français</option>
+              <option value="de">Deutsch</option>
+              <option value="hi">हिन्दी</option>
+              <option value="ja">日本語</option>
+              <option value="ko">한국어</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <div>
+              <strong>Discord Community</strong>
+              <small>Join our live community for title requests, chat, and stream updates</small>
+            </div>
+            <a class="secondary-button" href="https://discord.com/channels/1564928608877936841/1564928609309696092" target="_blank" rel="noopener noreferrer" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+              <span>Join Discord</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sports Live Stream Player Modal (GaiaFlix replicate) -->
+    <div class="player-backdrop" id="sports-player-backdrop" hidden>
+      <div class="player-modal sports-player-shell" role="dialog" aria-modal="true" aria-labelledby="sports-player-title">
+        <div class="player-head">
+          <div>
+            <span class="eyebrow"><span class="live-dot"></span> Live Sports Broadcast</span>
+            <h2 id="sports-player-title">Live Match</h2>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button class="action-btn" id="sports-popout-btn" type="button" title="Open Stream in Popout Window" aria-label="Open Stream in Popout Window" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 12px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); color: var(--text); cursor: pointer;">
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              <span>Popout</span>
+            </button>
+            <button class="action-btn" id="sports-reload-btn" type="button" title="Reload Feed" aria-label="Reload Feed" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 12px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); color: var(--text); cursor: pointer;">
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+              <span>Reload</span>
+            </button>
+            <button class="close-button" id="close-sports-player" aria-label="Close sports player"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+          </div>
+        </div>
+        <div class="player-media-container" id="sports-media-container">
+          <iframe id="sports-stream-frame" class="embed-player" src="about:blank" allowfullscreen="true" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="no-referrer-when-downgrade"></iframe>
+        </div>
+        <div class="sports-stream-feeds-bar" id="sports-stream-feeds-bar"></div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="./app.js?v=20261028-episodes-fix-v5"></script>
+    <script>
+      (function() {
+        function dismissStartupLoader() {
+          var loader = document.getElementById("startup-loader");
+          if (loader && !loader.classList.contains("fade-out")) {
+            loader.classList.add("fade-out");
+            setTimeout(function() { loader.style.display = "none"; }, 450);
+          }
+        }
+        if (document.readyState === "complete" || document.readyState === "interactive") {
+          setTimeout(dismissStartupLoader, 400);
+        } else {
+          window.addEventListener("DOMContentLoaded", function() { setTimeout(dismissStartupLoader, 400); });
+        }
+        window.addEventListener("load", dismissStartupLoader);
+        setTimeout(dismissStartupLoader, 1200);
+      })();
+    </script>
+  </body>
+</html>
