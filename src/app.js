@@ -1349,11 +1349,14 @@ function makeFilterDefaults(channel) {
   }).concat([["rateMax", 10]]));
 }
 
+const CONTENT_BATCH_SIZE = 35;
+
 const state = {
   section: "home",
   genre: "all",
   search: "",
   view: "grid",
+  displayLimit: CONTENT_BATCH_SIZE,
   filters: makeFilterDefaults(animeChannel),
   watchlist: new Set(loadWatchlist()),
   activeModal: null,
@@ -1693,7 +1696,7 @@ async function loadLiveCatalog(isRetry = false) {
     ];
 
     const results = await Promise.all(tmdbRequests.map(async ({ path, cat }) => {
-      // 1. Try /api/tmdb local proxy
+      // 1. Try /api/tmdb local proxy (backed by server-side TMDB API key)
       try {
         const proxyRes = await fetch(`/api/tmdb${path}`);
         if (proxyRes.ok) {
@@ -1704,22 +1707,7 @@ async function loadLiveCatalog(isRetry = false) {
         }
       } catch {}
 
-      // 2. Direct TMDB with working fallback keys
-      for (const apiKey of TMDB_API_KEYS) {
-        try {
-          const sep = path.includes("?") ? "&" : "?";
-          const directUrl = `https://api.themoviedb.org/3${path}${sep}api_key=${apiKey}`;
-          const directRes = await fetch(directUrl);
-          if (directRes.ok) {
-            const data = await directRes.json();
-            if (Array.isArray(data?.results) && data.results.length) {
-              return { ok: true, items: data.results.map((i) => normalizeTmdbItem(i, cat)), cat };
-            }
-          }
-        } catch {}
-      }
-
-      // 3. Fallback: try /api/catalog endpoint
+      // 2. Fallback: try /api/catalog endpoint
       try {
         const catRes = await fetch(`/api/catalog?category=${cat === "trending" ? "all" : cat}`);
         if (catRes.ok) {
@@ -1790,10 +1778,130 @@ const sectionPages = {
 let isLoadingMore = false;
 let hasMoreContent = true;
 
+async function fetchNextRemoteBatch(targetSection) {
+  const nextPage = (sectionPages[targetSection] || 1) + 1;
+  sectionPages[targetSection] = nextPage;
+
+  let paths = [];
+  if (targetSection === "movies") {
+    paths = [
+      { path: `/movie/popular?page=${nextPage}`, cat: "movie" },
+      { path: `/discover/movie?sort_by=popularity.desc&page=${nextPage}`, cat: "movie" }
+    ];
+  } else if (targetSection === "series") {
+    paths = [
+      { path: `/tv/popular?page=${nextPage}`, cat: "tv" },
+      { path: `/discover/tv?sort_by=popularity.desc&page=${nextPage}`, cat: "tv" }
+    ];
+  } else if (targetSection === "anime") {
+    paths = [
+      { path: `/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=${nextPage}`, cat: "anime" },
+      { path: `/discover/movie?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=${nextPage}`, cat: "anime" }
+    ];
+  } else if (targetSection === "cartoons") {
+    paths = [
+      { path: `/discover/tv?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=${nextPage}`, cat: "cartoons" },
+      { path: `/discover/movie?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=${nextPage}`, cat: "cartoons" }
+    ];
+  } else {
+    // "home"
+    paths = [
+      { path: `/trending/all/day?page=${nextPage}`, cat: "trending" },
+      { path: `/movie/now_playing?page=${nextPage}`, cat: "movie" }
+    ];
+  }
+
+  const fetchedBatches = await Promise.all(paths.map(async ({ path, cat }) => {
+    // 1. Try local proxy
+    try {
+      const proxyRes = await fetch(`/api/tmdb${path}`);
+      if (proxyRes.ok) {
+        const data = await proxyRes.json();
+        if (Array.isArray(data?.results) && data.results.length) {
+          return data.results.map((i) => normalizeTmdbItem(i, cat));
+        }
+      }
+    } catch {}
+
+    // 2. Fallback /api/catalog
+    try {
+      const catRes = await fetch(`/api/catalog?category=${cat}&page=${nextPage}`);
+      if (catRes.ok) {
+        const catData = await catRes.json();
+        const items = catData?.data?.items;
+        if (Array.isArray(items) && items.length) {
+          return items.map((i) => (i.tmdbId ? i : normalizeApiItem(i, cat)));
+        }
+      }
+    } catch {}
+
+    return [];
+  }));
+
+  const flatItems = fetchedBatches.flat();
+  const newItems = [];
+  const seen = new Set(catalog.map((c) => (c.title || "").toLowerCase().trim()));
+  flatItems.forEach((item) => {
+    const key = (item.title || "").toLowerCase().trim();
+    if (!seen.has(key)) {
+      seen.add(key);
+      newItems.push(item);
+    }
+  });
+
+  if (newItems.length > 0) {
+    catalog.push(...newItems);
+    updateStatusBadge(true, catalog.length);
+    try {
+      localStorage.setItem("ustream-catalog-cache", JSON.stringify(catalog.slice(0, 500)));
+    } catch {}
+  } else if (flatItems.length === 0) {
+    hasMoreContent = false;
+  }
+
+  return newItems.length;
+}
+
 async function loadMoreTitles() {
-  if (isLoadingMore || !hasMoreContent) return;
+  if (isLoadingMore) return;
   const targetSection = state.section;
   if (["sports", "explore", "profile", "my-list"].includes(targetSection)) return;
+
+  const visible = getVisibleCards();
+  const currentDisplayedCount = Math.min(state.displayLimit, visible.length);
+
+  // 1. If we already have buffered items in memory, reveal the next 35 immediately
+  if (state.displayLimit < visible.length) {
+    state.displayLimit += CONTENT_BATCH_SIZE;
+    const newDisplayed = visible.slice(0, state.displayLimit);
+    const toAppend = newDisplayed.slice(currentDisplayedCount);
+
+    const grid = $("#card-grid");
+    if (grid && toAppend.length > 0) {
+      const fragment = document.createDocumentFragment();
+      const tempDiv = document.createElement("div");
+      tempDiv.innerHTML = toAppend.map((card) => renderCard(card, { isNew: true })).join("");
+      while (tempDiv.firstChild) {
+        fragment.appendChild(tempDiv.firstChild);
+      }
+      grid.appendChild(fragment);
+    }
+
+    updateCatalogCounters(visible, newDisplayed);
+
+    // If remaining buffered items are low, prefetch the next remote batch in the background
+    if (visible.length - state.displayLimit < CONTENT_BATCH_SIZE && hasMoreContent) {
+      void fetchNextRemoteBatch(targetSection);
+    }
+    return;
+  }
+
+  // 2. Fetch the next batch from the network
+  if (!hasMoreContent) {
+    const loadMoreBtn = $("#load-more-btn");
+    if (loadMoreBtn) loadMoreBtn.textContent = "All available titles loaded";
+    return;
+  }
 
   isLoadingMore = true;
   const loader = $("#catalog-infinite-loader");
@@ -1805,114 +1913,28 @@ async function loadMoreTitles() {
   }
 
   try {
-    const nextPage = (sectionPages[targetSection] || 1) + 1;
-    sectionPages[targetSection] = nextPage;
+    await fetchNextRemoteBatch(targetSection);
+    const updatedVisible = getVisibleCards();
 
-    let paths = [];
-    if (targetSection === "movies") {
-      paths = [
-        { path: `/movie/popular?page=${nextPage}`, cat: "movie" },
-        { path: `/discover/movie?sort_by=popularity.desc&page=${nextPage}`, cat: "movie" }
-      ];
-    } else if (targetSection === "series") {
-      paths = [
-        { path: `/tv/popular?page=${nextPage}`, cat: "tv" },
-        { path: `/discover/tv?sort_by=popularity.desc&page=${nextPage}`, cat: "tv" }
-      ];
-    } else if (targetSection === "anime") {
-      paths = [
-        { path: `/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=${nextPage}`, cat: "anime" },
-        { path: `/discover/movie?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=${nextPage}`, cat: "anime" }
-      ];
-    } else if (targetSection === "cartoons") {
-      paths = [
-        { path: `/discover/tv?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=${nextPage}`, cat: "cartoons" },
-        { path: `/discover/movie?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=${nextPage}`, cat: "cartoons" }
-      ];
-    } else {
-      // "home"
-      paths = [
-        { path: `/trending/all/day?page=${nextPage}`, cat: "trending" },
-        { path: `/movie/now_playing?page=${nextPage}`, cat: "movie" }
-      ];
+    state.displayLimit += CONTENT_BATCH_SIZE;
+    const newDisplayed = updatedVisible.slice(0, state.displayLimit);
+    const toAppend = newDisplayed.slice(currentDisplayedCount);
+
+    const grid = $("#card-grid");
+    if (grid && toAppend.length > 0) {
+      const fragment = document.createDocumentFragment();
+      const tempDiv = document.createElement("div");
+      tempDiv.innerHTML = toAppend.map((card) => renderCard(card, { isNew: true })).join("");
+      while (tempDiv.firstChild) {
+        fragment.appendChild(tempDiv.firstChild);
+      }
+      grid.appendChild(fragment);
     }
 
-    const fetchedBatches = await Promise.all(paths.map(async ({ path, cat }) => {
-      // 1. Try local proxy
-      try {
-        const proxyRes = await fetch(`/api/tmdb${path}`);
-        if (proxyRes.ok) {
-          const data = await proxyRes.json();
-          if (Array.isArray(data?.results) && data.results.length) {
-            return data.results.map((i) => normalizeTmdbItem(i, cat));
-          }
-        }
-      } catch {}
+    updateCatalogCounters(updatedVisible, newDisplayed);
 
-      // 2. Direct TMDB fallback
-      for (const apiKey of TMDB_API_KEYS) {
-        try {
-          const sep = path.includes("?") ? "&" : "?";
-          const directUrl = `https://api.themoviedb.org/3${path}${sep}api_key=${apiKey}`;
-          const directRes = await fetch(directUrl);
-          if (directRes.ok) {
-            const data = await directRes.json();
-            if (Array.isArray(data?.results) && data.results.length) {
-              return data.results.map((i) => normalizeTmdbItem(i, cat));
-            }
-          }
-        } catch {}
-      }
-
-      // 3. Fallback /api/catalog
-      try {
-        const catRes = await fetch(`/api/catalog?category=${cat}&page=${nextPage}`);
-        if (catRes.ok) {
-          const catData = await catRes.json();
-          const items = catData?.data?.items;
-          if (Array.isArray(items) && items.length) {
-            return items.map((i) => (i.tmdbId ? i : normalizeApiItem(i, cat)));
-          }
-        }
-      } catch {}
-
-      return [];
-    }));
-
-    const newItems = [];
-    const seen = new Set(catalog.map((c) => (c.title || "").toLowerCase().trim()));
-    fetchedBatches.flat().forEach((item) => {
-      const key = (item.title || "").toLowerCase().trim();
-      if (!seen.has(key)) {
-        seen.add(key);
-        newItems.push(item);
-      }
-    });
-
-    if (newItems.length > 0) {
-      catalog.push(...newItems);
-      // Smoothly append new cards to the DOM without re-rendering everything
-      const grid = $("#card-grid");
-      if (grid) {
-        const currentVisibleKeys = new Set([...grid.querySelectorAll(".media-card")].map((el) => el.dataset.title));
-        const appendable = getVisibleCards().filter((card) => !currentVisibleKeys.has(card.title));
-        if (appendable.length > 0) {
-          const tempDiv = document.createElement("div");
-          tempDiv.innerHTML = appendable.map(renderCard).join("");
-          while (tempDiv.firstChild) {
-            grid.appendChild(tempDiv.firstChild);
-          }
-        }
-      }
-      updateStatusBadge(true, catalog.length);
-      try {
-        localStorage.setItem("ustream-catalog-cache", JSON.stringify(catalog.slice(0, 300)));
-      } catch {}
-    } else {
-      if (nextPage > 25) {
-        hasMoreContent = false;
-        if (loadMoreBtn) loadMoreBtn.textContent = "All titles loaded";
-      }
+    if (updatedVisible.length <= newDisplayed.length && !hasMoreContent) {
+      if (loadMoreBtn) loadMoreBtn.textContent = "All available titles loaded";
     }
   } catch (err) {
     console.warn("[Ustream LoadMore]", err);
@@ -1957,21 +1979,6 @@ async function loadNewestRecommendations() {
         }
       }
     } catch {}
-
-    if (!recItems.length) {
-      for (const apiKey of TMDB_API_KEYS) {
-        try {
-          const directRes = await fetch(`https://api.themoviedb.org/3/movie/now_playing?api_key=${apiKey}&page=1`);
-          if (directRes.ok) {
-            const data = await directRes.json();
-            if (Array.isArray(data?.results) && data.results.length) {
-              recItems = data.results.slice(0, 12).map((i) => normalizeTmdbItem(i, "movie"));
-              break;
-            }
-          }
-        } catch {}
-      }
-    }
 
     if (recItems.length) {
       recommendations = recItems;
@@ -2038,19 +2045,25 @@ async function loadSearchResults(query) {
     } catch {}
 
     if (!results.length) {
-      for (const apiKey of TMDB_API_KEYS) {
-        try {
-          const directUrl = `https://api.themoviedb.org/3/search/multi?api_key=${apiKey}&query=${encodeURIComponent(trimmed)}`;
-          const directRes = await fetch(directUrl);
-          if (directRes.ok) {
-            const data = await directRes.json();
-            if (Array.isArray(data?.results)) {
-              results = data.results;
-              break;
-            }
+      try {
+        const fallbackRes = await fetch(`/api/search?query=${encodeURIComponent(trimmed)}`);
+        if (fallbackRes.ok) {
+          const fallbackData = await fallbackRes.json();
+          const items = fallbackData?.data?.items || fallbackData?.items;
+          if (Array.isArray(items) && items.length) {
+            results = items.map((it) => ({
+              id: it.tmdbId || it.subjectId,
+              media_type: it.type === "movie" ? "movie" : "tv",
+              title: it.title,
+              poster_path: it.poster_path || "",
+              backdrop_path: it.backdrop_path || "",
+              vote_average: it.rating || 8.0,
+              release_date: String(it.year || ""),
+              first_air_date: String(it.year || "")
+            }));
           }
-        } catch {}
-      }
+        }
+      } catch {}
     }
 
     if (requestId !== searchRequestId) return;
@@ -2127,6 +2140,8 @@ function setSection(section, updateHash = true) {
   const target = validSections.includes(section) ? section : "home";
   state.section = target;
   state.genre = "all"; // Reset genre sub-tab so all titles in this section are visible!
+  state.displayLimit = CONTENT_BATCH_SIZE; // Always reset to 35 content items per section
+  hasMoreContent = true;
 
   if (updateHash) {
     const newHash = target === "home" ? "#/home" : `#/${target}`;
@@ -2280,7 +2295,7 @@ function setSection(section, updateHash = true) {
   if (loadMoreWrap) {
     loadMoreWrap.hidden = ["sports", "explore", "profile", "my-list"].includes(target);
   }
-  if (visible.length < 24 && !["sports", "explore", "profile", "my-list"].includes(target)) {
+  if (visible.length < CONTENT_BATCH_SIZE && !["sports", "explore", "profile", "my-list"].includes(target) && hasMoreContent) {
     void loadMoreTitles();
   }
 }
@@ -2472,7 +2487,7 @@ function renderRecommendations() {
   if (update) update.textContent = visibleRecs.length ? `Updated today · ${visibleRecs.length} picks` : "";
 }
 
-function renderCard(card) {
+function renderCard(card, { isNew = false } = {}) {
   const saved = state.watchlist.has(card.title);
   const cleanTitle = escapeHtml(card.title);
   const isAdult = isAdultContent(card);
@@ -2480,7 +2495,7 @@ function renderCard(card) {
     ? `<span class="card-badge adult-badge" style="background:#ef4444;color:#fff;font-weight:800;">18+</span>`
     : (card.badge ? `<span class="card-badge">${escapeHtml(card.badge)}</span>` : "");
   return `
-    <article class="media-card" data-title="${cleanTitle}">
+    <article class="media-card ${isNew ? "card-enter" : ""}" data-title="${cleanTitle}">
       <div class="poster" style="--poster-gradient:${card.gradient}">
         ${card.image ? `<img class="poster-image" src="${card.image}" alt="${cleanTitle} poster" loading="lazy" />` : ""}
         <span class="poster-kicker">${escapeHtml(card.kicker)}</span>
@@ -2494,14 +2509,55 @@ function renderCard(card) {
   `;
 }
 
+function updateCatalogCounters(visible, displayed) {
+  const resultCount = $("#result-count");
+  if (resultCount) resultCount.textContent = displayed.length;
+
+  const catalogStatus = $("#catalog-live-status");
+  if (catalogStatus) {
+    if (visible.length === 0) {
+      catalogStatus.textContent = state.section === "my-list" ? "Your list is empty." : "No titles found matching your criteria.";
+    } else if (visible.length > displayed.length) {
+      catalogStatus.textContent = `Showing ${displayed.length} of ${visible.length} available titles.`;
+    } else {
+      catalogStatus.textContent = `Showing all ${visible.length} title${visible.length === 1 ? "" : "s"}.`;
+    }
+  }
+
+  const loadMoreWrap = $("#catalog-load-more-wrap");
+  const loadMoreBtn = $("#load-more-btn");
+  if (loadMoreWrap && loadMoreBtn) {
+    const isExcluded = ["sports", "explore", "profile", "my-list"].includes(state.section);
+    if (isExcluded) {
+      loadMoreWrap.hidden = true;
+    } else {
+      const remaining = visible.length - displayed.length;
+      if (remaining > 0) {
+        loadMoreWrap.hidden = false;
+        loadMoreBtn.hidden = false;
+        loadMoreBtn.textContent = `Load ${Math.min(CONTENT_BATCH_SIZE, remaining)} More Content (${remaining} ready)`;
+      } else if (hasMoreContent) {
+        loadMoreWrap.hidden = false;
+        loadMoreBtn.hidden = false;
+        loadMoreBtn.textContent = `Load ${CONTENT_BATCH_SIZE} More Content`;
+      } else {
+        loadMoreWrap.hidden = displayed.length === 0;
+        loadMoreBtn.hidden = false;
+        loadMoreBtn.textContent = "All available titles loaded";
+      }
+    }
+  }
+}
+
 function render() {
   renderContinue();
   renderRecommendations();
   const visible = getVisibleCards();
+  const displayed = visible.slice(0, state.displayLimit);
   const grid = $("#card-grid");
   if (grid) {
     grid.classList.toggle("compact", state.view === "compact");
-    grid.innerHTML = visible.map(renderCard).join("");
+    grid.innerHTML = displayed.map((card) => renderCard(card)).join("");
   }
   const emptyState = $("#empty-state");
   if (emptyState) {
@@ -2519,18 +2575,7 @@ function render() {
       if (clearBtn) clearBtn.hidden = false;
     }
   }
-  const resultCount = $("#result-count");
-  if (resultCount) resultCount.textContent = visible.length;
-
-  const catalogStatus = $("#catalog-live-status");
-  if (catalogStatus) {
-    if (visible.length === 0) {
-      catalogStatus.textContent = state.section === "my-list" ? "Your list is empty." : "No titles found matching your criteria.";
-    } else {
-      catalogStatus.textContent = `Showing ${visible.length} title${visible.length === 1 ? "" : "s"}.`;
-    }
-  }
-
+  updateCatalogCounters(visible, displayed);
   renderActiveFilters();
 }
 
@@ -2797,8 +2842,6 @@ function escapeHtml(str) {
   }[c]));
 }
 
-// TMDB_API_KEYS declared at top
-
 const TMDB_CACHE = new Map();
 
 function isItemSeries(item) {
@@ -2913,44 +2956,42 @@ async function resolveTmdbId(item) {
     }
   }
 
-  // Dynamic TMDB Search API with working keys and sanitized query
+  // Dynamic TMDB Search API through backend proxy
   const isSeries = isItemSeries(item);
   const searchQuery = sanitized || normalized || cleanTitle;
   if (searchQuery) {
-    for (const apiKey of TMDB_API_KEYS) {
-      try {
-        const searchPath = isSeries ? "search/tv" : "search/multi";
-        const searchUrl = `https://api.themoviedb.org/3/${searchPath}?api_key=${apiKey}&query=${encodeURIComponent(searchQuery)}`;
-        const res = await fetch(searchUrl);
-        if (res.ok) {
-          const data = await res.json();
-          const results = data?.results || [];
-          const top = isSeries
-            ? (results.find(r => r.media_type === "tv" || (!r.media_type && r.first_air_date)) || results[0])
-            : (results.find(r => r.media_type === "movie" || (!r.media_type && r.release_date)) || results[0]);
-          if (top?.id && isValidTmdbId(top.id)) {
-            const foundId = String(top.id);
-            const mediaType = isSeries ? "tv" : (top.media_type || (top.first_air_date ? "tv" : "movie"));
-            item.mediaType = mediaType;
-            item.tmdbId = foundId;
-            if (top.backdrop_path && !item.backdrop) {
-              item.backdrop = `https://image.tmdb.org/t/p/original${top.backdrop_path}`;
-            }
-            if (top.poster_path && !item.image) {
-              item.image = `https://image.tmdb.org/t/p/w500${top.poster_path}`;
-            }
-            if (mediaType === "tv") {
-              item.type = "series";
-            } else if (mediaType === "movie" && item.type !== "anime") {
-              item.type = "movie";
-            }
-            TMDB_CACHE.set(cacheKey, { id: foundId, mediaType });
-            return foundId;
+    try {
+      const searchPath = isSeries ? "/search/tv" : "/search/multi";
+      const searchUrl = `/api/tmdb${searchPath}?query=${encodeURIComponent(searchQuery)}`;
+      const res = await fetch(searchUrl);
+      if (res.ok) {
+        const data = await res.json();
+        const results = data?.results || [];
+        const top = isSeries
+          ? (results.find(r => r.media_type === "tv" || (!r.media_type && r.first_air_date)) || results[0])
+          : (results.find(r => r.media_type === "movie" || (!r.media_type && r.release_date)) || results[0]);
+        if (top?.id && isValidTmdbId(top.id)) {
+          const foundId = String(top.id);
+          const mediaType = isSeries ? "tv" : (top.media_type || (top.first_air_date ? "tv" : "movie"));
+          item.mediaType = mediaType;
+          item.tmdbId = foundId;
+          if (top.backdrop_path && !item.backdrop) {
+            item.backdrop = `https://image.tmdb.org/t/p/original${top.backdrop_path}`;
           }
+          if (top.poster_path && !item.image) {
+            item.image = `https://image.tmdb.org/t/p/w500${top.poster_path}`;
+          }
+          if (mediaType === "tv") {
+            item.type = "series";
+          } else if (mediaType === "movie" && item.type !== "anime") {
+            item.type = "movie";
+          }
+          TMDB_CACHE.set(cacheKey, { id: foundId, mediaType });
+          return foundId;
         }
-      } catch (err) {
-        console.warn("[TMDB Dynamic Search]", err.message);
       }
+    } catch (err) {
+      console.warn("[TMDB Dynamic Search]", err.message);
     }
   }
 
@@ -5025,6 +5066,7 @@ document.addEventListener("click", (event) => {
   if (button.dataset.section) return setSection(button.dataset.section, true);
   if (button.dataset.genre) {
     state.genre = button.dataset.genre;
+    state.displayLimit = CONTENT_BATCH_SIZE;
     $$(".genre-tab").forEach((tab) => tab.classList.toggle("active", tab === button));
     render();
     return;
@@ -5148,15 +5190,17 @@ function clearWatchlist() {
 
 $("#search-input")?.addEventListener("input", (event) => {
   state.search = event.target.value;
+  state.displayLimit = CONTENT_BATCH_SIZE;
   render();
   window.clearTimeout(searchTimer);
   searchTimer = window.setTimeout(() => void loadSearchResults(state.search), 350);
 });
 
-$("#filter-groups").addEventListener("change", (event) => {
+$("#filter-groups")?.addEventListener("change", (event) => {
   const input = event.target.closest("[data-filter]");
   if (!input) return;
   state.filters[input.dataset.filter] = input.value;
+  state.displayLimit = CONTENT_BATCH_SIZE;
   render();
 });
 
