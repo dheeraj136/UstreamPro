@@ -1,7 +1,6 @@
 {
   "buildCommand": "node scripts/build.mjs",
   "outputDirectory": "public",
-  "cleanUrls": true,
   "rewrites": [
     {
       "source": "/api/config",
@@ -14,6 +13,10 @@
     {
       "source": "/api/livetv",
       "destination": "/api/sports.json"
+    },
+    {
+      "source": "/((?!api/|assets/|favicon|.*\\..*).*)",
+      "destination": "/index.html"
     }
   ]
 }
