@@ -2002,6 +2002,10 @@ function initInfiniteScroll() {
 
   // 2. Continuous passive window scroll listener (guarantees auto infinity loading on all mobile & desktop browsers)
   window.addEventListener("scroll", () => {
+    const topbar = $(".topbar");
+    if (topbar) {
+      topbar.classList.toggle("scrolled", window.scrollY > 20);
+    }
     if (scrollThrottleTimer) return;
     scrollThrottleTimer = window.setTimeout(() => {
       scrollThrottleTimer = null;
@@ -2050,24 +2054,136 @@ function setFeatured(item) {
   const words = item.title.split(" ");
   const firstWord = words[0];
   const restWords = words.slice(1).join(" ");
-  $("#hero-title").innerHTML = restWords ? `${firstWord}<br /><em>${restWords}</em>` : firstWord;
-  $("#hero-description").textContent = item.description || `Stream ${item.title} from the catalog.`;
-  const typeLabel = item.type === "anime" ? "Anime" : item.type === "series" ? "Series" : item.type === "cartoon" ? "Cartoon" : "Movie";
-  $("#hero-meta").innerHTML = `<span>${item.year}</span><span class="rating">★ ${item.rating ? item.rating.toFixed(1) : "—"}</span><span>${item.runtime || "Live title"}</span><span>${typeLabel}</span>`;
-  $("#hero-credit").innerHTML = `<span>${item.kicker || "Featured"}</span> · ${item.country || "Catalog"}`;
-  $("#hero-play").dataset.title = item.title;
-  $("#hero-details").dataset.title = item.title;
+  const heroTitle = $("#hero-title");
+  if (heroTitle) {
+    heroTitle.innerHTML = restWords ? `${escapeHtml(firstWord)}<br /><em>${escapeHtml(restWords)}</em>` : escapeHtml(firstWord);
+  }
+  const heroDesc = $("#hero-description");
+  if (heroDesc) {
+    heroDesc.textContent = item.description || `Stream ${item.title} in pristine high definition with surround audio on Ustream.`;
+  }
+
+  const ratingVal = item.rating || 8.6;
+  const matchPercent = Math.min(99, Math.max(88, Math.round(ratingVal * 10 + (item.title.length % 5))));
+  const maturityRating = item.maturityRating || (isAdultContent(item) ? "18+" : item.type === "movie" ? "PG-13" : "TV-MA");
+
+  const heroMeta = $("#hero-meta");
+  if (heroMeta) {
+    heroMeta.innerHTML = `
+      <span class="badge-imdb" title="IMDb Rating">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="#f5c518" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        ${ratingVal.toFixed(1)}
+      </span>
+      <span class="badge-match" title="Viewer Match Score">${matchPercent}% Match</span>
+      <span class="badge-tech">4K Ultra HD</span>
+      <span class="badge-tech">Dolby Atmos</span>
+      <span class="badge-age">${maturityRating}</span>
+      <span>${item.year || "2026"}</span>
+      <span>${item.runtime || "2h 05m"}</span>
+    `;
+  }
+
+  const genrePillsContainer = $("#hero-genre-pills");
+  if (genrePillsContainer) {
+    const genres = Array.isArray(item.genre) && item.genre.length ? item.genre.slice(0, 4) : ["Action", "Sci-Fi", "Drama"];
+    genrePillsContainer.innerHTML = genres
+      .map((g) => `<span class="hero-genre-chip">${escapeHtml(g)}</span>`)
+      .join("");
+  }
+
+  const eyebrowText = $("#hero-eyebrow-text");
+  if (eyebrowText) eyebrowText.textContent = item.kicker || "Featured Premiere";
+
+  const matchBadge = $("#hero-match-badge");
+  if (matchBadge) matchBadge.textContent = `${matchPercent}% Match`;
+
+  const heroCredit = $("#hero-credit");
+  if (heroCredit) heroCredit.innerHTML = `<span>${escapeHtml(item.kicker || "Featured")}</span> · ${escapeHtml(item.country || "Catalog")}`;
+
+  const playBtn = $("#hero-play");
+  if (playBtn) playBtn.dataset.title = item.title;
+
+  const trailerBtn = $("#hero-trailer");
+  if (trailerBtn) trailerBtn.dataset.title = item.title;
+
+  const detailsBtn = $("#hero-details");
+  if (detailsBtn) detailsBtn.dataset.title = item.title;
+
+  const bookmarkBtn = $("#hero-bookmark");
+  if (bookmarkBtn) {
+    bookmarkBtn.dataset.title = item.title;
+    const isSaved = state.watchlist.has(item.title);
+    bookmarkBtn.classList.toggle("saved", isSaved);
+    bookmarkBtn.setAttribute("aria-label", isSaved ? `Remove ${item.title} from Watchlist` : `Add ${item.title} to Watchlist`);
+  }
 
   const backdrop = $("#hero-backdrop");
   if (backdrop) {
     const backdropUrl = item.backdrop || item.image || item.cover?.url;
     if (backdropUrl) {
-      backdrop.style.backgroundImage = `radial-gradient(circle at 73% 42%, rgba(34, 49, 87, .45), transparent 45%), linear-gradient(90deg, #0a0a10 0%, rgba(10, 10, 16, .88) 42%, rgba(10, 10, 16, .25) 75%, #0a0a10 100%), url("${backdropUrl}")`;
-      backdrop.style.backgroundSize = "cover";
-      backdrop.style.backgroundPosition = "center top";
-      backdrop.style.backgroundRepeat = "no-repeat";
+      backdrop.style.backgroundImage = `url("${backdropUrl}")`;
       backdrop.setAttribute("aria-label", `${item.title} banner`);
     }
+  }
+}
+
+async function playTrailer(title) {
+  const item = findTitle(title) || featured;
+  if (!item) return;
+  showToast(`Loading trailer for ${item.title}…`);
+  try {
+    let trailerKey = null;
+    const tmdbId = item.tmdbId || item.id || TMDB_MAP[item.title]?.tmdbId;
+    const mediaType = (item.type === "series" || item.category === "series" || item.category === "tv") ? "tv" : "movie";
+
+    if (tmdbId) {
+      try {
+        const videoData = await fetchTmdbApi(`/${mediaType}/${tmdbId}/videos`);
+        const videos = videoData?.results || [];
+        const trailer = videos.find((v) => v.site === "YouTube" && (v.type === "Trailer" || v.type === "Teaser")) || videos.find((v) => v.site === "YouTube");
+        if (trailer?.key) {
+          trailerKey = trailer.key;
+        }
+      } catch {}
+    }
+
+    if (!trailerKey) {
+      try {
+        const searchData = await fetchTmdbApi(`/search/${mediaType}?query=${encodeURIComponent(item.title)}`);
+        const found = searchData?.results?.[0];
+        if (found?.id) {
+          const videoData = await fetchTmdbApi(`/${mediaType}/${found.id}/videos`);
+          const videos = videoData?.results || [];
+          const trailer = videos.find((v) => v.site === "YouTube" && (v.type === "Trailer" || v.type === "Teaser")) || videos.find((v) => v.site === "YouTube");
+          if (trailer?.key) {
+            trailerKey = trailer.key;
+          }
+        }
+      } catch {}
+    }
+
+    const playerBackdrop = $("#player-backdrop");
+    const embedPlayer = $("#embed-player");
+    const playerTitle = $("#player-title");
+    const customPlayerWrapper = $("#custom-player-wrapper");
+
+    if (trailerKey) {
+      if (customPlayerWrapper) customPlayerWrapper.hidden = true;
+      if (embedPlayer) {
+        embedPlayer.hidden = false;
+        embedPlayer.src = `https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&rel=0&modestbranding=1`;
+      }
+      if (playerTitle) playerTitle.textContent = `${item.title} — Official Trailer`;
+      if (playerBackdrop) playerBackdrop.hidden = false;
+      return;
+    }
+
+    // Fallback: regular playTitle if trailer unavailable
+    showToast(`Opening stream for ${item.title}`);
+    playTitle(item.title);
+  } catch (e) {
+    console.warn("Could not load trailer:", e);
+    playTitle(item.title);
   }
 }
 
@@ -2531,6 +2647,12 @@ function renderCard(card, { isNew = false } = {}) {
   const badgeHtml = isAdult
     ? `<span class="card-badge adult-badge" style="background:#ef4444;color:#fff;font-weight:800;">18+</span>`
     : (card.badge ? `<span class="card-badge">${escapeHtml(card.badge)}</span>` : "");
+
+  const cont = continuation.find((c) => c.title === card.title);
+  const progressBarHtml = cont && cont.progress > 0
+    ? `<div class="card-progress-bar"><div class="card-progress-fill" style="width:${cont.progress}%"></div></div>`
+    : "";
+
   return `
     <article class="media-card ${isNew ? "card-enter" : ""}" data-title="${cleanTitle}">
       <div class="poster" style="--poster-gradient:${card.gradient}">
@@ -2538,6 +2660,7 @@ function renderCard(card, { isNew = false } = {}) {
         <span class="poster-kicker">${escapeHtml(card.kicker)}</span>
         ${badgeHtml}
         <span class="poster-title">${cleanTitle}</span>
+        ${progressBarHtml}
         <button class="list-toggle ${saved ? "saved" : ""}" data-action="toggle-list" data-title="${cleanTitle}" aria-label="${saved ? "Remove" : "Add"} ${cleanTitle} ${saved ? "from" : "to"} my list">${saved ? renderIcon("heartFilled", "icon-sm") : renderIcon("plus", "icon-sm")}</button>
         <button class="card-hover" data-action="play" data-title="${cleanTitle}" aria-label="Play ${cleanTitle}"><span class="play-circle">${renderIcon("play", "icon-md")}</span></button>
       </div>
@@ -2657,7 +2780,11 @@ function renderHomeRails() {
             <button class="rail-arrow" data-rail-scroll="right" aria-label="Scroll ${escapeHtml(r.title)} right"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
           </div>
         </div>
-        <div class="media-rail">${r.items.map((card) => renderCard(card)).join("")}</div>
+        <div class="rail-wrapper">
+          <button class="rail-arrow-float left" data-rail-scroll="left" aria-label="Scroll ${escapeHtml(r.title)} left"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg></button>
+          <div class="media-rail">${r.items.map((card) => renderCard(card)).join("")}</div>
+          <button class="rail-arrow-float right" data-rail-scroll="right" aria-label="Scroll ${escapeHtml(r.title)} right"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg></button>
+        </div>
       </section>
     `)
     .join("");
@@ -5191,6 +5318,15 @@ document.addEventListener("click", (event) => {
   }
   if (button.dataset.action === "details") return openDetails(button.dataset.title);
   if (button.dataset.action === "play") { playTitle(button.dataset.title); return; }
+  if (button.dataset.action === "trailer") return void playTrailer(button.dataset.title);
+  if (button.dataset.action === "bookmark") {
+    const title = button.dataset.title || featured?.title;
+    if (title) {
+      toggleList(title);
+      button.classList.toggle("saved", state.watchlist.has(title));
+    }
+    return;
+  }
   if (button.dataset.action === "toggle-list") return toggleList(button.dataset.title);
   if (button.id === "search-trigger") { focusSearch(); return; }
   if (button.id === "filter-button") return openDrawer();

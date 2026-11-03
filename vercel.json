@@ -1,13 +1,7 @@
 {
   "buildCommand": "node scripts/build.mjs",
   "outputDirectory": "public",
-  "redirects": [
-    {
-      "source": "/",
-      "destination": "/index.html",
-      "permanent": false
-    }
-  ],
+  "cleanUrls": true,
   "rewrites": [
     {
       "source": "/api/config",
