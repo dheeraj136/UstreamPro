@@ -1142,13 +1142,25 @@ a { color: inherit; text-decoration: none; }
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  position: relative;
+  scroll-snap-align: start;
+  contain: paint;
+}
+.skeleton-card-wide .skeleton-poster {
+  aspect-ratio: 16 / 9 !important;
 }
 .skeleton-poster {
-  aspect-ratio: 2/3;
+  aspect-ratio: 2 / 3;
   width: 100%;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.03) 25%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.03) 75%);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.02) 25%,
+    rgba(255, 255, 255, 0.09) 50%,
+    rgba(255, 255, 255, 0.02) 75%
+  );
   background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+  animation: skeletonShimmer 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: background-position;
 }
 .skeleton-info {
   padding: 12px;
@@ -1159,16 +1171,24 @@ a { color: inherit; text-decoration: none; }
 .skeleton-line {
   height: 12px;
   border-radius: 4px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.03) 25%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.03) 75%);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.02) 25%,
+    rgba(255, 255, 255, 0.09) 50%,
+    rgba(255, 255, 255, 0.02) 75%
+  );
   background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+  animation: skeletonShimmer 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: background-position;
 }
 .skeleton-line.short { width: 45%; }
 .skeleton-line.medium { width: 75%; }
+.skeleton-line.full { width: 95%; }
+.skeleton-line.half { width: 50%; }
 
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+@keyframes skeletonShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 /* Error state styles */
@@ -2865,16 +2885,15 @@ html[data-theme="light"] .pin-prompt-modal {
 
 /* Infinite Catalog & Load More (GaiaFlix replicate) */
 .catalog-infinite-loader {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 32px 0;
-  color: var(--accent);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: .05em;
-  text-transform: uppercase;
+  display: block;
+  width: 100%;
+  padding: 16px 0 28px;
+}
+.catalog-infinite-loader[hidden] {
+  display: none !important;
+}
+.catalog-infinite-loader .card-grid {
+  margin-top: 8px;
 }
 .infinite-spinner {
   width: 22px;

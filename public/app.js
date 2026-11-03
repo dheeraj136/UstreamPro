@@ -1565,18 +1565,22 @@ function updateStatusBadge(isLive, count) {
   }
 }
 
+function createSkeletonCardsHtml(count = 12, isWide = false) {
+  return Array.from({ length: count }).map(() => `
+    <div class="skeleton-card ${isWide ? "skeleton-card-wide" : ""}" aria-hidden="true">
+      <div class="skeleton-poster" ${isWide ? 'style="aspect-ratio: 16/9;"' : ""}></div>
+      <div class="skeleton-info">
+        <div class="skeleton-line medium"></div>
+        <div class="skeleton-line short"></div>
+      </div>
+    </div>
+  `).join("");
+}
+
 function renderSkeletons() {
   const grid = $("#card-grid");
   if (grid) {
-    grid.innerHTML = Array.from({ length: 8 }).map(() => `
-      <div class="skeleton-card" aria-hidden="true">
-        <div class="skeleton-poster"></div>
-        <div class="skeleton-info">
-          <div class="skeleton-line medium"></div>
-          <div class="skeleton-line short"></div>
-        </div>
-      </div>
-    `).join("");
+    grid.innerHTML = createSkeletonCardsHtml(12);
   }
   const emptyBox = $("#empty-state");
   if (emptyBox) emptyBox.hidden = true;
@@ -1587,15 +1591,7 @@ function renderSkeletons() {
   if (recRow) {
     const recSection = $("#recommendations-section");
     if (recSection) recSection.hidden = false;
-    recRow.innerHTML = Array.from({ length: 6 }).map(() => `
-      <div class="skeleton-card" aria-hidden="true">
-        <div class="skeleton-poster"></div>
-        <div class="skeleton-info">
-          <div class="skeleton-line medium"></div>
-          <div class="skeleton-line short"></div>
-        </div>
-      </div>
-    `).join("");
+    recRow.innerHTML = createSkeletonCardsHtml(8);
   }
 }
 
@@ -2121,6 +2117,9 @@ function setFeatured(item) {
   if (backdrop) {
     const backdropUrl = item.backdrop || item.image || item.cover?.url;
     if (backdropUrl) {
+      const preloadImg = new Image();
+      preloadImg.decoding = "async";
+      preloadImg.src = backdropUrl;
       backdrop.style.backgroundImage = `url("${backdropUrl}")`;
       backdrop.setAttribute("aria-label", `${item.title} banner`);
     }
@@ -2656,7 +2655,7 @@ function renderCard(card, { isNew = false } = {}) {
   return `
     <article class="media-card ${isNew ? "card-enter" : ""}" data-title="${cleanTitle}">
       <div class="poster" style="--poster-gradient:${card.gradient}">
-        ${card.image ? `<img class="poster-image" src="${card.image}" alt="${cleanTitle} poster" loading="lazy" />` : ""}
+        ${card.image ? `<img class="poster-image" src="${card.image}" alt="${cleanTitle} poster" loading="lazy" decoding="async" />` : ""}
         <span class="poster-kicker">${escapeHtml(card.kicker)}</span>
         ${badgeHtml}
         <span class="poster-title">${cleanTitle}</span>
@@ -3533,7 +3532,7 @@ function updatePlayerEpisodeFlow() {
     }
     if (upNextArt) {
       upNextArt.innerHTML = player.item?.image
-        ? `<img src="${player.item.image}" alt="${escapeHtml(player.item.title || "Next episode")} preview" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" />`
+        ? `<img src="${player.item.image}" alt="${escapeHtml(player.item.title || "Next episode")} preview" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" />`
         : `<span class="player-art-icon">${renderIcon("play", "icon-md")}</span>`;
     }
   } else if (episodic && !next) {
@@ -3559,7 +3558,7 @@ function updatePlayerEpisodeFlow() {
     }
     if (upNextArt) {
       upNextArt.innerHTML = related?.image
-        ? `<img src="${related.image}" alt="${escapeHtml(related.title || "Recommended title")} preview" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" />`
+        ? `<img src="${related.image}" alt="${escapeHtml(related.title || "Recommended title")} preview" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" />`
         : `<span class="player-art-icon">${renderIcon("anime", "icon-md")}</span>`;
     }
   } else {
@@ -3579,7 +3578,7 @@ function updatePlayerEpisodeFlow() {
       }
       if (upNextArt) {
         upNextArt.innerHTML = related.image
-          ? `<img src="${related.image}" alt="${escapeHtml(related.title || "Recommended title")} preview" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" />`
+          ? `<img src="${related.image}" alt="${escapeHtml(related.title || "Recommended title")} preview" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" />`
           : `<span class="player-art-icon">${renderIcon("play", "icon-md")}</span>`;
       }
     } else {
@@ -5163,7 +5162,7 @@ async function loadCommunityVideos() {
     section.hidden = false;
     row.innerHTML = data.videos.map((v) => `
       <div class="community-card" data-video-id="${v.id}" tabindex="0" role="button" aria-label="Play ${escapeHtml(v.title)}">
-        <img src="${v.thumbnailPath || `/api/videos/thumbnail/${v.id}`}" alt="${escapeHtml(v.title)}" loading="lazy" />
+        <img src="${v.thumbnailPath || `/api/videos/thumbnail/${v.id}`}" alt="${escapeHtml(v.title)}" loading="lazy" decoding="async" />
         <div class="community-card-overlay">
           <strong>${escapeHtml(v.title)}</strong>
           <span>${v.views || 0} views · ${escapeHtml(v.category)}</span>
@@ -5214,7 +5213,7 @@ async function loadUserUploads() {
     listEl.innerHTML = videos.map((v) => `
       <div class="my-upload-item">
         <div class="my-upload-info">
-          <img class="my-upload-thumb" src="${v.thumbnailPath || `/api/videos/thumbnail/${v.id}`}" alt="" />
+          <img class="my-upload-thumb" src="${v.thumbnailPath || `/api/videos/thumbnail/${v.id}`}" alt="" loading="lazy" decoding="async" />
           <div class="my-upload-details">
             <strong>${escapeHtml(v.title)}</strong>
             <span>${v.views || 0} views · ${v.status} · ${(v.fileSize / (1024 * 1024)).toFixed(1)} MB</span>
@@ -6953,9 +6952,17 @@ async function executeModalSearch(query) {
   const resultsEl = $("#modal-search-results");
   if (!resultsEl) return;
   resultsEl.innerHTML = `
-    <div class="search-loading-state" style="padding: 40px; text-align: center; color: var(--muted);">
-      <span class="player-loading-indicator"></span>
-      <p style="margin-top: 10px;">Searching titles &amp; events for “${escapeHtml(query)}”…</p>
+    <div style="margin-bottom: 12px; font-size: 13px; color: var(--muted);">Searching for “${escapeHtml(query)}”…</div>
+    <div class="search-results-grid" aria-hidden="true">
+      ${Array.from({ length: 6 }).map(() => `
+        <div class="skeleton-card" style="min-height: 180px;">
+          <div class="skeleton-poster" style="aspect-ratio: 2/3;"></div>
+          <div class="skeleton-info">
+            <div class="skeleton-line medium"></div>
+            <div class="skeleton-line short"></div>
+          </div>
+        </div>
+      `).join("")}
     </div>
   `;
 
@@ -7083,7 +7090,7 @@ async function executeModalSearch(query) {
           <div class="search-results-grid">
             ${finalCards.map(item => `
               <article class="search-result-card" data-search-card-title="${escapeHtml(item.title)}">
-                <img class="search-result-poster" src="${item.image || "about:blank"}" alt="${escapeHtml(item.title)}" loading="lazy">
+                <img class="search-result-poster" src="${item.image || "about:blank"}" alt="${escapeHtml(item.title)}" loading="lazy" decoding="async">
                 <span class="search-result-title">${escapeHtml(item.title)}</span>
                 <div class="search-result-meta">
                   <span>${item.year || "2024"}</span>
@@ -7689,12 +7696,7 @@ function initSportsSection() {
 async function loadAndRenderSports() {
   const grid = $("#sports-match-grid");
   if (!sportsState.cache && grid) {
-    grid.innerHTML = `
-      <div class="sports-loading-state">
-        <span class="player-loading-indicator"></span>
-        <span>Loading live matches &amp; channels…</span>
-      </div>
-    `;
+    grid.innerHTML = createSkeletonCardsHtml(6, true);
   }
   try {
     await fetchSportsCatalog();
@@ -7878,7 +7880,7 @@ function renderSportsSection() {
     return `
       <article class="sports-match-card ${match.poster ? "has-poster" : ""}" data-sports-id="${escapeHtml(match.id)}">
         <div class="sports-card-art">
-          ${match.poster ? `<img src="${escapeHtml(match.poster)}" alt="" loading="lazy">` : ""}
+          ${match.poster ? `<img src="${escapeHtml(match.poster)}" alt="" loading="lazy" decoding="async">` : ""}
           <div class="sports-versus-overlay">
             ${teams ? `
               <div class="sports-team-col">
@@ -8036,7 +8038,7 @@ function renderExploreProviders() {
   grid.innerHTML = exploreProviders.map(p => `
     <article class="provider-tile" data-provider-id="${p.id}">
       <div class="provider-logo-wrap">
-        <img src="${p.logo}" alt="${escapeHtml(p.name)}" loading="lazy">
+        <img src="${p.logo}" alt="${escapeHtml(p.name)}" loading="lazy" decoding="async">
       </div>
       <span class="provider-tile-name">${escapeHtml(p.name)}</span>
       <span class="provider-tile-tag">${escapeHtml(p.tag)}</span>

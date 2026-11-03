@@ -181,8 +181,14 @@
           <div id="catalog-live-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
           <div class="card-grid" id="card-grid" role="region" aria-live="polite" aria-label="Catalog results"></div>
           <div class="catalog-infinite-loader" id="catalog-infinite-loader" aria-live="polite" hidden>
-            <div class="infinite-spinner" aria-hidden="true"></div>
-            <span>Loading more titles...</span>
+            <div class="card-grid" aria-hidden="true">
+              <div class="skeleton-card"><div class="skeleton-poster"></div><div class="skeleton-info"><div class="skeleton-line medium"></div><div class="skeleton-line short"></div></div></div>
+              <div class="skeleton-card"><div class="skeleton-poster"></div><div class="skeleton-info"><div class="skeleton-line medium"></div><div class="skeleton-line short"></div></div></div>
+              <div class="skeleton-card"><div class="skeleton-poster"></div><div class="skeleton-info"><div class="skeleton-line medium"></div><div class="skeleton-line short"></div></div></div>
+              <div class="skeleton-card"><div class="skeleton-poster"></div><div class="skeleton-info"><div class="skeleton-line medium"></div><div class="skeleton-line short"></div></div></div>
+              <div class="skeleton-card"><div class="skeleton-poster"></div><div class="skeleton-info"><div class="skeleton-line medium"></div><div class="skeleton-line short"></div></div></div>
+              <div class="skeleton-card"><div class="skeleton-poster"></div><div class="skeleton-info"><div class="skeleton-line medium"></div><div class="skeleton-line short"></div></div></div>
+            </div>
           </div>
           <div class="catalog-load-more-wrap" id="catalog-load-more-wrap">
             <button class="secondary-button load-more-btn" id="load-more-btn" type="button" aria-label="Explore more content">
@@ -241,10 +247,12 @@
           <div class="sports-channel-letters" id="sports-channel-letters" hidden></div>
 
           <div class="sports-match-grid" id="sports-match-grid" aria-live="polite">
-            <div class="sports-loading-state">
-              <span class="player-loading-indicator"></span>
-              <span>Loading live matches…</span>
-            </div>
+            <div class="skeleton-card skeleton-card-wide" aria-hidden="true"><div class="skeleton-poster" style="aspect-ratio: 16/9;"></div><div class="skeleton-info"><div class="skeleton-line medium"></div><div class="skeleton-line short"></div></div></div>
+            <div class="skeleton-card skeleton-card-wide" aria-hidden="true"><div class="skeleton-poster" style="aspect-ratio: 16/9;"></div><div class="skeleton-info"><div class="skeleton-line medium"></div><div class="skeleton-line short"></div></div></div>
+            <div class="skeleton-card skeleton-card-wide" aria-hidden="true"><div class="skeleton-poster" style="aspect-ratio: 16/9;"></div><div class="skeleton-info"><div class="skeleton-line medium"></div><div class="skeleton-line short"></div></div></div>
+            <div class="skeleton-card skeleton-card-wide" aria-hidden="true"><div class="skeleton-poster" style="aspect-ratio: 16/9;"></div><div class="skeleton-info"><div class="skeleton-line medium"></div><div class="skeleton-line short"></div></div></div>
+            <div class="skeleton-card skeleton-card-wide" aria-hidden="true"><div class="skeleton-poster" style="aspect-ratio: 16/9;"></div><div class="skeleton-info"><div class="skeleton-line medium"></div><div class="skeleton-line short"></div></div></div>
+            <div class="skeleton-card skeleton-card-wide" aria-hidden="true"><div class="skeleton-poster" style="aspect-ratio: 16/9;"></div><div class="skeleton-info"><div class="skeleton-line medium"></div><div class="skeleton-line short"></div></div></div>
           </div>
 
           <div class="sports-pagination" id="sports-pagination" hidden></div>
@@ -262,7 +270,12 @@
           </div>
 
           <div class="providers-grid" id="providers-grid">
-            <div class="sports-loading-state"><span class="player-loading-indicator"></span> <span>Loading streaming services…</span></div>
+            <div class="skeleton-card" aria-hidden="true"><div class="skeleton-poster" style="aspect-ratio: 1/1;"></div><div class="skeleton-info"><div class="skeleton-line medium"></div></div></div>
+            <div class="skeleton-card" aria-hidden="true"><div class="skeleton-poster" style="aspect-ratio: 1/1;"></div><div class="skeleton-info"><div class="skeleton-line medium"></div></div></div>
+            <div class="skeleton-card" aria-hidden="true"><div class="skeleton-poster" style="aspect-ratio: 1/1;"></div><div class="skeleton-info"><div class="skeleton-line medium"></div></div></div>
+            <div class="skeleton-card" aria-hidden="true"><div class="skeleton-poster" style="aspect-ratio: 1/1;"></div><div class="skeleton-info"><div class="skeleton-line medium"></div></div></div>
+            <div class="skeleton-card" aria-hidden="true"><div class="skeleton-poster" style="aspect-ratio: 1/1;"></div><div class="skeleton-info"><div class="skeleton-line medium"></div></div></div>
+            <div class="skeleton-card" aria-hidden="true"><div class="skeleton-poster" style="aspect-ratio: 1/1;"></div><div class="skeleton-info"><div class="skeleton-line medium"></div></div></div>
           </div>
 
           <div class="provider-catalog-view" id="provider-catalog-view" hidden>
