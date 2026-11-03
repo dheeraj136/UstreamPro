@@ -34,6 +34,30 @@ await writeFile(
   "utf8"
 );
 
+await writeFile(
+  join(publicApiDir, "health.json"),
+  JSON.stringify({ ok: true, status: "healthy", service: "ustream" }, null, 2),
+  "utf8"
+);
+
+await writeFile(
+  join(publicApiDir, "catalog.json"),
+  JSON.stringify({ ok: true, results: [] }, null, 2),
+  "utf8"
+);
+
+await writeFile(
+  join(publicApiDir, "search.json"),
+  JSON.stringify({ ok: true, results: [] }, null, 2),
+  "utf8"
+);
+
+await writeFile(
+  join(publicApiDir, "videos.json"),
+  JSON.stringify({ ok: true, videos: [] }, null, 2),
+  "utf8"
+);
+
 // Fetch latest Live Sports Catalog and build static sports.json for high-availability CDN delivery
 try {
   const controller = new AbortController();

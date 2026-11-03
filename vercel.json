@@ -1,6 +1,7 @@
 {
   "buildCommand": "node scripts/build.mjs",
   "outputDirectory": "public",
+  "cleanUrls": true,
   "redirects": [
     {
       "source": "/",
@@ -14,12 +15,32 @@
       "destination": "/api/config.json"
     },
     {
+      "source": "/api/health",
+      "destination": "/api/health.json"
+    },
+    {
+      "source": "/api/catalog",
+      "destination": "/api/catalog.json"
+    },
+    {
+      "source": "/api/search",
+      "destination": "/api/search.json"
+    },
+    {
+      "source": "/api/videos",
+      "destination": "/api/videos.json"
+    },
+    {
       "source": "/api/sports",
       "destination": "/api/sports.json"
     },
     {
       "source": "/api/livetv",
       "destination": "/api/sports.json"
+    },
+    {
+      "source": "/api/:match*",
+      "destination": "/api/health.json"
     }
   ]
 }
