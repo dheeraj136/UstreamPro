@@ -1,45 +1,45 @@
 {
   "buildCommand": "node scripts/build.mjs",
   "outputDirectory": "public",
-  "routes": [
+  "redirects": [
     {
-      "src": "/api/config",
-      "dest": "/api/config.json"
+      "source": "/",
+      "destination": "/index.html",
+      "permanent": false
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/config",
+      "destination": "/api/config.json"
     },
     {
-      "src": "/api/health",
-      "dest": "/api/health.json"
+      "source": "/api/health",
+      "destination": "/api/health.json"
     },
     {
-      "src": "/api/catalog",
-      "dest": "/api/catalog.json"
+      "source": "/api/catalog",
+      "destination": "/api/catalog.json"
     },
     {
-      "src": "/api/search",
-      "dest": "/api/search.json"
+      "source": "/api/search",
+      "destination": "/api/search.json"
     },
     {
-      "src": "/api/videos",
-      "dest": "/api/videos.json"
+      "source": "/api/videos",
+      "destination": "/api/videos.json"
     },
     {
-      "src": "/api/sports",
-      "dest": "/api/sports.json"
+      "source": "/api/sports",
+      "destination": "/api/sports.json"
     },
     {
-      "src": "/api/livetv",
-      "dest": "/api/sports.json"
+      "source": "/api/livetv",
+      "destination": "/api/sports.json"
     },
     {
-      "src": "/api/(.*)",
-      "dest": "/api/health.json"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/api/:match*",
+      "destination": "/api/health.json"
     }
   ]
 }
