@@ -1449,26 +1449,34 @@ const TMDB_PUBLIC_KEYS = [
 async function fetchTmdbApi(path) {
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
 
-  // 1. Direct TMDB v3 fetch (Replicating GaiaFlix client-side architecture)
-  // Direct client calls bypass Vercel serverless cold starts, timeouts, and lambda failures
+  // 1. Direct TMDB v3 fetch with AbortController timeout to prevent hanging requests
   for (const key of TMDB_PUBLIC_KEYS) {
     try {
       const sep = cleanPath.includes("?") ? "&" : "?";
       const directUrl = `https://api.themoviedb.org/3${cleanPath}${sep}api_key=${key}`;
+      const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), 4500) : null;
       const res = await fetch(directUrl, {
-        headers: { Accept: "application/json" }
+        headers: { Accept: "application/json" },
+        signal: controller ? controller.signal : undefined
       });
+      if (timer) clearTimeout(timer);
       if (res.ok) {
         return await res.json();
       }
     } catch (e) {
-      // Try next key or proxy fallback
+      // Try next key or fallback
     }
   }
 
   // 2. Secondary fallback: Local server proxy /api/tmdb
   try {
-    const res = await fetch(`/api/tmdb${cleanPath}`);
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), 4500) : null;
+    const res = await fetch(`/api/tmdb${cleanPath}`, {
+      signal: controller ? controller.signal : undefined
+    });
+    if (timer) clearTimeout(timer);
     if (res.ok) {
       return await res.json();
     }
@@ -1800,7 +1808,7 @@ async function fetchNextRemoteBatch(targetSection) {
   const newItems = [];
   let attempts = 0;
 
-  while (newItems.length < 20 && attempts < 3) {
+  while (newItems.length < 35 && attempts < 6) {
     attempts++;
     const nextPage = (sectionPages[targetSection] || 2) + 1;
     sectionPages[targetSection] = nextPage;
@@ -1810,28 +1818,34 @@ async function fetchNextRemoteBatch(targetSection) {
       paths = [
         { path: `/movie/popular?page=${nextPage}`, cat: "movie" },
         { path: `/discover/movie?sort_by=popularity.desc&page=${nextPage}`, cat: "movie" },
-        { path: `/movie/top_rated?page=${nextPage}`, cat: "movie" }
+        { path: `/movie/top_rated?page=${nextPage}`, cat: "movie" },
+        { path: `/movie/now_playing?page=${nextPage}`, cat: "movie" }
       ];
     } else if (targetSection === "series") {
       paths = [
         { path: `/tv/popular?page=${nextPage}`, cat: "tv" },
         { path: `/discover/tv?sort_by=popularity.desc&page=${nextPage}`, cat: "tv" },
-        { path: `/tv/top_rated?page=${nextPage}`, cat: "tv" }
+        { path: `/tv/top_rated?page=${nextPage}`, cat: "tv" },
+        { path: `/tv/on_the_air?page=${nextPage}`, cat: "tv" }
       ];
     } else if (targetSection === "anime") {
       paths = [
         { path: `/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=${nextPage}`, cat: "anime" },
-        { path: `/discover/movie?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=${nextPage}`, cat: "anime" }
+        { path: `/discover/movie?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=${nextPage}`, cat: "anime" },
+        { path: `/discover/tv?with_genres=16&with_original_language=ja&sort_by=vote_count.desc&page=${nextPage}`, cat: "anime" }
       ];
     } else if (targetSection === "cartoons") {
       paths = [
         { path: `/discover/tv?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=${nextPage}`, cat: "cartoons" },
-        { path: `/discover/movie?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=${nextPage}`, cat: "cartoons" }
+        { path: `/discover/movie?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=${nextPage}`, cat: "cartoons" },
+        { path: `/discover/tv?with_genres=16&with_original_language=en&sort_by=vote_count.desc&page=${nextPage}`, cat: "cartoons" }
       ];
     } else {
       // "home" (infinite popular, trending, and top-rated fusion)
       paths = [
         { path: `/trending/all/day?page=${nextPage}`, cat: "trending" },
+        { path: `/movie/popular?page=${nextPage}`, cat: "movie" },
+        { path: `/tv/popular?page=${nextPage}`, cat: "tv" },
         { path: `/discover/movie?sort_by=popularity.desc&page=${nextPage}`, cat: "movie" },
         { path: `/discover/tv?sort_by=popularity.desc&page=${nextPage}`, cat: "tv" }
       ];
@@ -1841,7 +1855,9 @@ async function fetchNextRemoteBatch(targetSection) {
       try {
         const rawResults = await fetchTmdbResults(path);
         if (Array.isArray(rawResults) && rawResults.length) {
-          return rawResults.map((i) => normalizeTmdbItem(i, cat));
+          return rawResults
+            .filter((i) => i.media_type !== "person")
+            .map((i) => normalizeTmdbItem(i, cat));
         }
       } catch {}
 
@@ -1861,14 +1877,15 @@ async function fetchNextRemoteBatch(targetSection) {
 
     const flatItems = fetchedBatches.flat();
     flatItems.forEach((item) => {
-      const key = (item.title || "").toLowerCase().trim();
+      if (!item || !item.title) return;
+      const key = item.title.toLowerCase().trim();
       if (!seen.has(key)) {
         seen.add(key);
         newItems.push(item);
       }
     });
 
-    if (flatItems.length === 0 && nextPage >= 100) {
+    if (flatItems.length === 0 && nextPage >= 500) {
       hasMoreContent = false;
       break;
     }
@@ -1901,15 +1918,15 @@ async function loadMoreTitles() {
   }
 
   try {
-    const initialVisible = getVisibleCards();
-    const currentDisplayedCount = Math.min(state.displayLimit, initialVisible.length);
+    let visible = getVisibleCards();
+    let currentDisplayedCount = Math.min(state.displayLimit, visible.length);
 
     // If buffered items in memory are insufficient, fetch remote batch first
-    if (initialVisible.length - currentDisplayedCount < CONTENT_BATCH_SIZE && hasMoreContent) {
+    if (visible.length - currentDisplayedCount < CONTENT_BATCH_SIZE && hasMoreContent) {
       await fetchNextRemoteBatch(targetSection);
+      visible = getVisibleCards();
     }
 
-    const visible = getVisibleCards();
     state.displayLimit += CONTENT_BATCH_SIZE;
     const newDisplayed = visible.slice(0, state.displayLimit);
     const toAppend = newDisplayed.slice(currentDisplayedCount);
@@ -1926,6 +1943,7 @@ async function loadMoreTitles() {
     }
 
     updateCatalogCounters(visible, newDisplayed);
+    clearErrorState();
 
     if (visible.length <= newDisplayed.length && !hasMoreContent) {
       if (loadMoreBtn) loadMoreBtn.textContent = "All available titles loaded";
@@ -1936,7 +1954,7 @@ async function loadMoreTitles() {
       if (!isLoadingMore && hasMoreContent) {
         handleAutoInfiniteScroll();
       }
-    }, 200);
+    }, 250);
   } catch (err) {
     console.warn("[Ustream LoadMore]", err);
   } finally {
@@ -1959,10 +1977,10 @@ function handleAutoInfiniteScroll() {
   const sentinel = $("#catalog-sentinel");
   let shouldLoad = false;
 
-  // Proximity Check 1: Card grid bottom distance
+  // Proximity Check 1: Card grid bottom distance within 1600px of viewport
   if (grid) {
     const rect = grid.getBoundingClientRect();
-    if (rect.bottom <= window.innerHeight + 1400) {
+    if (rect.bottom <= window.innerHeight + 1600) {
       shouldLoad = true;
     }
   }
@@ -1970,7 +1988,7 @@ function handleAutoInfiniteScroll() {
   // Proximity Check 2: Sentinel trigger position
   if (!shouldLoad && sentinel) {
     const sRect = sentinel.getBoundingClientRect();
-    if (sRect.top <= window.innerHeight + 1200) {
+    if (sRect.top <= window.innerHeight + 1400) {
       shouldLoad = true;
     }
   }
@@ -1980,7 +1998,7 @@ function handleAutoInfiniteScroll() {
     const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
     const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 800;
     const docHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
-    if (docHeight - (scrollY + viewportHeight) <= 1400) {
+    if (docHeight - (scrollY + viewportHeight) <= 1600) {
       shouldLoad = true;
     }
   }
@@ -1997,14 +2015,14 @@ function initInfiniteScroll() {
     loadMoreBtn.addEventListener("click", () => void loadMoreTitles());
   }
 
-  // 1. High-sensitivity IntersectionObserver with generous 1200px threshold
+  // 1. High-sensitivity IntersectionObserver with generous 1400px threshold
   if (sentinel && "IntersectionObserver" in window) {
     const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && !isLoadingMore && hasMoreContent) {
+      if (entries.some((e) => e.isIntersecting) && !isLoadingMore && hasMoreContent) {
         void loadMoreTitles();
       }
     }, {
-      rootMargin: "1200px 0px"
+      rootMargin: "1400px 0px"
     });
     observer.observe(sentinel);
   }
@@ -2026,10 +2044,19 @@ function initInfiniteScroll() {
 
   window.addEventListener("scroll", onScrollFrame, { passive: true });
   window.addEventListener("touchmove", onScrollFrame, { passive: true });
+  window.addEventListener("wheel", onScrollFrame, { passive: true });
   window.addEventListener("resize", () => handleAutoInfiniteScroll(), { passive: true });
 
-  // Initial trigger check after startup
-  setTimeout(() => handleAutoInfiniteScroll(), 800);
+  // 3. Heartbeat scroll proximity monitor (polls every 500ms to guarantee continuous auto-loading)
+  setInterval(() => {
+    if (!isLoadingMore && hasMoreContent) {
+      handleAutoInfiniteScroll();
+    }
+  }, 500);
+
+  // Initial trigger checks after startup
+  setTimeout(() => handleAutoInfiniteScroll(), 600);
+  setTimeout(() => handleAutoInfiniteScroll(), 1200);
 }
 
 async function loadNewestRecommendations() {
