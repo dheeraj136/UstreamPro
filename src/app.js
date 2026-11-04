@@ -1796,71 +1796,83 @@ let isLoadingMore = false;
 let hasMoreContent = true;
 
 async function fetchNextRemoteBatch(targetSection) {
-  const nextPage = (sectionPages[targetSection] || 1) + 1;
-  sectionPages[targetSection] = nextPage;
-
-  let paths = [];
-  if (targetSection === "movies") {
-    paths = [
-      { path: `/movie/popular?page=${nextPage}`, cat: "movie" },
-      { path: `/discover/movie?sort_by=popularity.desc&page=${nextPage}`, cat: "movie" }
-    ];
-  } else if (targetSection === "series") {
-    paths = [
-      { path: `/tv/popular?page=${nextPage}`, cat: "tv" },
-      { path: `/discover/tv?sort_by=popularity.desc&page=${nextPage}`, cat: "tv" }
-    ];
-  } else if (targetSection === "anime") {
-    paths = [
-      { path: `/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=${nextPage}`, cat: "anime" },
-      { path: `/discover/movie?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=${nextPage}`, cat: "anime" }
-    ];
-  } else if (targetSection === "cartoons") {
-    paths = [
-      { path: `/discover/tv?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=${nextPage}`, cat: "cartoons" },
-      { path: `/discover/movie?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=${nextPage}`, cat: "cartoons" }
-    ];
-  } else {
-    // "home"
-    paths = [
-      { path: `/trending/all/day?page=${nextPage}`, cat: "trending" },
-      { path: `/movie/now_playing?page=${nextPage}`, cat: "movie" }
-    ];
-  }
-
-  const fetchedBatches = await Promise.all(paths.map(async ({ path, cat }) => {
-    try {
-      const rawResults = await fetchTmdbResults(path);
-      if (Array.isArray(rawResults) && rawResults.length) {
-        return rawResults.map((i) => normalizeTmdbItem(i, cat));
-      }
-    } catch {}
-
-    // Fallback: /api/catalog
-    try {
-      const catRes = await fetch(`/api/catalog?category=${cat}&page=${nextPage}`);
-      if (catRes.ok) {
-        const catData = await catRes.json();
-        const items = catData?.data?.items;
-        if (Array.isArray(items) && items.length) {
-          return items.map((i) => (i.tmdbId ? i : normalizeApiItem(i, cat)));
-        }
-      }
-    } catch {}
-
-    return [];
-  }));
-
-  const flatItems = fetchedBatches.flat();
-  const newItems = [];
   const seen = new Set(catalog.map((c) => (c.title || "").toLowerCase().trim()));
-  flatItems.forEach((item) => {
-    const key = (item.title || "").toLowerCase().trim();
-    if (!seen.has(key)) {
-      seen.add(key);
-      newItems.push(item);
+  const newItems = [];
+  let attempts = 0;
+
+  while (newItems.length < 20 && attempts < 3) {
+    attempts++;
+    const nextPage = (sectionPages[targetSection] || 2) + 1;
+    sectionPages[targetSection] = nextPage;
+
+    let paths = [];
+    if (targetSection === "movies") {
+      paths = [
+        { path: `/movie/popular?page=${nextPage}`, cat: "movie" },
+        { path: `/discover/movie?sort_by=popularity.desc&page=${nextPage}`, cat: "movie" },
+        { path: `/movie/top_rated?page=${nextPage}`, cat: "movie" }
+      ];
+    } else if (targetSection === "series") {
+      paths = [
+        { path: `/tv/popular?page=${nextPage}`, cat: "tv" },
+        { path: `/discover/tv?sort_by=popularity.desc&page=${nextPage}`, cat: "tv" },
+        { path: `/tv/top_rated?page=${nextPage}`, cat: "tv" }
+      ];
+    } else if (targetSection === "anime") {
+      paths = [
+        { path: `/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=${nextPage}`, cat: "anime" },
+        { path: `/discover/movie?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=${nextPage}`, cat: "anime" }
+      ];
+    } else if (targetSection === "cartoons") {
+      paths = [
+        { path: `/discover/tv?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=${nextPage}`, cat: "cartoons" },
+        { path: `/discover/movie?with_genres=16&with_original_language=en&sort_by=popularity.desc&page=${nextPage}`, cat: "cartoons" }
+      ];
+    } else {
+      // "home" (infinite popular, trending, and top-rated fusion)
+      paths = [
+        { path: `/trending/all/day?page=${nextPage}`, cat: "trending" },
+        { path: `/discover/movie?sort_by=popularity.desc&page=${nextPage}`, cat: "movie" },
+        { path: `/discover/tv?sort_by=popularity.desc&page=${nextPage}`, cat: "tv" }
+      ];
     }
-  });
+
+    const fetchedBatches = await Promise.all(paths.map(async ({ path, cat }) => {
+      try {
+        const rawResults = await fetchTmdbResults(path);
+        if (Array.isArray(rawResults) && rawResults.length) {
+          return rawResults.map((i) => normalizeTmdbItem(i, cat));
+        }
+      } catch {}
+
+      try {
+        const catRes = await fetch(`/api/catalog?category=${cat}&page=${nextPage}`);
+        if (catRes.ok) {
+          const catData = await catRes.json();
+          const items = catData?.data?.items;
+          if (Array.isArray(items) && items.length) {
+            return items.map((i) => (i.tmdbId ? i : normalizeApiItem(i, cat)));
+          }
+        }
+      } catch {}
+
+      return [];
+    }));
+
+    const flatItems = fetchedBatches.flat();
+    flatItems.forEach((item) => {
+      const key = (item.title || "").toLowerCase().trim();
+      if (!seen.has(key)) {
+        seen.add(key);
+        newItems.push(item);
+      }
+    });
+
+    if (flatItems.length === 0 && nextPage >= 100) {
+      hasMoreContent = false;
+      break;
+    }
+  }
 
   if (newItems.length > 0) {
     catalog.push(...newItems);
@@ -1868,8 +1880,6 @@ async function fetchNextRemoteBatch(targetSection) {
     try {
       localStorage.setItem("ustream-catalog-cache", JSON.stringify(catalog.slice(0, 1000)));
     } catch {}
-  } else if (flatItems.length === 0 && nextPage >= 50) {
-    hasMoreContent = false;
   }
 
   return newItems.length;
@@ -1880,11 +1890,26 @@ async function loadMoreTitles() {
   const targetSection = state.section;
   if (["sports", "explore", "profile", "my-list"].includes(targetSection)) return;
 
-  const visible = getVisibleCards();
-  const currentDisplayedCount = Math.min(state.displayLimit, visible.length);
+  isLoadingMore = true;
+  const loader = $("#catalog-infinite-loader");
+  const loadMoreBtn = $("#load-more-btn");
+  if (loader) loader.hidden = false;
+  if (loadMoreBtn) {
+    loadMoreBtn.disabled = true;
+    loadMoreBtn.classList.add("loading");
+    loadMoreBtn.textContent = "Loading more titles…";
+  }
 
-  // 1. If we already have buffered items in memory, reveal the next 35 immediately
-  if (state.displayLimit < visible.length) {
+  try {
+    const initialVisible = getVisibleCards();
+    const currentDisplayedCount = Math.min(state.displayLimit, initialVisible.length);
+
+    // If buffered items in memory are insufficient, fetch remote batch first
+    if (initialVisible.length - currentDisplayedCount < CONTENT_BATCH_SIZE && hasMoreContent) {
+      await fetchNextRemoteBatch(targetSection);
+    }
+
+    const visible = getVisibleCards();
     state.displayLimit += CONTENT_BATCH_SIZE;
     const newDisplayed = visible.slice(0, state.displayLimit);
     const toAppend = newDisplayed.slice(currentDisplayedCount);
@@ -1902,53 +1927,16 @@ async function loadMoreTitles() {
 
     updateCatalogCounters(visible, newDisplayed);
 
-    // If remaining buffered items are low, prefetch the next remote batch in the background
-    if (visible.length - state.displayLimit < CONTENT_BATCH_SIZE && hasMoreContent) {
-      void fetchNextRemoteBatch(targetSection);
-    }
-    return;
-  }
-
-  // 2. Fetch the next batch from the network
-  if (!hasMoreContent) {
-    const loadMoreBtn = $("#load-more-btn");
-    if (loadMoreBtn) loadMoreBtn.textContent = "All available titles loaded";
-    return;
-  }
-
-  isLoadingMore = true;
-  const loader = $("#catalog-infinite-loader");
-  const loadMoreBtn = $("#load-more-btn");
-  if (loader) loader.hidden = false;
-  if (loadMoreBtn) {
-    loadMoreBtn.disabled = true;
-    loadMoreBtn.classList.add("loading");
-  }
-
-  try {
-    await fetchNextRemoteBatch(targetSection);
-    const updatedVisible = getVisibleCards();
-
-    state.displayLimit += CONTENT_BATCH_SIZE;
-    const newDisplayed = updatedVisible.slice(0, state.displayLimit);
-    const toAppend = newDisplayed.slice(currentDisplayedCount);
-
-    const grid = $("#card-grid");
-    if (grid && toAppend.length > 0) {
-      const fragment = document.createDocumentFragment();
-      const tempDiv = document.createElement("div");
-      tempDiv.innerHTML = toAppend.map((card) => renderCard(card, { isNew: true })).join("");
-      while (tempDiv.firstChild) {
-        fragment.appendChild(tempDiv.firstChild);
-      }
-      grid.appendChild(fragment);
-    }
-
-    updateCatalogCounters(updatedVisible, newDisplayed);
-
-    if (updatedVisible.length <= newDisplayed.length && !hasMoreContent) {
+    if (visible.length <= newDisplayed.length && !hasMoreContent) {
       if (loadMoreBtn) loadMoreBtn.textContent = "All available titles loaded";
     }
+
+    // Auto-retrigger check if user viewport is still near bottom
+    setTimeout(() => {
+      if (!isLoadingMore && hasMoreContent) {
+        handleAutoInfiniteScroll();
+      }
+    }, 200);
   } catch (err) {
     console.warn("[Ustream LoadMore]", err);
   } finally {
@@ -1961,18 +1949,43 @@ async function loadMoreTitles() {
   }
 }
 
-let scrollThrottleTimer = null;
+let scrollTicking = false;
 function handleAutoInfiniteScroll() {
   if (isLoadingMore || !hasMoreContent) return;
   const targetSection = state.section;
   if (["sports", "explore", "profile", "my-list"].includes(targetSection)) return;
 
-  const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
-  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-  const docHeight = document.documentElement.scrollHeight || document.body.scrollHeight;
+  const grid = $("#card-grid");
+  const sentinel = $("#catalog-sentinel");
+  let shouldLoad = false;
 
-  // Auto infinity load: as soon as user is within 1000px of bottom, automatically load next 35 content!
-  if (docHeight - (scrollY + viewportHeight) <= 1000) {
+  // Proximity Check 1: Card grid bottom distance
+  if (grid) {
+    const rect = grid.getBoundingClientRect();
+    if (rect.bottom <= window.innerHeight + 1400) {
+      shouldLoad = true;
+    }
+  }
+
+  // Proximity Check 2: Sentinel trigger position
+  if (!shouldLoad && sentinel) {
+    const sRect = sentinel.getBoundingClientRect();
+    if (sRect.top <= window.innerHeight + 1200) {
+      shouldLoad = true;
+    }
+  }
+
+  // Proximity Check 3: Document scroll position fallback
+  if (!shouldLoad) {
+    const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 800;
+    const docHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+    if (docHeight - (scrollY + viewportHeight) <= 1400) {
+      shouldLoad = true;
+    }
+  }
+
+  if (shouldLoad) {
     void loadMoreTitles();
   }
 }
@@ -1984,35 +1997,39 @@ function initInfiniteScroll() {
     loadMoreBtn.addEventListener("click", () => void loadMoreTitles());
   }
 
-  // 1. Dual-trigger IntersectionObserver with generous 800px root margin
+  // 1. High-sensitivity IntersectionObserver with generous 1200px threshold
   if (sentinel && "IntersectionObserver" in window) {
     const observer = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting && !isLoadingMore && hasMoreContent) {
         void loadMoreTitles();
       }
     }, {
-      rootMargin: "800px 0px"
+      rootMargin: "1200px 0px"
     });
     observer.observe(sentinel);
   }
 
-  // 2. Continuous passive window scroll listener (guarantees auto infinity loading on all mobile & desktop browsers)
-  window.addEventListener("scroll", () => {
+  // 2. Smooth requestAnimationFrame-backed scroll and touchmove listener
+  const onScrollFrame = () => {
     const topbar = $(".topbar");
     if (topbar) {
       topbar.classList.toggle("scrolled", window.scrollY > 20);
     }
-    if (scrollThrottleTimer) return;
-    scrollThrottleTimer = window.setTimeout(() => {
-      scrollThrottleTimer = null;
-      handleAutoInfiniteScroll();
-    }, 80);
-  }, { passive: true });
+    if (!scrollTicking) {
+      window.requestAnimationFrame(() => {
+        handleAutoInfiniteScroll();
+        scrollTicking = false;
+      });
+      scrollTicking = true;
+    }
+  };
 
-  // 3. Window resize listener
-  window.addEventListener("resize", () => {
-    handleAutoInfiniteScroll();
-  }, { passive: true });
+  window.addEventListener("scroll", onScrollFrame, { passive: true });
+  window.addEventListener("touchmove", onScrollFrame, { passive: true });
+  window.addEventListener("resize", () => handleAutoInfiniteScroll(), { passive: true });
+
+  // Initial trigger check after startup
+  setTimeout(() => handleAutoInfiniteScroll(), 800);
 }
 
 async function loadNewestRecommendations() {
@@ -2648,6 +2665,8 @@ function renderCard(card, { isNew = false } = {}) {
     ? `<span class="card-badge adult-badge" style="background:#ef4444;color:#fff;font-weight:800;">18+</span>`
     : (card.badge ? `<span class="card-badge">${escapeHtml(card.badge)}</span>` : "");
 
+  const ratingVal = typeof card.rating === "number" && !isNaN(card.rating) ? card.rating : (parseFloat(card.rating) || 8.0);
+  const scoreHtml = `<span class="score">★ ${ratingVal.toFixed(1)}</span>`;
   const cont = continuation.find((c) => c.title === card.title);
   const progressBarHtml = cont && cont.progress > 0
     ? `<div class="card-progress-bar"><div class="card-progress-fill" style="width:${cont.progress}%"></div></div>`
@@ -2664,7 +2683,7 @@ function renderCard(card, { isNew = false } = {}) {
         <button class="list-toggle ${saved ? "saved" : ""}" data-action="toggle-list" data-title="${cleanTitle}" aria-label="${saved ? "Remove" : "Add"} ${cleanTitle} ${saved ? "from" : "to"} my list">${saved ? renderIcon("heartFilled", "icon-sm") : renderIcon("plus", "icon-sm")}</button>
         <button class="card-hover" data-action="play" data-title="${cleanTitle}" aria-label="Play ${cleanTitle}"><span class="play-circle">${renderIcon("play", "icon-md")}</span></button>
       </div>
-      <div class="card-info"><h3>${cleanTitle}</h3><div class="card-meta"><span>${card.year}</span><span>${card.runtime}</span><span class="score">★ ${card.rating.toFixed(1)}</span></div></div>
+      <div class="card-info"><h3>${cleanTitle}</h3><div class="card-meta"><span>${card.year}</span><span>${card.runtime}</span>${scoreHtml}</div></div>
     </article>
   `;
 }
