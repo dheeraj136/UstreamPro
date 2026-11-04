@@ -1455,7 +1455,7 @@ async function fetchTmdbApi(path) {
       const sep = cleanPath.includes("?") ? "&" : "?";
       const directUrl = `https://api.themoviedb.org/3${cleanPath}${sep}api_key=${key}`;
       const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-      const timer = controller ? setTimeout(() => controller.abort(), 4500) : null;
+      const timer = controller ? setTimeout(() => controller.abort(), 2200) : null;
       const res = await fetch(directUrl, {
         headers: { Accept: "application/json" },
         signal: controller ? controller.signal : undefined
@@ -1472,7 +1472,7 @@ async function fetchTmdbApi(path) {
   // 2. Secondary fallback: Local server proxy /api/tmdb
   try {
     const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-    const timer = controller ? setTimeout(() => controller.abort(), 4500) : null;
+    const timer = controller ? setTimeout(() => controller.abort(), 2200) : null;
     const res = await fetch(`/api/tmdb${cleanPath}`, {
       signal: controller ? controller.signal : undefined
     });
@@ -1808,10 +1808,12 @@ async function fetchNextRemoteBatch(targetSection) {
   const newItems = [];
   let attempts = 0;
 
-  while (newItems.length < 35 && attempts < 6) {
+  while (newItems.length < 40 && attempts < 4) {
     attempts++;
-    const nextPage = (sectionPages[targetSection] || 2) + 1;
-    sectionPages[targetSection] = nextPage;
+    const p1 = (sectionPages[targetSection] || 2) + 1;
+    const p2 = p1 + 1;
+    sectionPages[targetSection] = p2;
+    const nextPage = p1;
 
     let paths = [];
     if (targetSection === "movies") {
@@ -1925,24 +1927,36 @@ async function loadMoreTitles() {
   try {
     let visible = getVisibleCards();
 
-    // Always fetch more if we're running low on buffered content for this section
+    // 1. FAST PATH: If we have buffered titles in memory, reveal them INSTANTLY (0ms latency!)
+    const bufferedReady = visible.length - state.displayLimit;
+    if (bufferedReady > 0) {
+      state.displayLimit += Math.min(CONTENT_BATCH_SIZE, bufferedReady);
+      const displayed = visible.slice(0, state.displayLimit);
+      const grid = $("#card-grid");
+      if (grid) {
+        grid.innerHTML = displayed.map((card) => renderCard(card)).join("");
+      }
+      updateCatalogCounters(visible, displayed);
+      clearErrorState();
+    }
+
+    // 2. BACKGROUND PRE-FETCH: If buffer is running low, proactively fetch remote batch
     if (visible.length - state.displayLimit < CONTENT_BATCH_SIZE * 2 && hasMoreContent) {
       const fetched = await fetchNextRemoteBatch(targetSection);
-      console.log("[Ustream] Fetched", fetched, "new items for", targetSection, "| catalog:", catalog.length);
       visible = getVisibleCards();
+
+      // Immediately slice and show up to the full batch size
+      if (visible.length > state.displayLimit) {
+        state.displayLimit = Math.min(state.displayLimit + CONTENT_BATCH_SIZE, visible.length);
+        const newDisplayed = visible.slice(0, state.displayLimit);
+        const grid = $("#card-grid");
+        if (grid) {
+          grid.innerHTML = newDisplayed.map((card) => renderCard(card)).join("");
+        }
+        updateCatalogCounters(visible, newDisplayed);
+      }
     }
 
-    // Increase the display limit
-    state.displayLimit += CONTENT_BATCH_SIZE;
-
-    // Re-render the full grid (safe against race conditions with render() calls)
-    const displayed = visible.slice(0, state.displayLimit);
-    const grid = $("#card-grid");
-    if (grid) {
-      grid.innerHTML = displayed.map((card) => renderCard(card)).join("");
-    }
-
-    updateCatalogCounters(visible, displayed);
     clearErrorState();
 
     if (displayed.length >= visible.length && !hasMoreContent) {

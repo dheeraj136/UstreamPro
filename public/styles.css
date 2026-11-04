@@ -4116,3 +4116,124 @@ html[data-theme="light"] .pin-prompt-modal {
     display: none !important;
   }
 }
+
+/* ==========================================================================
+   Faded Frosted Glass Skeleton Placeholders (Netflix & Apple TV+ Glassmorphism)
+   ========================================================================== */
+.glass-skeleton-card {
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.035);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  contain: paint;
+  animation: glassCardPulse 2s ease-in-out infinite;
+  min-height: 280px;
+}
+
+@keyframes glassCardPulse {
+  0%, 100% {
+    opacity: 0.65;
+    border-color: rgba(255, 255, 255, 0.08);
+    transform: translateZ(0);
+  }
+  50% {
+    opacity: 1;
+    border-color: rgba(231, 255, 81, 0.28);
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    transform: translateZ(0) translateY(-2px);
+  }
+}
+
+.glass-skeleton-poster {
+  aspect-ratio: 2 / 3;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(20, 22, 34, 0.8) 0%, rgba(12, 13, 20, 0.95) 100%);
+}
+
+.glass-skeleton-poster::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.02) 25%,
+    rgba(255, 255, 255, 0.14) 50%,
+    rgba(255, 255, 255, 0.02) 75%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: glassShimmer 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+@keyframes glassShimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.glass-skeleton-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 48px;
+  height: 18px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.glass-skeleton-info {
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(14, 15, 24, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.glass-skeleton-line {
+  height: 12px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-skeleton-line::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.16) 50%,
+    transparent 100%
+  );
+  animation: glassShimmer 1.4s infinite;
+}
+
+.glass-skeleton-line.title {
+  width: 82%;
+  height: 14px;
+}
+
+.glass-skeleton-line.meta {
+  width: 50%;
+  height: 10px;
+}
