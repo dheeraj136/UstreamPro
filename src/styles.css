@@ -4118,59 +4118,67 @@ html[data-theme="light"] .pin-prompt-modal {
 }
 
 /* ==========================================================================
-   Faded Frosted Glass Skeleton Placeholders (Netflix & Apple TV+ Glassmorphism)
+   Faded Frosted Glass Skeleton Placeholders (Exact 1:1 Content Size Match)
    ========================================================================== */
-.glass-skeleton-card {
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.035);
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  contain: paint;
+.catalog-infinite-loader {
+  display: block;
+  width: 100%;
+  padding: 0;
+  margin-top: 18px;
+}
+.catalog-infinite-loader[hidden] {
+  display: none !important;
+}
+.catalog-infinite-loader .card-grid {
+  margin: 0;
+}
+
+.media-card.glass-skeleton-card {
+  min-width: 0;
+  contain: content;
+  pointer-events: none;
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  min-height: 0;
   animation: glassCardPulse 2s ease-in-out infinite;
-  min-height: 280px;
 }
 
 @keyframes glassCardPulse {
   0%, 100% {
-    opacity: 0.65;
-    border-color: rgba(255, 255, 255, 0.08);
+    opacity: 0.6;
     transform: translateZ(0);
   }
   50% {
-    opacity: 1;
-    border-color: rgba(231, 255, 81, 0.28);
-    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-    transform: translateZ(0) translateY(-2px);
+    opacity: 0.95;
+    transform: translateZ(0) translateY(-1px);
   }
 }
 
-.glass-skeleton-poster {
+.media-card.glass-skeleton-card .poster.glass-poster {
+  position: relative;
   aspect-ratio: 2 / 3;
   width: 100%;
-  position: relative;
+  border-radius: 12px;
   overflow: hidden;
-  background: linear-gradient(180deg, rgba(20, 22, 34, 0.8) 0%, rgba(12, 13, 20, 0.95) 100%);
+  background: rgba(255, 255, 255, 0.035);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  isolation: isolate;
 }
 
-.glass-skeleton-poster::after {
-  content: "";
+.glass-poster-shimmer {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background: linear-gradient(
     105deg,
     transparent 0%,
-    rgba(255, 255, 255, 0.02) 25%,
-    rgba(255, 255, 255, 0.14) 50%,
-    rgba(255, 255, 255, 0.02) 75%,
+    rgba(255, 255, 255, 0.02) 20%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.02) 80%,
     transparent 100%
   );
   background-size: 200% 100%;
@@ -4183,57 +4191,60 @@ html[data-theme="light"] .pin-prompt-modal {
   100% { transform: translateX(100%); }
 }
 
+.glass-skeleton-kicker {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 38px;
+  height: 8px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
 .glass-skeleton-badge {
   position: absolute;
   top: 10px;
-  left: 10px;
-  width: 48px;
-  height: 18px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  right: 10px;
+  width: 32px;
+  height: 16px;
+  border-radius: 4px;
+  background: rgba(231, 255, 81, 0.15);
+  border: 1px solid rgba(231, 255, 81, 0.22);
 }
 
-.glass-skeleton-info {
-  padding: 14px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  background: rgba(14, 15, 24, 0.65);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+.media-card.glass-skeleton-card .card-info {
+  padding: 10px 2px 0;
+  background: transparent;
+  border: none;
 }
 
-.glass-skeleton-line {
-  height: 12px;
+.glass-line {
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.08);
   position: relative;
   overflow: hidden;
 }
 
-.glass-skeleton-line::after {
+.glass-line::after {
   content: "";
   position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
+  inset: 0;
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(255, 255, 255, 0.16) 50%,
+    rgba(255, 255, 255, 0.14) 50%,
     transparent 100%
   );
   animation: glassShimmer 1.4s infinite;
 }
 
-.glass-skeleton-line.title {
-  width: 82%;
-  height: 14px;
+.glass-line.title {
+  width: 80%;
+  height: 12px;
+  margin-bottom: 7px;
 }
 
-.glass-skeleton-line.meta {
-  width: 50%;
+.glass-line.meta {
+  width: 52%;
   height: 10px;
 }

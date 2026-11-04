@@ -19,7 +19,7 @@
     <meta name="twitter:title" content="Ustream — Watch What Moves You" />
     <meta name="twitter:description" content="Stream movies, series, and anime on Ustream" />
     <meta name="twitter:image" content="https://ustream-pro.vercel.app/assets/brand-banner.jpg" />
-    <link rel="stylesheet" href="./styles.css?v=20261104-glass-v1" />
+    <link rel="stylesheet" href="./styles.css?v=20261104-glass-v2" />
   </head>
   <body>
     <div id="startup-loader" class="startup-loader" aria-label="Loading Ustream">
@@ -188,10 +188,74 @@
           <div class="card-grid" id="card-grid" role="region" aria-live="polite" aria-label="Catalog results"></div>
           <div class="catalog-infinite-loader" id="catalog-infinite-loader" aria-live="polite" hidden>
             <div class="card-grid" aria-hidden="true">
-              <div class="glass-skeleton-card">
-                <div class="glass-skeleton-poster">
-                  <div class="glass-skeleton-badge"></div>
+              <article class="media-card glass-skeleton-card" aria-hidden="true">
+                <div class="poster glass-poster">
+                  <div class="glass-poster-shimmer"></div>
+                  <span class="glass-skeleton-kicker"></span>
+                  <span class="glass-skeleton-badge"></span>
                 </div>
+                <div class="card-info">
+                  <div class="glass-line title"></div>
+                  <div class="glass-line meta"></div>
+                </div>
+              </article>
+              <article class="media-card glass-skeleton-card" aria-hidden="true">
+                <div class="poster glass-poster">
+                  <div class="glass-poster-shimmer"></div>
+                  <span class="glass-skeleton-kicker"></span>
+                  <span class="glass-skeleton-badge"></span>
+                </div>
+                <div class="card-info">
+                  <div class="glass-line title"></div>
+                  <div class="glass-line meta"></div>
+                </div>
+              </article>
+              <article class="media-card glass-skeleton-card" aria-hidden="true">
+                <div class="poster glass-poster">
+                  <div class="glass-poster-shimmer"></div>
+                  <span class="glass-skeleton-kicker"></span>
+                  <span class="glass-skeleton-badge"></span>
+                </div>
+                <div class="card-info">
+                  <div class="glass-line title"></div>
+                  <div class="glass-line meta"></div>
+                </div>
+              </article>
+              <article class="media-card glass-skeleton-card" aria-hidden="true">
+                <div class="poster glass-poster">
+                  <div class="glass-poster-shimmer"></div>
+                  <span class="glass-skeleton-kicker"></span>
+                  <span class="glass-skeleton-badge"></span>
+                </div>
+                <div class="card-info">
+                  <div class="glass-line title"></div>
+                  <div class="glass-line meta"></div>
+                </div>
+              </article>
+              <article class="media-card glass-skeleton-card" aria-hidden="true">
+                <div class="poster glass-poster">
+                  <div class="glass-poster-shimmer"></div>
+                  <span class="glass-skeleton-kicker"></span>
+                  <span class="glass-skeleton-badge"></span>
+                </div>
+                <div class="card-info">
+                  <div class="glass-line title"></div>
+                  <div class="glass-line meta"></div>
+                </div>
+              </article>
+              <article class="media-card glass-skeleton-card" aria-hidden="true">
+                <div class="poster glass-poster">
+                  <div class="glass-poster-shimmer"></div>
+                  <span class="glass-skeleton-kicker"></span>
+                  <span class="glass-skeleton-badge"></span>
+                </div>
+                <div class="card-info">
+                  <div class="glass-line title"></div>
+                  <div class="glass-line meta"></div>
+                </div>
+              </article>
+            </div>
+          </div>
                 <div class="glass-skeleton-info">
                   <div class="glass-skeleton-line title"></div>
                   <div class="glass-skeleton-line meta"></div>
@@ -1264,7 +1328,7 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="./app.js?v=20261104-autoload-v4"></script>
+    <script type="module" src="./app.js?v=20261104-autoload-v5"></script>
     <script>
       (function() {
         function dismissStartupLoader() {
