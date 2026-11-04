@@ -87,18 +87,22 @@ a { color: inherit; text-decoration: none; }
   position: sticky;
   top: 0;
   z-index: 100;
-  background: linear-gradient(180deg, rgba(7, 7, 11, 0.75) 0%, rgba(7, 7, 11, 0) 100%);
+  background: transparent;
   backdrop-filter: blur(0px);
   -webkit-backdrop-filter: blur(0px);
   border-bottom: 1px solid transparent;
-  transition: background 0.32s cubic-bezier(0.16, 1, 0.3, 1), backdrop-filter 0.32s ease, -webkit-backdrop-filter 0.32s ease, border-color 0.32s ease, box-shadow 0.32s ease;
+  transition: background 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              backdrop-filter 0.3s ease,
+              -webkit-backdrop-filter 0.3s ease,
+              border-color 0.3s ease,
+              box-shadow 0.3s ease;
 }
 .topbar.scrolled {
-  background: rgba(10, 10, 15, 0.75);
+  background: rgba(8, 8, 12, 0.85);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.7);
 }
 .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -.055em; font-size: 20px; white-space: nowrap; }
 .brand > span:last-child span { color: var(--accent); }
@@ -193,11 +197,12 @@ a { color: inherit; text-decoration: none; }
 .hero-vignette {
   position: absolute;
   inset: 0;
-  z-index: -2;
   pointer-events: none;
+  z-index: 1;
   background:
-    linear-gradient(180deg, rgba(7, 7, 11, 0.45) 0%, transparent 22%, transparent 55%, rgba(7, 7, 11, 0.95) 90%, #07070b 100%),
-    linear-gradient(90deg, #07070b 0%, rgba(7, 7, 11, 0.96) 38%, rgba(7, 7, 11, 0.55) 65%, transparent 88%);
+    linear-gradient(0deg, var(--bg) 0%, rgba(8, 8, 12, 0.75) 35%, transparent 70%),
+    linear-gradient(90deg, rgba(8, 8, 12, 0.95) 0%, rgba(8, 8, 12, 0.6) 45%, transparent 80%),
+    radial-gradient(circle at 80% 25%, transparent 40%, rgba(8, 8, 12, 0.7) 100%);
 }
 .hero-backdrop[style*="url"] ~ .hero-art .orb { opacity: .12; }
 .hero-backdrop[style*="url"] ~ .hero-art .signal-lines { opacity: .15; }
@@ -4029,4 +4034,85 @@ html[data-theme="light"] .pin-prompt-modal {
   flex-shrink: 0;
   color: #00a8e1;
   margin-top: 3px;
+}
+
+
+@media (max-width: 768px) {
+  .desktop-nav {
+    display: none !important;
+  }
+  .mobile-nav {
+    position: fixed;
+    z-index: 999;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: flex !important;
+    justify-content: space-around;
+    align-items: center;
+    height: 64px;
+    padding: 6px 16px max(8px, env(safe-area-inset-bottom));
+    background: rgba(8, 8, 12, 0.85);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.7);
+  }
+  .mobile-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    background: transparent;
+    color: var(--muted-2);
+    min-width: 64px;
+    cursor: pointer;
+    border: none;
+    padding: 6px 8px;
+    border-radius: 10px;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .mobile-nav-item .icon {
+    width: 22px;
+    height: 22px;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.2s ease, filter 0.2s ease;
+  }
+  .mobile-nav-item small {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    transition: color 0.2s ease;
+  }
+  .mobile-nav-item:hover,
+  .mobile-nav-item:focus-visible {
+    color: var(--text);
+  }
+  .mobile-nav-item:active {
+    transform: scale(0.92);
+  }
+  .mobile-nav-item.active {
+    color: var(--accent);
+  }
+  .mobile-nav-item.active .icon {
+    stroke: var(--accent);
+    filter: drop-shadow(0 0 8px rgba(231, 255, 81, 0.5));
+    transform: translateY(-1px);
+  }
+  .mobile-nav-item.active small {
+    color: var(--accent);
+    font-weight: 700;
+  }
+  body {
+    padding-bottom: 74px;
+  }
+}
+
+@media (min-width: 769px) {
+  .desktop-nav {
+    display: flex !important;
+  }
+  .mobile-nav {
+    display: none !important;
+  }
 }

@@ -2124,6 +2124,7 @@ function setFeatured(item) {
       backdrop.setAttribute("aria-label", `${item.title} banner`);
     }
   }
+  startHeroMotionPreview(item);
 }
 
 async function playTrailer(title) {
@@ -2909,6 +2910,56 @@ function toggleHeroMute() {
       ? '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>'
       : '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>';
   }
+}
+
+function startHeroMotionPreview(item) {
+  stopHeroMotionPreview();
+  if (!item) return;
+
+  heroTrailerTimer = setTimeout(async () => {
+    try {
+      let trailerKey = null;
+      const tmdbId = item.tmdbId || item.id || TMDB_MAP[item.title]?.tmdbId;
+      const isSeries = item.type === "series" || item.category === "series" || item.category === "tv";
+      const mediaType = isSeries ? "tv" : "movie";
+
+      if (tmdbId) {
+        try {
+          const videoData = await fetchTmdbApi(`/${mediaType}/${tmdbId}/videos`);
+          const videos = videoData?.results || [];
+          const trailer = videos.find((v) => v.site === "YouTube" && (v.type === "Trailer" || v.type === "Teaser")) || videos.find((v) => v.site === "YouTube");
+          if (trailer?.key) trailerKey = trailer.key;
+        } catch {}
+      }
+
+      if (!trailerKey) {
+        try {
+          const searchData = await fetchTmdbApi(`/search/${mediaType}?query=${encodeURIComponent(item.title)}`);
+          const found = searchData?.results?.[0];
+          if (found?.id) {
+            const videoData = await fetchTmdbApi(`/${mediaType}/${found.id}/videos`);
+            const videos = videoData?.results || [];
+            const trailer = videos.find((v) => v.site === "YouTube" && (v.type === "Trailer" || v.type === "Teaser")) || videos.find((v) => v.site === "YouTube");
+            if (trailer?.key) trailerKey = trailer.key;
+          }
+        } catch {}
+      }
+
+      if (trailerKey && featured?.title === item.title) {
+        const videoWrap = $("#hero-video-wrap");
+        const trailerFrame = $("#hero-trailer-frame");
+        const muteBtn = $("#hero-mute-toggle");
+        if (trailerFrame && videoWrap) {
+          trailerFrame.src = `https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&mute=1&controls=0&loop=1&playlist=${trailerKey}&enablejsapi=1&playsinline=1`;
+          videoWrap.hidden = false;
+          videoWrap.classList.add("active");
+          if (muteBtn) muteBtn.hidden = false;
+        }
+      }
+    } catch (err) {
+      console.warn("Hero preview playback skipped:", err);
+    }
+  }, 1800);
 }
 
 
@@ -8565,6 +8616,10 @@ function initModalTabsAndHeroInteractions() {
     }
   });
 
+  $("#hero-trailer")?.addEventListener("click", () => {
+    stopHeroMotionPreview();
+    playTrailer(featured?.title);
+  });
   $("#hero-mute-toggle")?.addEventListener("click", toggleHeroMute);
 }
 
