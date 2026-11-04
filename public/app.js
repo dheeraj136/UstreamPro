@@ -1843,7 +1843,7 @@ async function fetchNextRemoteBatch(targetSection) {
     } else {
       // "home" (infinite popular, trending, and top-rated fusion)
       paths = [
-        { path: `/trending/all/day?page=${nextPage}`, cat: "trending" },
+        { path: `/trending/all/day?page=${nextPage}`, cat: "movie" },
         { path: `/movie/popular?page=${nextPage}`, cat: "movie" },
         { path: `/tv/popular?page=${nextPage}`, cat: "tv" },
         { path: `/discover/movie?sort_by=popularity.desc&page=${nextPage}`, cat: "movie" },
@@ -1885,9 +1885,14 @@ async function fetchNextRemoteBatch(targetSection) {
       }
     });
 
+    // Only stop if TMDB actually returned nothing after 500 pages (max TMDB limit)
     if (flatItems.length === 0 && nextPage >= 500) {
       hasMoreContent = false;
       break;
+    }
+    // If we got zero new unique items but there was data, keep trying
+    if (flatItems.length > 0 && newItems.length === 0 && nextPage < 500) {
+      continue;
     }
   }
 
@@ -1919,42 +1924,37 @@ async function loadMoreTitles() {
 
   try {
     let visible = getVisibleCards();
-    let currentDisplayedCount = Math.min(state.displayLimit, visible.length);
 
-    // If buffered items in memory are insufficient, fetch remote batch first
-    if (visible.length - currentDisplayedCount < CONTENT_BATCH_SIZE && hasMoreContent) {
-      await fetchNextRemoteBatch(targetSection);
+    // Always fetch more if we're running low on buffered content for this section
+    if (visible.length - state.displayLimit < CONTENT_BATCH_SIZE * 2 && hasMoreContent) {
+      const fetched = await fetchNextRemoteBatch(targetSection);
+      console.log("[Ustream] Fetched", fetched, "new items for", targetSection, "| catalog:", catalog.length);
       visible = getVisibleCards();
     }
 
+    // Increase the display limit
     state.displayLimit += CONTENT_BATCH_SIZE;
-    const newDisplayed = visible.slice(0, state.displayLimit);
-    const toAppend = newDisplayed.slice(currentDisplayedCount);
 
+    // Re-render the full grid (safe against race conditions with render() calls)
+    const displayed = visible.slice(0, state.displayLimit);
     const grid = $("#card-grid");
-    if (grid && toAppend.length > 0) {
-      const fragment = document.createDocumentFragment();
-      const tempDiv = document.createElement("div");
-      tempDiv.innerHTML = toAppend.map((card) => renderCard(card, { isNew: true })).join("");
-      while (tempDiv.firstChild) {
-        fragment.appendChild(tempDiv.firstChild);
-      }
-      grid.appendChild(fragment);
+    if (grid) {
+      grid.innerHTML = displayed.map((card) => renderCard(card)).join("");
     }
 
-    updateCatalogCounters(visible, newDisplayed);
+    updateCatalogCounters(visible, displayed);
     clearErrorState();
 
-    if (visible.length <= newDisplayed.length && !hasMoreContent) {
+    if (displayed.length >= visible.length && !hasMoreContent) {
       if (loadMoreBtn) loadMoreBtn.textContent = "All available titles loaded";
     }
 
-    // Auto-retrigger check if user viewport is still near bottom
+    // Auto-retrigger: keep loading if user viewport is still near bottom
     setTimeout(() => {
       if (!isLoadingMore && hasMoreContent) {
         handleAutoInfiniteScroll();
       }
-    }, 250);
+    }, 300);
   } catch (err) {
     console.warn("[Ustream LoadMore]", err);
   } finally {
@@ -2047,16 +2047,18 @@ function initInfiniteScroll() {
   window.addEventListener("wheel", onScrollFrame, { passive: true });
   window.addEventListener("resize", () => handleAutoInfiniteScroll(), { passive: true });
 
-  // 3. Heartbeat scroll proximity monitor (polls every 500ms to guarantee continuous auto-loading)
+  // 3. Heartbeat scroll proximity monitor (polls every 800ms to guarantee continuous auto-loading)
   setInterval(() => {
     if (!isLoadingMore && hasMoreContent) {
       handleAutoInfiniteScroll();
     }
-  }, 500);
+  }, 800);
 
-  // Initial trigger checks after startup
-  setTimeout(() => handleAutoInfiniteScroll(), 600);
-  setTimeout(() => handleAutoInfiniteScroll(), 1200);
+  // Initial trigger checks after startup — stagger to allow catalog to load
+  setTimeout(() => handleAutoInfiniteScroll(), 800);
+  setTimeout(() => handleAutoInfiniteScroll(), 1500);
+  setTimeout(() => handleAutoInfiniteScroll(), 3000);
+  setTimeout(() => handleAutoInfiniteScroll(), 5000);
 }
 
 async function loadNewestRecommendations() {
@@ -2495,6 +2497,10 @@ function setSection(section, updateHash = true) {
   if (visible.length < CONTENT_BATCH_SIZE && !["sports", "explore", "profile", "my-list"].includes(target) && hasMoreContent) {
     void loadMoreTitles();
   }
+
+  setTimeout(() => {
+    if (!isLoadingMore && hasMoreContent) handleAutoInfiniteScroll();
+  }, 1000);
 }
 
 function isDarkModeActive() {
@@ -8614,8 +8620,13 @@ async function loadCategoryTmdb(category) {
         const filtered = newCards.filter(c => !seen.has((c.title || "").toLowerCase().trim()));
         if (filtered.length) {
           catalog = [...catalog, ...filtered];
-          render();
           const vis = getVisibleCards();
+          const displayed = vis.slice(0, state.displayLimit);
+          const grid = $("#card-grid");
+          if (grid && state.section === category) {
+            grid.innerHTML = displayed.map((card) => renderCard(card)).join("");
+            updateCatalogCounters(vis, displayed);
+          }
           if (vis.length > 0 && state.section === category) {
             setFeatured(vis[0]);
           }
