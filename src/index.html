@@ -93,6 +93,9 @@
       <main id="main-content" tabindex="-1">
         <section class="hero" aria-labelledby="hero-title">
           <div class="hero-backdrop" id="hero-backdrop" role="img" aria-label="Featured premiere banner"></div>
+          <div class="hero-video-wrap" id="hero-video-wrap" aria-hidden="true" hidden>
+            <iframe id="hero-trailer-frame" class="hero-trailer-frame" src="about:blank" allow="autoplay; encrypted-media" tabindex="-1"></iframe>
+          </div>
           <div class="hero-vignette" aria-hidden="true"></div>
           <div class="hero-content">
             <div class="eyebrow" id="hero-eyebrow-row"><span class="live-dot"></span> <span id="hero-eyebrow-text">Featured Premiere</span> <span class="badge-match" id="hero-match-badge">98% Match</span></div>
@@ -101,10 +104,12 @@
             <div class="hero-genre-pills" id="hero-genre-pills"></div>
             <p id="hero-description">Stream the latest movies, series, and anime in high definition.</p>
             <div class="hero-actions">
-              <button class="primary-button" id="hero-play" data-action="play" data-title="" aria-label="Play featured title"><svg class="icon icon-sm icon-play icon-filled" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg> <span>Play now</span></button>
-              <button class="secondary-button" id="hero-trailer" data-action="trailer" data-title="" aria-label="Watch trailer"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span>Trailer</span></button>
-              <button class="secondary-button" id="hero-details" data-action="details" data-title="" aria-label="More information"><svg class="icon icon-sm icon-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg> <span>More info</span></button>
-              <button class="icon-button hero-bookmark-btn" id="hero-bookmark" data-action="bookmark" aria-label="Add to Watchlist" title="Add to Watchlist"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
+              <button class="primary-button" id="hero-play" data-action="play" data-title="" aria-label="Play featured title"><svg class="icon icon-sm icon-play icon-filled" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg> <span>Play</span></button>
+              <button class="secondary-button" id="hero-details" data-action="details" data-title="" aria-label="More information"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> <span>More Info</span></button>
+              <button class="icon-button hero-bookmark-btn" id="hero-bookmark" data-action="bookmark" aria-label="Add to Watchlist" title="Add to Watchlist"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
+              <button class="icon-button hero-mute-toggle" id="hero-mute-toggle" type="button" aria-label="Mute or Unmute Preview Audio" title="Mute/Unmute audio" hidden>
+                <svg class="icon icon-sm" id="hero-mute-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+              </button>
             </div>
             <div class="hero-credit" id="hero-credit"><span>Featured Premiere</span> · Updated today</div>
           </div>
@@ -482,14 +487,66 @@
 
     <div class="modal-backdrop" id="modal-backdrop" hidden>
       <article class="detail-modal" id="detail-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-        <button class="close-button modal-close" id="close-modal" aria-label="Close details"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
-        <div class="modal-art" id="modal-art" role="img" aria-label="Title poster"></div>
-        <div class="modal-copy">
-          <p class="section-kicker">Now streaming</p>
-          <h2 id="modal-title">Title</h2>
-          <div class="hero-meta" id="modal-meta"></div>
-          <p id="modal-description"></p>
-          <div class="hero-actions"><button class="primary-button" id="modal-play" aria-label="Play title now"><svg class="icon icon-sm icon-play icon-filled" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg> <span>Play now</span></button><button class="secondary-button" id="modal-list" aria-label="Add to watchlist"><svg class="icon icon-sm icon-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg> <span>Add to list</span></button></div>
+        <button class="close-button modal-close" id="close-modal" aria-label="Close details"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        
+        <div class="modal-hero-header">
+          <div class="modal-hero-backdrop" id="modal-art" role="img" aria-label="Title backdrop"></div>
+          <div class="modal-hero-vignette"></div>
+          <div class="modal-hero-details">
+            <p class="section-kicker" id="modal-kicker">Now Streaming</p>
+            <h2 id="modal-title">Title</h2>
+            <div class="hero-meta" id="modal-meta"></div>
+            <div class="hero-actions modal-action-bar">
+              <button class="primary-button" id="modal-play" aria-label="Play title now"><svg class="icon icon-sm icon-play icon-filled" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg> <span>Play Now</span></button>
+              <button class="secondary-button" id="modal-trailer" aria-label="Watch official trailer"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span>Trailer</span></button>
+              <button class="secondary-button" id="modal-list" aria-label="Add to watchlist"><svg class="icon icon-sm icon-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5v14"/></svg> <span>Add to List</span></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-tabs-bar" role="tablist">
+          <button class="modal-tab-btn active" data-modal-tab="overview" role="tab" aria-selected="true">Overview</button>
+          <button class="modal-tab-btn" data-modal-tab="episodes" id="modal-tab-episodes" role="tab" aria-selected="false" hidden>Episodes</button>
+          <button class="modal-tab-btn" data-modal-tab="xray" role="tab" aria-selected="false"><span class="xray-badge">X-Ray</span> Cast &amp; Crew</button>
+          <button class="modal-tab-btn" data-modal-tab="more-like-this" role="tab" aria-selected="false">More Like This</button>
+        </div>
+
+        <div class="modal-tab-content">
+          <!-- Overview Tab -->
+          <div class="modal-tab-panel active" id="modal-panel-overview" role="tabpanel">
+            <p class="modal-synopsis" id="modal-description"></p>
+            <div class="modal-specs-grid" id="modal-specs-grid"></div>
+          </div>
+
+          <!-- Tabular Season / Episode Drawer -->
+          <div class="modal-tab-panel" id="modal-panel-episodes" role="tabpanel" hidden>
+            <div class="season-selector-bar">
+              <span class="season-selector-label">Season</span>
+              <div class="season-pills-list" id="modal-season-pills"></div>
+            </div>
+            <div class="episodes-tabular-list" id="modal-episodes-list"></div>
+          </div>
+
+          <!-- Amazon Prime X-Ray (Cast, Directors, Trivia) -->
+          <div class="modal-tab-panel" id="modal-panel-xray" role="tabpanel" hidden>
+            <div class="xray-section">
+              <h3 class="xray-heading">Top Cast</h3>
+              <div class="xray-cast-rail" id="modal-xray-cast"></div>
+            </div>
+            <div class="xray-section">
+              <h3 class="xray-heading">Director &amp; Writers</h3>
+              <div class="xray-crew-list" id="modal-xray-crew"></div>
+            </div>
+            <div class="xray-section">
+              <h3 class="xray-heading">Trivia &amp; Production Notes</h3>
+              <div class="xray-trivia-box" id="modal-xray-trivia"></div>
+            </div>
+          </div>
+
+          <!-- More Like This Grid -->
+          <div class="modal-tab-panel" id="modal-panel-more-like-this" role="tabpanel" hidden>
+            <div class="card-grid compact" id="modal-related-grid"></div>
+          </div>
         </div>
       </article>
     </div>
