@@ -1,4 +1,7 @@
 import { ICONS, renderIcon } from "./assets/icons.js";
+import { storage } from "./modules/storage.js";
+import { initImageLazyLoading, observeLazyImages, getDescriptiveAlt, handleImageError } from "./modules/image-loader.js";
+import { delegate, addPassiveListener, rafThrottle, createListenerPool } from "./modules/events.js";
 
 /* ==========================================================================
    Ustream Anti-Ad & Redirect Blocker Shield
@@ -82,6 +85,7 @@ function initAdShield() {
     observer.observe(document.documentElement, { childList: true, subtree: true });
   } else {
     document.addEventListener("DOMContentLoaded", () => {
+  initImageLazyLoading();
       observer.observe(document.documentElement, { childList: true, subtree: true });
     });
   }
@@ -1686,10 +1690,9 @@ async function loadLiveCatalog(isRetry = false) {
   clearErrorState();
   
   // Instant Cold-Start Rendering: Check if cached catalog exists to show immediately (0ms delay)
-  const cachedCatalogStr = localStorage.getItem("ustream-catalog-cache");
-  if (cachedCatalogStr) {
+  const cached = storage.get("ustream-catalog-cache");
+  if (cached) {
     try {
-      const cached = JSON.parse(cachedCatalogStr);
       if (Array.isArray(cached) && cached.length >= 20) {
         catalog = cached;
         setFeatured(catalog[0]);
@@ -1774,7 +1777,7 @@ async function loadLiveCatalog(isRetry = false) {
       clearErrorState();
       render();
       try {
-        localStorage.setItem("ustream-catalog-cache", JSON.stringify(catalog.slice(0, 300)));
+        storage.set("ustream-catalog-cache", storage.compactCatalog(catalog, 150));
       } catch {}
       if (!cachedCatalogStr) {
         showToast(`Loaded ${successfulItems.length} titles across all categories`);
@@ -1902,7 +1905,7 @@ async function fetchNextRemoteBatch(targetSection) {
     catalog.push(...newItems);
     updateStatusBadge(true, catalog.length);
     try {
-      localStorage.setItem("ustream-catalog-cache", JSON.stringify(catalog.slice(0, 1000)));
+      storage.set("ustream-catalog-cache", storage.compactCatalog(catalog, 150));
     } catch {}
   }
 
@@ -1935,6 +1938,7 @@ async function loadMoreTitles() {
       const grid = $("#card-grid");
       if (grid) {
         grid.innerHTML = displayed.map((card) => renderCard(card)).join("");
+        observeLazyImages(grid);
       }
       updateCatalogCounters(visible, displayed);
       clearErrorState();
@@ -2722,7 +2726,7 @@ function renderCard(card, { isNew = false } = {}) {
   return `
     <article class="media-card ${isNew ? "card-enter" : ""}" data-title="${cleanTitle}">
       <div class="poster" style="--poster-gradient:${card.gradient}">
-        ${card.image ? `<img class="poster-image" src="${card.image}" alt="${cleanTitle} poster" loading="lazy" decoding="async" />` : ""}
+        ${card.image ? `<img class="poster-image" src="${card.image}" alt="${escapeHtml(cleanTitle)} official poster" loading="lazy" decoding="async" />` : ""}
         <span class="poster-kicker">${escapeHtml(card.kicker)}</span>
         ${badgeHtml}
         <span class="poster-title">${cleanTitle}</span>
@@ -3104,12 +3108,13 @@ function renderModalEpisodes(item, season = 1) {
     </button>
   `).join("");
 
-  pillsContainer.querySelectorAll("[data-season-select]").forEach(btn => {
-    btn.addEventListener("click", () => {
+  pillsContainer.onclick = (e) => {
+    const btn = e.target.closest("[data-season-select]");
+    if (btn && pillsContainer.contains(btn)) {
       const s = parseInt(btn.dataset.seasonSelect, 10);
       renderModalEpisodes(item, s);
-    });
-  });
+    }
+  };
 
   // Render episode cards
   let episodesForSeason = [];
@@ -3131,7 +3136,7 @@ function renderModalEpisodes(item, season = 1) {
   listContainer.innerHTML = episodesForSeason.map(ep => `
     <article class="episode-table-row" data-episode-play="${ep.ep}" tabindex="0" role="button" aria-label="Play Episode ${ep.ep}: ${escapeHtml(ep.name)}">
       <div class="episode-row-thumb">
-        <img src="${item.image || "assets/logo-mark.png"}" alt="" loading="lazy" decoding="async">
+        <img src="${item.image || "assets/logo-mark.png"}" alt="${escapeHtml(ep.name || `Episode ${ep.ep}`)} preview" loading="lazy" decoding="async">
         <span class="episode-row-number">EP ${ep.ep}</span>
       </div>
       <div class="episode-row-info">
@@ -3146,8 +3151,9 @@ function renderModalEpisodes(item, season = 1) {
     </article>
   `).join("");
 
-  listContainer.querySelectorAll("[data-episode-play]").forEach(row => {
-    row.addEventListener("click", () => {
+  listContainer.onclick = (e) => {
+    const row = e.target.closest("[data-episode-play]");
+    if (row && listContainer.contains(row)) {
       const epNum = parseInt(row.dataset.episodePlay, 10);
       closeDetails();
       playTitle(item.title);
@@ -3155,8 +3161,17 @@ function renderModalEpisodes(item, season = 1) {
         if (typeof changePlayerSeason === "function") changePlayerSeason(String(season));
         if (typeof changePlayerEpisode === "function") changePlayerEpisode(String(epNum));
       }, 400);
-    });
-  });
+    }
+  };
+  listContainer.onkeydown = (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      const row = e.target.closest("[data-episode-play]");
+      if (row && listContainer.contains(row)) {
+        e.preventDefault();
+        row.click();
+      }
+    }
+  };
 }
 
 
@@ -3258,7 +3273,7 @@ function openDetails(title) {
     if (castRail) {
       castRail.innerHTML = credits.cast.map(c => `
         <div class="xray-cast-card">
-          <img class="xray-actor-avatar" src="${c.photo || "assets/logo-mark.png"}" alt="${escapeHtml(c.name)}" loading="lazy" decoding="async">
+          <img class="xray-actor-avatar" src="${c.photo || "assets/logo-mark.png"}" alt="${escapeHtml(c.name)} portrait" loading="lazy" decoding="async">
           <span class="xray-actor-name">${escapeHtml(c.name)}</span>
           <span class="xray-character-name">${escapeHtml(c.character)}</span>
         </div>
@@ -3297,18 +3312,19 @@ function openDetails(title) {
     const related = catalog.filter(c => c.title !== item.title && (c.type === item.type || (c.genre && item.genre && c.genre.some(g => item.genre.includes(g))))).slice(0, 4);
     const fallbackList = related.length ? related : catalog.slice(0, 4);
     relatedGrid.innerHTML = fallbackList.map(c => renderCard(c, { isNew: false })).join("");
-    relatedGrid.querySelectorAll("[data-action='play']").forEach(btn => {
-      btn.addEventListener("click", (e) => {
+    relatedGrid.onclick = (e) => {
+      const btn = e.target.closest("[data-action='play']");
+      if (btn && relatedGrid.contains(btn)) {
         e.stopPropagation();
         closeDetails();
         playTitle(btn.dataset.title);
-      });
-    });
-    relatedGrid.querySelectorAll(".media-card").forEach(card => {
-      card.addEventListener("click", () => {
+        return;
+      }
+      const card = e.target.closest(".media-card");
+      if (card && relatedGrid.contains(card)) {
         openDetails(card.dataset.title);
-      });
-    });
+      }
+    };
   }
 
   // Reset tab to overview
@@ -3974,7 +3990,7 @@ function updatePlayerEpisodeFlow() {
     }
     if (upNextArt) {
       upNextArt.innerHTML = player.item?.image
-        ? `<img src="${player.item.image}" alt="${escapeHtml(player.item.title || "Next episode")} preview" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" />`
+        ? `<img class="player-preview-thumb" src="${player.item.image}" alt="${escapeHtml(player.item.title || "Next episode")} preview" loading="lazy" decoding="async" />`
         : `<span class="player-art-icon">${renderIcon("play", "icon-md")}</span>`;
     }
   } else if (episodic && !next) {
@@ -4000,7 +4016,7 @@ function updatePlayerEpisodeFlow() {
     }
     if (upNextArt) {
       upNextArt.innerHTML = related?.image
-        ? `<img src="${related.image}" alt="${escapeHtml(related.title || "Recommended title")} preview" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" />`
+        ? `<img class="player-preview-thumb" src="${related.image}" alt="${escapeHtml(related.title || "Recommended title")} preview" loading="lazy" decoding="async" />`
         : `<span class="player-art-icon">${renderIcon("anime", "icon-md")}</span>`;
     }
   } else {
@@ -4020,7 +4036,7 @@ function updatePlayerEpisodeFlow() {
       }
       if (upNextArt) {
         upNextArt.innerHTML = related.image
-          ? `<img src="${related.image}" alt="${escapeHtml(related.title || "Recommended title")} preview" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" />`
+          ? `<img class="player-preview-thumb" src="${related.image}" alt="${escapeHtml(related.title || "Recommended title")} preview" loading="lazy" decoding="async" />`
           : `<span class="player-art-icon">${renderIcon("play", "icon-md")}</span>`;
       }
     } else {
@@ -5185,7 +5201,7 @@ function initCustomVideoPlayer() {
     if (current > 5 && Math.floor(current) % 5 === 0) {
       const vidKey = video.dataset.itemTitle || state.player?.item?.title;
       if (vidKey) {
-        localStorage.setItem(`ustream-pos-${vidKey}`, String(Math.floor(current)));
+        storage.setDebounced(`ustream-pos-${vidKey}`, Math.floor(current), 800);
       }
     }
   });
@@ -5604,7 +5620,7 @@ async function loadCommunityVideos() {
     section.hidden = false;
     row.innerHTML = data.videos.map((v) => `
       <div class="community-card" data-video-id="${v.id}" tabindex="0" role="button" aria-label="Play ${escapeHtml(v.title)}">
-        <img src="${v.thumbnailPath || `/api/videos/thumbnail/${v.id}`}" alt="${escapeHtml(v.title)}" loading="lazy" decoding="async" />
+        <img src="${v.thumbnailPath || `/api/videos/thumbnail/${v.id}`}" alt="${escapeHtml(v.title)} video thumbnail" loading="lazy" decoding="async" />
         <div class="community-card-overlay">
           <strong>${escapeHtml(v.title)}</strong>
           <span>${v.views || 0} views · ${escapeHtml(v.category)}</span>
@@ -5655,7 +5671,7 @@ async function loadUserUploads() {
     listEl.innerHTML = videos.map((v) => `
       <div class="my-upload-item">
         <div class="my-upload-info">
-          <img class="my-upload-thumb" src="${v.thumbnailPath || `/api/videos/thumbnail/${v.id}`}" alt="" loading="lazy" decoding="async" />
+          <img class="my-upload-thumb" src="${v.thumbnailPath || `/api/videos/thumbnail/${v.id}`}" alt="${escapeHtml(v.title)} video thumbnail" loading="lazy" decoding="async" />
           <div class="my-upload-details">
             <strong>${escapeHtml(v.title)}</strong>
             <span>${v.views || 0} views · ${v.status} · ${(v.fileSize / (1024 * 1024)).toFixed(1)} MB</span>
@@ -7532,7 +7548,7 @@ async function executeModalSearch(query) {
           <div class="search-results-grid">
             ${finalCards.map(item => `
               <article class="search-result-card" data-search-card-title="${escapeHtml(item.title)}">
-                <img class="search-result-poster" src="${item.image || "about:blank"}" alt="${escapeHtml(item.title)}" loading="lazy" decoding="async">
+                <img class="search-result-poster" src="${item.image || "assets/logo-mark.png"}" alt="${escapeHtml(item.title)} poster" loading="lazy" decoding="async">
                 <span class="search-result-title">${escapeHtml(item.title)}</span>
                 <div class="search-result-meta">
                   <span>${item.year || "2024"}</span>
@@ -8322,7 +8338,7 @@ function renderSportsSection() {
     return `
       <article class="sports-match-card ${match.poster ? "has-poster" : ""}" data-sports-id="${escapeHtml(match.id)}">
         <div class="sports-card-art">
-          ${match.poster ? `<img src="${escapeHtml(match.poster)}" alt="" loading="lazy" decoding="async">` : ""}
+          ${match.poster ? `<img src="${escapeHtml(match.poster)}" alt="${escapeHtml(match.title || "Match")} sports poster" loading="lazy" decoding="async">` : ""}
           <div class="sports-versus-overlay">
             ${teams ? `
               <div class="sports-team-col">
@@ -8335,7 +8351,7 @@ function renderSportsSection() {
                 <span class="sports-team-name">${escapeHtml(teams.away?.name || "Away")}</span>
               </div>
             ` : `
-              <div style="font-size: 18px; font-weight: 900; color: var(--accent); text-align: center; padding: 0 12px;">${escapeHtml(match.title.slice(0, 22))}</div>
+              <div class="sports-match-simple-title">${escapeHtml(match.title.slice(0, 22))}</div>
             `}
           </div>
         </div>
@@ -8352,10 +8368,10 @@ function renderSportsSection() {
 
   if (sportsState.tab === "live" && data.channels.length > 0 && !sportsState.query && sportsState.category === "all") {
     html += `
-      <div style="grid-column: 1 / -1; margin-top: 20px; padding: 20px 24px; background: linear-gradient(135deg, rgba(230,57,70,0.1), rgba(20,20,30,0.8)); border: 1px solid rgba(230,57,70,0.25); border-radius: 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+      <div class="sports-broadcast-banner">
         <div>
-          <strong style="font-size: 16px; color: var(--text); display: block; margin-bottom: 4px;">Looking for 24/7 Live Sports Channels?</strong>
-          <span style="color: var(--muted); font-size: 13px;">Tune into Sky Sports, ESPN, TNT Sports, Willow Cricket, DAZN, beIN Sports and ${data.channels.length} channels available 24/7.</span>
+          <strong class="sports-banner-title">Looking for 24/7 Live Sports Channels?</strong>
+          <span class="sports-banner-sub">Tune into Sky Sports, ESPN, TNT Sports, Willow Cricket, DAZN, beIN Sports and ${data.channels.length} channels available 24/7.</span>
         </div>
         <button class="primary-button" id="live-bottom-channels-btn" type="button" style="white-space: nowrap;">Explore 24/7 TV Channels →</button>
       </div>
@@ -8364,21 +8380,24 @@ function renderSportsSection() {
 
   grid.innerHTML = html;
 
-  grid.querySelectorAll("[data-sports-id]").forEach(card => {
-    card.addEventListener("click", () => {
+  observeLazyImages(grid);
+  grid.onclick = (e) => {
+    const card = e.target.closest("[data-sports-id]");
+    if (card && grid.contains(card)) {
       const id = card.dataset.sportsId;
       const match = displayItems.find(m => m.id === id);
       if (match) openSportsPlayer(match);
-    });
-  });
-
-  $("#live-bottom-channels-btn")?.addEventListener("click", () => {
-    $$("[data-sports-tab]").forEach(b => b.classList.toggle("active", b.dataset.sportsTab === "channels"));
-    sportsState.tab = "channels";
-    sportsState.channelPage = 0;
-    sportsState.channelLetter = "";
-    renderSportsSection();
-  });
+      return;
+    }
+    const bottomBtn = e.target.closest("#live-bottom-channels-btn");
+    if (bottomBtn && grid.contains(bottomBtn)) {
+      $("[data-sports-tab]").forEach(b => b.classList.toggle("active", b.dataset.sportsTab === "channels"));
+      sportsState.tab = "channels";
+      sportsState.channelPage = 0;
+      sportsState.channelLetter = "";
+      renderSportsSection();
+    }
+  };
 }
 
 function openSportsPlayer(match) {
@@ -8480,7 +8499,7 @@ function renderExploreProviders() {
   grid.innerHTML = exploreProviders.map(p => `
     <article class="provider-tile" data-provider-id="${p.id}">
       <div class="provider-logo-wrap">
-        <img src="${p.logo}" alt="${escapeHtml(p.name)}" loading="lazy" decoding="async">
+        <img src="${p.logo}" alt="${escapeHtml(p.name)} provider logo" loading="lazy" decoding="async">
       </div>
       <span class="provider-tile-name">${escapeHtml(p.name)}</span>
       <span class="provider-tile-tag">${escapeHtml(p.tag)}</span>

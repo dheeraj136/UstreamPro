@@ -17,6 +17,16 @@ for (const file of ["index.html", "styles.css", "app.js"]) {
   await copyFile(src, join(publicDir, file));
 }
 
+const modulesSrcDir = join(root, "src", "modules");
+const publicModulesDir = join(publicDir, "modules");
+if (existsSync(modulesSrcDir)) {
+  await mkdir(publicModulesDir, { recursive: true });
+  const moduleFiles = await readdir(modulesSrcDir);
+  for (const modFile of moduleFiles) {
+    await copyFile(join(modulesSrcDir, modFile), join(publicModulesDir, modFile));
+  }
+}
+
 const assets = await readdir(assetsDir);
 for (const file of assets) {
   await copyFile(join(assetsDir, file), join(publicAssetsDir, file));
@@ -25,7 +35,7 @@ for (const file of assets) {
 for (const iconFile of ["favicon.svg", "favicon.png", "apple-touch-icon.png"]) {
   if (existsSync(join(assetsDir, iconFile))) {
     await copyFile(join(assetsDir, iconFile), join(publicDir, iconFile));
-      }
+  }
 }
 
 await writeFile(
