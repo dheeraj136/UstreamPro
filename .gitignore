@@ -10,3 +10,4 @@ data/uploads/videos/*
 data/uploads/thumbnails/*
 !data/uploads/videos/.gitkeep
 !data/uploads/thumbnails/.gitkeep
+.vercel

@@ -11,8 +11,11 @@ import { delegate, addPassiveListener, rafThrottle, createListenerPool } from ".
 function initAdShield() {
   if (typeof window === "undefined") return;
 
-  // 1. Hard-block unauthorized window.open ad popups and tab redirects
+  // 1. Hard-block unauthorized window.open ad popups and tab redirects (allow explicit user popouts)
   const _origOpen = window.open;
+  window._allowUserPopout = function(url) {
+    return _origOpen.call(window, url, "_blank", "noopener,noreferrer");
+  };
   window.open = function (url, target, features) {
     if (!url || typeof url !== "string") return null;
     try {
@@ -2064,6 +2067,7 @@ function initInfiniteScroll() {
   window.addEventListener("touchmove", onScrollFrame, { passive: true });
   window.addEventListener("wheel", onScrollFrame, { passive: true });
   window.addEventListener("resize", () => handleAutoInfiniteScroll(), { passive: true });
+  onScrollFrame();
 
   // 3. Heartbeat scroll proximity monitor (polls every 800ms to guarantee continuous auto-loading)
   setInterval(() => {
@@ -2341,12 +2345,10 @@ function showToast(message) {
 }
 
 function focusSearch() {
-  if (typeof openSearchModal === "function") {
-    openSearchModal();
-    return;
-  }
+  openSearchModal();
   $("#search-box")?.classList.add("mobile-open");
-  $("#search-input")?.focus();
+  const sInp = $("#modal-search-input") || $("#search-input");
+  sInp?.focus();
 }
 
 function updateProfileStats() {
@@ -3328,18 +3330,21 @@ function openDetails(title) {
   }
 
   // Reset tab to overview
-  $("[data-modal-tab]").forEach(b => {
+  $$("[data-modal-tab]").forEach(b => {
     const isOverview = b.dataset.modalTab === "overview";
     b.classList.toggle("active", isOverview);
     b.setAttribute("aria-selected", isOverview ? "true" : "false");
   });
-  $(".modal-tab-panel").forEach(p => {
+  $$(".modal-tab-panel").forEach(p => {
     const isOverview = p.id === "modal-panel-overview";
     p.hidden = !isOverview;
     p.classList.toggle("active", isOverview);
   });
 
-  if (modalBackdrop) modalBackdrop.hidden = false;
+  if (modalBackdrop) {
+    modalBackdrop.hidden = false;
+    modalBackdrop.removeAttribute("hidden");
+  }
 }
 
 const isHttpUrl = (value) => typeof value === "string" && /^https?:\/\//i.test(value);
@@ -4990,7 +4995,11 @@ function closePlayer() {
   if (seasonBarField) seasonBarField.hidden = true;
   const episodeBarField = $("#player-episode-bar-field");
   if (episodeBarField) episodeBarField.hidden = true;
-  $("#player-backdrop").hidden = true;
+  const pb = $("#player-backdrop");
+  if (pb) {
+    pb.hidden = true;
+    pb.setAttribute("hidden", "true");
+  }
   setPlayerState(PLAYER_STATE.IDLE);
 }
 
@@ -5716,7 +5725,11 @@ async function loadUserUploads() {
 }
 
 function closeDetails() {
-  $("#modal-backdrop").hidden = true;
+  const mb = $("#modal-backdrop");
+  if (mb) {
+    mb.hidden = true;
+    mb.setAttribute("hidden", "true");
+  }
   state.activeModal = null;
 }
 
@@ -6065,16 +6078,10 @@ document.addEventListener("keydown", (event) => {
 
 const LocalAuthVault = {
   getStore() {
-    try {
-      const raw = localStorage.getItem("ustream_local_auth_store");
-      if (raw) return JSON.parse(raw);
-    } catch {}
-    return { users: [], profiles: [], activeUserId: null, activeProfileId: null };
+    return storage.get("ustream_local_auth_store", { users: [], profiles: [], activeUserId: null, activeProfileId: null });
   },
   saveStore(store) {
-    try {
-      localStorage.setItem("ustream_local_auth_store", JSON.stringify(store));
-    } catch {}
+    storage.set("ustream_local_auth_store", store);
   },
   handleRequest(endpoint, method, body) {
     const store = this.getStore();
@@ -8131,7 +8138,7 @@ function initSportsSection() {
       const idx = sportsState.activeFeedIndex;
       const src = match?.sources?.[idx]?.embedUrl || match?.sources?.[0]?.embedUrl;
       if (src && src !== "about:blank") {
-        window.open(src, "_blank", "noopener,noreferrer");
+        (window._allowUserPopout ? window._allowUserPopout(src) : window.open(src, "_blank", "noopener,noreferrer"));
       }
     });
 
@@ -8391,7 +8398,7 @@ function renderSportsSection() {
     }
     const bottomBtn = e.target.closest("#live-bottom-channels-btn");
     if (bottomBtn && grid.contains(bottomBtn)) {
-      $("[data-sports-tab]").forEach(b => b.classList.toggle("active", b.dataset.sportsTab === "channels"));
+      $$("[data-sports-tab]").forEach(b => b.classList.toggle("active", b.dataset.sportsTab === "channels"));
       sportsState.tab = "channels";
       sportsState.channelPage = 0;
       sportsState.channelLetter = "";
@@ -8683,15 +8690,15 @@ function initSectionButtons() {
 
 
 function initModalTabsAndHeroInteractions() {
-  $("[data-modal-tab]").forEach(btn => {
+  $$("[data-modal-tab]").forEach(btn => {
     btn.addEventListener("click", () => {
       const tab = btn.dataset.modalTab;
-      $("[data-modal-tab]").forEach(b => {
+      $$("[data-modal-tab]").forEach(b => {
         const isActive = b.dataset.modalTab === tab;
         b.classList.toggle("active", isActive);
         b.setAttribute("aria-selected", isActive ? "true" : "false");
       });
-      $(".modal-tab-panel").forEach(p => {
+      $$(".modal-tab-panel").forEach(p => {
         const isActive = p.id === `modal-panel-${tab}`;
         p.hidden = !isActive;
         p.classList.toggle("active", isActive);
