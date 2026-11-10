@@ -3,9 +3,27 @@
  */
 
 let observer = null;
+let errorListenerBound = false;
 
 export function initImageLazyLoading() {
-  if (typeof window === "undefined" || !("IntersectionObserver" in window)) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (!errorListenerBound) {
+    errorListenerBound = true;
+    window.addEventListener(
+      "error",
+      (event) => {
+        if (event.target && event.target.tagName === "IMG") {
+          handleImageError(event.target);
+        }
+      },
+      true
+    );
+  }
+
+  if (!("IntersectionObserver" in window)) {
     return;
   }
 
@@ -72,9 +90,22 @@ export function getDescriptiveAlt({ title, subtitle, context = "poster", isDecor
 /**
  * Global fallback for broken image URLs to prevent broken image icons
  */
-export function handleImageError(img, fallbackSrc = "assets/logo-mark.png") {
+export function handleImageError(img, fallbackSrc = "./assets/logo-mark.png") {
   if (!img || img.dataset.hasFailed) return;
   img.dataset.hasFailed = "true";
+
+  const sportsCard = img.closest(".sports-match-card");
+  if (sportsCard) {
+    sportsCard.classList.remove("has-poster");
+    img.style.display = "none";
+    return;
+  }
+
+  if (img.classList.contains("poster-image")) {
+    img.style.display = "none";
+    return;
+  }
+
   img.src = fallbackSrc;
   img.classList.add("image-fallback");
 }

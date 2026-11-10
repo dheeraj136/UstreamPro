@@ -24,13 +24,13 @@
     <link rel="dns-prefetch" href="https://image.tmdb.org" />
     <link rel="preconnect" href="https://api.themoviedb.org" crossorigin />
     <link rel="dns-prefetch" href="https://api.themoviedb.org" />
-    <link rel="preload" href="./styles.css?v=20261104-glass-v3" as="style" />
+    <link rel="preload" href="./styles.css?v=20261110-v5" as="style" />
     <link rel="preload" href="./assets/logo.png" as="image" type="image/png" fetchpriority="high" />
-    <link rel="modulepreload" href="./app.js?v=20261104-perf-v1" />
+    <link rel="modulepreload" href="./app.js?v=20261110-v5" />
     <link rel="modulepreload" href="./modules/storage.js" />
     <link rel="modulepreload" href="./modules/image-loader.js" />
     <link rel="modulepreload" href="./modules/events.js" />
-    <link rel="stylesheet" href="./styles.css?v=20261104-glass-v3" />
+    <link rel="stylesheet" href="./styles.css?v=20261110-v5" />
   </head>
   <body>
     <div id="startup-loader" class="startup-loader" aria-label="Loading Ustream">
@@ -356,7 +356,7 @@
           </div>
 
           <div class="provider-catalog-view" id="provider-catalog-view" hidden>
-            <div class="catalog-grid" id="provider-titles-grid"></div>
+            <div class="card-grid catalog-grid" id="provider-titles-grid"></div>
           </div>
         </section>
 
@@ -424,7 +424,7 @@
             <div class="profile-grid">
               <!-- Creator Studio & Uploads -->
               <div class="profile-card creator-studio-card">
-                <div class="profile-card-header-row" class="account-card-header">
+                <div class="profile-card-header-row account-card-header">
                   <div>
                     <h3 class="profile-card-title">Creator Studio</h3>
                     <p class="profile-card-desc">Publish your videos, track view counts, and share streamable media.</p>
@@ -633,7 +633,7 @@
           <button class="close-button" id="close-player" aria-label="Close player"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
         </div>
         <div class="player-media-container" id="player-media-container">
-          <iframe id="embed-player" class="embed-player" src="about:blank" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true" allow="autoplay; fullscreen; picture-in-picture; encrypted-media"></iframe>
+          <iframe id="embed-player" class="embed-player" src="about:blank" allow="autoplay; fullscreen; picture-in-picture; encrypted-media"></iframe>
           <div class="custom-player-wrapper" id="custom-player-wrapper" hidden>
             <video id="video-player" playsinline preload="metadata"></video>
             
@@ -1255,14 +1255,14 @@
           </div>
         </div>
         <div class="player-media-container" id="sports-media-container">
-          <iframe id="sports-stream-frame" class="embed-player" src="about:blank" allowfullscreen="true" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="no-referrer-when-downgrade"></iframe>
+          <iframe id="sports-stream-frame" class="embed-player" src="about:blank" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="no-referrer-when-downgrade"></iframe>
         </div>
         <div class="sports-stream-feeds-bar" id="sports-stream-feeds-bar"></div>
       </div>
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="./app.js?v=20261104-perf-v1" defer></script>
+    <script type="module" src="./app.js?v=20261110-v5" defer></script>
     <script>
       (function() {
         function dismissStartupLoader() {

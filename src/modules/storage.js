@@ -97,7 +97,7 @@ export const storage = {
       const keysToRemove = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k && (k.startsWith("ustream-pos-") || k === "ustream-catalog-cache")) {
+        if (k && (k.startsWith("ustream-pos-") || k.startsWith("ustream-catalog-cache"))) {
           keysToRemove.push(k);
         }
       }
@@ -117,14 +117,31 @@ export const storage = {
     if (!Array.isArray(items)) return [];
     return items.slice(0, max).map((item) => ({
       id: item.id,
+      tmdbId: item.tmdbId,
+      subjectId: item.subjectId,
       title: item.title,
       type: item.type || "movie",
-      year: item.year || "",
-      rating: item.rating || "",
-      image: item.image || "",
-      genre: item.genre || "",
-      overview: item.overview ? item.overview.slice(0, 160) : "",
-      category: item.category || ""
+      category: item.category || item.type || "movie",
+      year: item.year || 2024,
+      rating: item.rating || 8.0,
+      runtime: item.runtime || item.duration || (item.type === "series" ? "Series" : "Feature film"),
+      image: item.image || item.cover?.url || "",
+      backdrop: item.backdrop || item.image || "",
+      genre: Array.isArray(item.genre) ? item.genre : [item.type || "movie"],
+      description: item.description ? item.description.slice(0, 280) : (item.overview ? item.overview.slice(0, 280) : ""),
+      kicker: item.kicker || (item.type === "series" ? "Hit Series" : "Blockbuster"),
+      badge: item.badge || "HD",
+      gradient: item.gradient || "linear-gradient(145deg, #1e293b, #0f172a 50%, #020617)",
+      country: item.country || item.countryName || "United States",
+      language: item.language || "English, Multi Sub",
+      adult: Boolean(item.adult || item.isAdult),
+      isAdult: Boolean(item.adult || item.isAdult),
+      maturityRating: item.maturityRating || "",
+      isJapaneseAnime: Boolean(item.isJapaneseAnime),
+      isCartoon: Boolean(item.isCartoon),
+      video: item.video || "",
+      seNum: item.seNum ?? (item.type === "movie" ? 0 : 1),
+      mediaType: item.mediaType || (item.type === "movie" ? "movie" : "tv")
     }));
   }
 };
