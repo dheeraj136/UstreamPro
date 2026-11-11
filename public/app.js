@@ -1331,7 +1331,11 @@ const EPISODE_MAP = {
 
 let catalog = [...DEMO_ITEMS];
 let recommendations = DEMO_ITEMS.slice(0, 6);
-let featured = DEMO_ITEMS[0];
+function pickRandomFeatured(items, poolSize = 20) {
+  const pool = items.slice(0, Math.min(poolSize, items.length));
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+let featured = pickRandomFeatured(DEMO_ITEMS);
 
 function loadContinuation() {
   try {
@@ -1645,7 +1649,7 @@ function loadShowcaseCatalog() {
   clearErrorState();
   catalog = [...DEMO_ITEMS];
   recommendations = DEMO_ITEMS.slice(0, 6);
-  setFeatured(DEMO_ITEMS[0]);
+  setFeatured(pickRandomFeatured(DEMO_ITEMS));
   updateStatusBadge(false, DEMO_ITEMS.length);
   render();
   showToast(`Loaded ${DEMO_ITEMS.length} curated titles (10 Movies, 5 Series, 5 Anime)`);
@@ -1699,7 +1703,7 @@ async function loadLiveCatalog(isRetry = false) {
     try {
       if (Array.isArray(cached) && cached.length >= 20 && cached[0]?.kicker) {
         catalog = cached;
-        setFeatured(catalog[0]);
+        setFeatured(pickRandomFeatured(catalog));
         updateStatusBadge(true, catalog.length);
         render();
       }
@@ -1776,7 +1780,7 @@ async function loadLiveCatalog(isRetry = false) {
 
     if (successfulItems.length >= 20) {
       catalog = successfulItems;
-      setFeatured(successfulItems[0]);
+      setFeatured(pickRandomFeatured(successfulItems));
       updateStatusBadge(true, successfulItems.length);
       clearErrorState();
       render();
