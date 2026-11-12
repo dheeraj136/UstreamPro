@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: https://ustream-pro.vercel.app/sitemap.xml

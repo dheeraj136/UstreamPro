@@ -3,22 +3,119 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#0b0b11" />
-    <meta name="description" content="Stream movies, series, and anime on Ustream" />
-    <title>Ustream — watch what moves you</title>
-    <link rel="canonical" href="https://ustream-pro.vercel.app" />
+    <title>UstreamPro — Watch Movies, TV Series, Anime &amp; Live Sports in HD</title>
+    <meta name="description" content="Stream full HD movies, trending TV series, anime dub &amp; sub, and live sports online for free with ultra-fast cloud playback on UstreamPro." />
+    <meta name="keywords" content="watch movies online, free streaming, stream tv shows, watch anime online, english dubbed anime, live sports stream, hd movies, ustream pro" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="theme-color" content="#08090d" />
+    <meta name="application-name" content="UstreamPro" />
+    <meta name="apple-mobile-web-app-title" content="UstreamPro" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <link rel="canonical" href="https://ustream-pro.vercel.app/" />
+    <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="./assets/apple-touch-icon.png" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:site_name" content="UstreamPro" />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://ustream-pro.vercel.app" />
-    <meta property="og:title" content="Ustream — Watch What Moves You" />
-    <meta property="og:description" content="Stream movies, series, and anime on Ustream" />
+    <meta property="og:url" content="https://ustream-pro.vercel.app/" />
+    <meta property="og:title" content="UstreamPro — Watch Movies, TV Series, Anime &amp; Live Sports in HD" />
+    <meta property="og:description" content="Stream full HD movies, trending TV series, anime dub &amp; sub, and live sports online for free with ultra-fast cloud playback on UstreamPro." />
     <meta property="og:image" content="https://ustream-pro.vercel.app/assets/brand-banner.jpg" />
+    <meta property="og:image:secure_url" content="https://ustream-pro.vercel.app/assets/brand-banner.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="UstreamPro — Watch Movies, TV Series, Anime &amp; Live Sports in HD" />
+
+    <!-- Twitter Cards -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Ustream — Watch What Moves You" />
-    <meta name="twitter:description" content="Stream movies, series, and anime on Ustream" />
+    <meta name="twitter:site" content="@ustreampro" />
+    <meta name="twitter:creator" content="@ustreampro" />
+    <meta name="twitter:title" content="UstreamPro — Watch Movies, TV Series, Anime &amp; Live Sports in HD" />
+    <meta name="twitter:description" content="Stream full HD movies, trending TV series, anime dub &amp; sub, and live sports online for free with ultra-fast cloud playback on UstreamPro." />
     <meta name="twitter:image" content="https://ustream-pro.vercel.app/assets/brand-banner.jpg" />
+    <meta name="twitter:image:alt" content="UstreamPro — Watch Movies, TV Series, Anime &amp; Live Sports in HD" />
+
+    <!-- Schema.org JSON-LD Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "UstreamPro",
+      "alternateName": ["Ustream", "Ustream Pro"],
+      "url": "https://ustream-pro.vercel.app/",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": "https://ustream-pro.vercel.app/?q={search_term_string}"
+        },
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "UstreamPro",
+      "url": "https://ustream-pro.vercel.app/",
+      "logo": "https://ustream-pro.vercel.app/assets/logo.png"
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SiteNavigationElement",
+      "name": "Site Navigation",
+      "url": "https://ustream-pro.vercel.app/",
+      "itemListElement": [
+        {
+          "@type": "SiteNavigationElement",
+          "position": 1,
+          "name": "Home",
+          "url": "https://ustream-pro.vercel.app/"
+        },
+        {
+          "@type": "SiteNavigationElement",
+          "position": 2,
+          "name": "Movies",
+          "url": "https://ustream-pro.vercel.app/?section=movies"
+        },
+        {
+          "@type": "SiteNavigationElement",
+          "position": 3,
+          "name": "Series",
+          "url": "https://ustream-pro.vercel.app/?section=series"
+        },
+        {
+          "@type": "SiteNavigationElement",
+          "position": 4,
+          "name": "Anime",
+          "url": "https://ustream-pro.vercel.app/?section=anime"
+        },
+        {
+          "@type": "SiteNavigationElement",
+          "position": 5,
+          "name": "Sports",
+          "url": "https://ustream-pro.vercel.app/?section=sports"
+        },
+        {
+          "@type": "SiteNavigationElement",
+          "position": 6,
+          "name": "Explore",
+          "url": "https://ustream-pro.vercel.app/?section=explore"
+        }
+      ]
+    }
+    </script>
+
     <!-- Critical Resource Preloading & Preconnects -->
     <link rel="preconnect" href="https://image.tmdb.org" crossorigin />
     <link rel="dns-prefetch" href="https://image.tmdb.org" />
@@ -40,7 +137,7 @@
     <div class="app-shell">
       <header class="topbar">
         <a class="brand" href="#main-content" aria-label="Ustream home">
-          <img class="brand-logo-img" src="./assets/logo.png" alt="Ustream — Watch What Moves You" height="34" />
+          <img class="brand-logo-img" src="./assets/logo.png" alt="UstreamPro — Watch Movies, TV Series, Anime &amp; Live Sports in HD" height="34" />
         </a>
 
         <nav class="desktop-nav" role="navigation" aria-label="Primary navigation">
@@ -110,7 +207,7 @@
           <div class="hero-vignette" aria-hidden="true"></div>
           <div class="hero-content">
             <div class="eyebrow" id="hero-eyebrow-row"><span class="live-dot"></span> <span id="hero-eyebrow-text">Featured Premiere</span> <span class="badge-match" id="hero-match-badge">98% Match</span></div>
-            <h1 id="hero-title">Live<br /><em>catalog</em></h1>
+            <h1 id="hero-title">UstreamPro<br /><em>Watch Movies, Series &amp; Sports</em></h1>
             <div class="hero-meta" id="hero-meta"><span class="badge-imdb">★ 9.4</span><span class="badge-tech">4K Ultra HD</span><span class="badge-tech">Dolby Atmos</span><span class="badge-age">TV-MA</span></div>
             <div class="hero-genre-pills" id="hero-genre-pills"></div>
             <p id="hero-description">Stream the latest movies, series, and anime in high definition.</p>
@@ -520,7 +617,7 @@
 
       <footer class="footer" role="contentinfo">
         <div class="footer-brand" role="img" aria-label="Ustream logo">
-          <img class="footer-logo-img" src="./assets/logo.png" alt="Ustream" height="30" />
+          <img class="footer-logo-img" src="./assets/logo.png" alt="UstreamPro" height="30" />
         </div>
         <span>Original stories. One beautiful stream.</span>
         <div class="footer-social-links" style="margin: 12px 0; display: flex; align-items: center; justify-content: center; gap: 12px;">
@@ -868,7 +965,7 @@
         <button class="close-button" id="close-auth-modal" aria-label="Close dialog"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
 
         <div class="auth-head">
-          <div class="auth-brand"><img class="auth-logo-img" src="./assets/logo.png" alt="Ustream" height="34" /></div>
+          <div class="auth-brand"><img class="auth-logo-img" src="./assets/logo.png" alt="UstreamPro" height="34" /></div>
           <h2 id="auth-modal-title">Welcome to Ustream</h2>
           <p id="auth-modal-desc">Sign in to sync your watch history, watchlist, and personalized viewer profiles.</p>
         </div>

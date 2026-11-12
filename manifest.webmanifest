@@ -1,0 +1,21 @@
+{
+  "name": "UstreamPro",
+  "short_name": "Ustream",
+  "description": "Stream full HD movies, trending TV series, anime dub & sub, and live sports online for free with ultra-fast cloud playback on UstreamPro.",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#08090d",
+  "background_color": "#08090d",
+  "icons": [
+    {
+      "src": "./assets/favicon.png",
+      "sizes": "192x192 64x64 32x32 24x24 16x16",
+      "type": "image/png"
+    },
+    {
+      "src": "./assets/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

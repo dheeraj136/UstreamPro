@@ -12,9 +12,11 @@ await mkdir(publicDir, { recursive: true });
 await mkdir(publicAssetsDir, { recursive: true });
 await mkdir(publicApiDir, { recursive: true });
 
-for (const file of ["index.html", "styles.css", "app.js"]) {
+for (const file of ["index.html", "styles.css", "app.js", "robots.txt", "sitemap.xml", "manifest.webmanifest"]) {
   const src = existsSync(join(root, "src", file)) ? join(root, "src", file) : join(root, file);
-  await copyFile(src, join(publicDir, file));
+  if (existsSync(src)) {
+    await copyFile(src, join(publicDir, file));
+  }
 }
 
 const modulesSrcDir = join(root, "src", "modules");
