@@ -3768,6 +3768,14 @@ function getEmbedStreamUrl(tmdbId, item, season = 1, episode = 1, serverKey = cu
       const langLabel = LANGUAGE_LABELS[currentLanguageKey] || "English";
       url += `&sub_label=${encodeURIComponent(langLabel)}`;
     }
+  } else if (serverKey === "vidsrc") {
+    if (currentLanguageKey && currentLanguageKey !== "auto") {
+      url += (url.includes("?") ? "&" : "?") + `ds_lang=${encodeURIComponent(currentLanguageKey)}`;
+    }
+  } else if (serverKey === "autoembed") {
+    if (currentLanguageKey && currentLanguageKey !== "auto") {
+      url += (url.includes("?") ? "&" : "?") + `lang=${encodeURIComponent(currentLanguageKey)}`;
+    }
   }
   if (serverKey === "aniembed") {
     const animeLang = currentLanguageKey === "en" ? "dub" : "sub";
@@ -6013,7 +6021,37 @@ document.addEventListener("change", (event) => {
     try {
       localStorage.setItem("ustream-language", currentLanguageKey);
     } catch {}
-    showToast(`Language set to ${LANGUAGE_LABELS[currentLanguageKey] || currentLanguageKey.toUpperCase()}`);
+
+    const isAnime = state.player?.item && (state.player.item.type === "anime" || state.player.item.category === "anime");
+    
+    // If user picks a localized language and current server is vidstuck (which has zero multi-lang support):
+    // automatically switch to Server 2 (VidLink Cloud) or Server 4 (AniEmbed) which support multi-audio & subtitles!
+    if (currentLanguageKey !== "auto" && currentLanguageKey !== "en" && currentServerKey === "vidstuck") {
+      currentServerKey = isAnime ? "aniembed" : "vidlink";
+      const serverSelect = $("#player-server-select");
+      if (serverSelect) serverSelect.value = currentServerKey;
+      try {
+        localStorage.setItem("ustream-server", currentServerKey);
+      } catch {}
+    } else if (isAnime && currentServerKey !== "aniembed") {
+      currentServerKey = "aniembed";
+      const serverSelect = $("#player-server-select");
+      if (serverSelect) serverSelect.value = "aniembed";
+      try {
+        localStorage.setItem("ustream-server", "aniembed");
+      } catch {}
+    }
+
+    const langName = LANGUAGE_LABELS[currentLanguageKey] || currentLanguageKey.toUpperCase();
+    if (isAnime) {
+      const animeMode = currentLanguageKey === "en" ? "English Dub" : "Japanese Sub (Original)";
+      showToast(`Anime audio set to ${animeMode}`);
+    } else if (currentLanguageKey === "auto" || currentLanguageKey === "en") {
+      showToast(`Audio set to Original English`);
+    } else {
+      showToast(`Language set to ${langName} · Subtitles & Dual-Audio enabled`);
+    }
+
     reloadCurrentEmbed();
     return;
   }
