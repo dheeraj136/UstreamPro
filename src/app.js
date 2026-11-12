@@ -3537,8 +3537,8 @@ const STREAM_SERVERS = {
   },
   vidlink: {
     name: "Server 2 (VidLink Cloud)",
-    getMovieUrl: (id) => `https://vidlink.pro/movie/${id}?primaryColor=e7ff51&secondaryColor=1f1f1f&icons=vid&multiLang=true`,
-    getTvUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e7ff51&secondaryColor=1f1f1f&icons=vid&multiLang=true`
+    getMovieUrl: (id) => `https://vidlink.pro/movie/${id}?primaryColor=e7ff51&secondaryColor=1f1f1f&icons=vid`,
+    getTvUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e7ff51&secondaryColor=1f1f1f&icons=vid`
   },
   vidsrc: {
     name: "Server 3 (VidSrc VIP)",
@@ -3567,6 +3567,9 @@ try {
   const savedServer = localStorage.getItem("ustream-server");
   if (savedServer && STREAM_SERVERS[savedServer] && savedServer !== "vidlink") {
     currentServerKey = savedServer;
+  } else {
+    currentServerKey = "vidstuck";
+    localStorage.setItem("ustream-server", "vidstuck");
   }
 } catch {}
 
@@ -3760,23 +3763,8 @@ function getEmbedStreamUrl(tmdbId, item, season = 1, episode = 1, serverKey = cu
   let url = isSeries
     ? server.getTvUrl(tmdbId, Math.max(1, Number(season) || 1), Math.max(1, Number(episode) || 1))
     : server.getMovieUrl(tmdbId);
-  if (serverKey === "vidlink") {
-    if (!url.includes("multiLang=true")) {
-      url += (url.includes("?") ? "&" : "?") + "multiLang=true";
-    }
-    if (currentLanguageKey && currentLanguageKey !== "auto") {
-      const langLabel = LANGUAGE_LABELS[currentLanguageKey] || "English";
-      url += `&sub_label=${encodeURIComponent(langLabel)}`;
-    }
-  } else if (serverKey === "vidsrc") {
-    if (currentLanguageKey && currentLanguageKey !== "auto") {
-      url += (url.includes("?") ? "&" : "?") + `ds_lang=${encodeURIComponent(currentLanguageKey)}`;
-    }
-  } else if (serverKey === "autoembed") {
-    if (currentLanguageKey && currentLanguageKey !== "auto") {
-      url += (url.includes("?") ? "&" : "?") + `lang=${encodeURIComponent(currentLanguageKey)}`;
-    }
-  }
+
+  // AniEmbed natively supports sub vs dub switching for anime
   if (serverKey === "aniembed") {
     const animeLang = currentLanguageKey === "en" ? "dub" : "sub";
     if (/lang=(?:sub|dub)/.test(url)) {
@@ -6023,17 +6011,7 @@ document.addEventListener("change", (event) => {
     } catch {}
 
     const isAnime = state.player?.item && (state.player.item.type === "anime" || state.player.item.category === "anime");
-    
-    // If user picks a localized language and current server is vidstuck (which has zero multi-lang support):
-    // automatically switch to Server 2 (VidLink Cloud) or Server 4 (AniEmbed) which support multi-audio & subtitles!
-    if (currentLanguageKey !== "auto" && currentLanguageKey !== "en" && currentServerKey === "vidstuck") {
-      currentServerKey = isAnime ? "aniembed" : "vidlink";
-      const serverSelect = $("#player-server-select");
-      if (serverSelect) serverSelect.value = currentServerKey;
-      try {
-        localStorage.setItem("ustream-server", currentServerKey);
-      } catch {}
-    } else if (isAnime && currentServerKey !== "aniembed") {
+    if (isAnime && currentServerKey !== "aniembed") {
       currentServerKey = "aniembed";
       const serverSelect = $("#player-server-select");
       if (serverSelect) serverSelect.value = "aniembed";
@@ -6046,10 +6024,8 @@ document.addEventListener("change", (event) => {
     if (isAnime) {
       const animeMode = currentLanguageKey === "en" ? "English Dub" : "Japanese Sub (Original)";
       showToast(`Anime audio set to ${animeMode}`);
-    } else if (currentLanguageKey === "auto" || currentLanguageKey === "en") {
-      showToast(`Audio set to Original English`);
     } else {
-      showToast(`Language set to ${langName} · Subtitles & Dual-Audio enabled`);
+      showToast(`Language preference: ${langName}`);
     }
 
     reloadCurrentEmbed();
