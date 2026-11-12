@@ -3537,8 +3537,8 @@ const STREAM_SERVERS = {
   },
   vidlink: {
     name: "Server 2 (VidLink Cloud)",
-    getMovieUrl: (id) => `https://vidlink.pro/movie/${id}?primaryColor=e7ff51&secondaryColor=1f1f1f&icons=vid`,
-    getTvUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e7ff51&secondaryColor=1f1f1f&icons=vid`
+    getMovieUrl: (id) => `https://vidlink.pro/movie/${id}?primaryColor=e7ff51&secondaryColor=1f1f1f&icons=vid&multiLang=true`,
+    getTvUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e7ff51&secondaryColor=1f1f1f&icons=vid&multiLang=true`
   },
   vidsrc: {
     name: "Server 3 (VidSrc VIP)",
@@ -3760,9 +3760,22 @@ function getEmbedStreamUrl(tmdbId, item, season = 1, episode = 1, serverKey = cu
   let url = isSeries
     ? server.getTvUrl(tmdbId, Math.max(1, Number(season) || 1), Math.max(1, Number(episode) || 1))
     : server.getMovieUrl(tmdbId);
-  if (serverKey === "vidlink" && currentLanguageKey && currentLanguageKey !== "auto") {
-    const langLabel = LANGUAGE_LABELS[currentLanguageKey] || "English";
-    url += `&sub_label=${encodeURIComponent(langLabel)}`;
+  if (serverKey === "vidlink") {
+    if (!url.includes("multiLang=true")) {
+      url += (url.includes("?") ? "&" : "?") + "multiLang=true";
+    }
+    if (currentLanguageKey && currentLanguageKey !== "auto") {
+      const langLabel = LANGUAGE_LABELS[currentLanguageKey] || "English";
+      url += `&sub_label=${encodeURIComponent(langLabel)}`;
+    }
+  }
+  if (serverKey === "aniembed") {
+    const animeLang = currentLanguageKey === "en" ? "dub" : "sub";
+    if (/lang=(?:sub|dub)/.test(url)) {
+      url = url.replace(/lang=(?:sub|dub)/, `lang=${animeLang}`);
+    } else {
+      url += (url.includes("?") ? "&" : "?") + `lang=${animeLang}`;
+    }
   }
   return url;
 }
