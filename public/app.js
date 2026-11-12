@@ -3530,46 +3530,46 @@ const TITLE_TMDB_MAP = {
 };
 
 const STREAM_SERVERS = {
-  vidstuck: {
-    name: "Server 1 (Vidstuck HD - Fast & Reliable)",
-    getMovieUrl: (id) => `https://vidstuck.cc/embed/movie/${id}?color=e7ff51&autoplay=false`,
-    getTvUrl: (id, s, e) => `https://vidstuck.cc/embed/tv/${id}/${s}/${e}?color=e7ff51&autoplay=false`
+  vidsrcsu: {
+    name: "Server 1 (VidSrc Pro - Fast & Multi-Source)",
+    getMovieUrl: (id) => `https://vidsrc.su/embed/movie/${id}`,
+    getTvUrl: (id, s, e) => `https://vidsrc.su/embed/tv/${id}/${s}/${e}`
   },
   vidlink: {
-    name: "Server 2 (VidLink Cloud)",
+    name: "Server 2 (VidLink Cloud - 4K/HD)",
     getMovieUrl: (id) => `https://vidlink.pro/movie/${id}?primaryColor=e7ff51&secondaryColor=1f1f1f&icons=vid`,
     getTvUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e7ff51&secondaryColor=1f1f1f&icons=vid`
   },
-  vidsrc: {
-    name: "Server 3 (VidSrc VIP)",
-    getMovieUrl: (id) => `https://vidsrc.to/embed/movie/${id}`,
-    getTvUrl: (id, s, e) => `https://vidsrc.to/embed/tv/${id}/${s}/${e}`
+  twoembed: {
+    name: "Server 3 (2Embed Mirror)",
+    getMovieUrl: (id) => `https://www.2embed.cc/embed/${id}`,
+    getTvUrl: (id, s, e) => `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}`
+  },
+  vidstuck: {
+    name: "Server 4 (Vidstuck HD - Fast)",
+    getMovieUrl: (id) => `https://vidstuck.cc/embed/movie/${id}?color=e7ff51&autoplay=false`,
+    getTvUrl: (id, s, e) => `https://vidstuck.cc/embed/tv/${id}/${s}/${e}?color=e7ff51&autoplay=false`
   },
   aniembed: {
-    name: "Server 4 (AniEmbed Anime)",
+    name: "Server 5 (AniEmbed Anime)",
     getMovieUrl: (id) => `https://aniembed.se/e/${id}/1?lang=sub&autoplay=1`,
     getTvUrl: (id, s, e) => `https://aniembed.se/e/${id}/${e}?lang=sub&autoplay=1`
   },
-  smashy: {
-    name: "Server 5 (SmashyStream)",
-    getMovieUrl: (id) => `https://player.smashy.stream/movie/${id}`,
-    getTvUrl: (id, s, e) => `https://player.smashy.stream/tv/${id}?s=${s}&e=${e}`
-  },
-  autoembed: {
-    name: "Server 6 (AutoEmbed)",
-    getMovieUrl: (id) => `https://player.autoembed.cc/embed/movie/${id}`,
-    getTvUrl: (id, s, e) => `https://player.autoembed.cc/embed/tv/${id}/${s}/${e}`
+  twoembedskin: {
+    name: "Server 6 (2Embed Skin)",
+    getMovieUrl: (id) => `https://2embed.skin/embed/${id}`,
+    getTvUrl: (id, s, e) => `https://2embed.skin/embedtv/${id}&s=${s}&e=${e}`
   }
 };
 
-let currentServerKey = "vidstuck";
+let currentServerKey = "vidsrcsu";
 try {
   const savedServer = localStorage.getItem("ustream-server");
-  if (savedServer && STREAM_SERVERS[savedServer] && savedServer !== "vidlink") {
+  if (savedServer && STREAM_SERVERS[savedServer]) {
     currentServerKey = savedServer;
   } else {
-    currentServerKey = "vidstuck";
-    localStorage.setItem("ustream-server", "vidstuck");
+    currentServerKey = "vidsrcsu";
+    localStorage.setItem("ustream-server", "vidsrcsu");
   }
 } catch {}
 
@@ -3758,7 +3758,7 @@ async function resolveTmdbId(item) {
 }
 
 function getEmbedStreamUrl(tmdbId, item, season = 1, episode = 1, serverKey = currentServerKey) {
-  const server = STREAM_SERVERS[serverKey] || STREAM_SERVERS.vidstuck;
+  const server = STREAM_SERVERS[serverKey] || STREAM_SERVERS.vidsrcsu;
   const isSeries = isItemSeries(item);
   let url = isSeries
     ? server.getTvUrl(tmdbId, Math.max(1, Number(season) || 1), Math.max(1, Number(episode) || 1))
@@ -4954,6 +4954,13 @@ async function playTitle(title) {
   state.player.selectedSeason = 1;
   state.player.selectedEpisode = 1;
 
+  const isAnime = item.type === "anime" || item.category === "anime";
+  if (isAnime) {
+    currentServerKey = "aniembed";
+  } else if (currentServerKey === "aniembed") {
+    currentServerKey = "vidsrcsu";
+  }
+
   if (state.player.isSeries) {
     await loadEpisodeState(item.subjectId || item.title, 1, 1, ++state.player.requestId);
   } else {
@@ -5009,7 +5016,8 @@ function handlePlaybackError() {
   const embed = $("#embed-player");
   if (embed && state.player?.tmdbId && state.player?.item) {
     // Switch to alternate server
-    const serverKeys = Object.keys(STREAM_SERVERS);
+    const isAnime = state.player.item.type === "anime" || state.player.item.category === "anime";
+    const serverKeys = Object.keys(STREAM_SERVERS).filter(k => isAnime || k !== "aniembed");
     const nextIdx = (serverKeys.indexOf(currentServerKey) + 1) % serverKeys.length;
     currentServerKey = serverKeys[nextIdx];
     const serverSelect = $("#player-server-select");
@@ -6024,11 +6032,14 @@ document.addEventListener("change", (event) => {
     if (isAnime) {
       const animeMode = currentLanguageKey === "en" ? "English Dub" : "Japanese Sub (Original)";
       showToast(`Anime audio set to ${animeMode}`);
+      reloadCurrentEmbed();
     } else {
-      showToast(`Language preference: ${langName}`);
+      if (currentLanguageKey === "auto" || currentLanguageKey === "en") {
+        showToast("Audio set to Original English");
+      } else {
+        showToast(`Language: ${langName} · Use [CC] button inside player for subtitles`);
+      }
     }
-
-    reloadCurrentEmbed();
     return;
   }
   if (event.target.id === "player-season-bar-select") {
