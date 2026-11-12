@@ -3530,46 +3530,47 @@ const TITLE_TMDB_MAP = {
 };
 
 const STREAM_SERVERS = {
+  gaiaflix: {
+    name: "Server 1 (Gaiaflix Pro - Multi-Audio & Dubs)",
+    isNative: true,
+    getMovieUrl: (id) => `https://vidsrc.su/embed/movie/${id}`,
+    getTvUrl: (id, s, e) => `https://vidsrc.su/embed/tv/${id}/${s}/${e}`
+  },
   vidsrcsu: {
-    name: "Server 1 (VidSrc Pro - Fast & Multi-Source)",
+    name: "Server 2 (VidSrc Pro - Fast & Multi-Source)",
     getMovieUrl: (id) => `https://vidsrc.su/embed/movie/${id}`,
     getTvUrl: (id, s, e) => `https://vidsrc.su/embed/tv/${id}/${s}/${e}`
   },
   vidlink: {
-    name: "Server 2 (VidLink Cloud - 4K/HD)",
+    name: "Server 3 (VidLink Cloud - 4K/HD Player)",
     getMovieUrl: (id) => `https://vidlink.pro/movie/${id}?primaryColor=e7ff51&secondaryColor=1f1f1f&icons=vid`,
     getTvUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e7ff51&secondaryColor=1f1f1f&icons=vid`
   },
   twoembed: {
-    name: "Server 3 (2Embed Mirror)",
+    name: "Server 4 (2Embed Mirror - Reliable)",
     getMovieUrl: (id) => `https://www.2embed.cc/embed/${id}`,
     getTvUrl: (id, s, e) => `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}`
   },
   vidstuck: {
-    name: "Server 4 (Vidstuck HD - Fast)",
+    name: "Server 5 (Vidstuck HD - Alternative)",
     getMovieUrl: (id) => `https://vidstuck.cc/embed/movie/${id}?color=e7ff51&autoplay=false`,
     getTvUrl: (id, s, e) => `https://vidstuck.cc/embed/tv/${id}/${s}/${e}?color=e7ff51&autoplay=false`
   },
   aniembed: {
-    name: "Server 5 (AniEmbed Anime)",
+    name: "Server 6 (AniEmbed - Anime Dub/Sub)",
     getMovieUrl: (id) => `https://aniembed.se/e/${id}/1?lang=sub&autoplay=1`,
     getTvUrl: (id, s, e) => `https://aniembed.se/e/${id}/${e}?lang=sub&autoplay=1`
-  },
-  twoembedskin: {
-    name: "Server 6 (2Embed Skin)",
-    getMovieUrl: (id) => `https://2embed.skin/embed/${id}`,
-    getTvUrl: (id, s, e) => `https://2embed.skin/embedtv/${id}&s=${s}&e=${e}`
   }
 };
 
-let currentServerKey = "vidsrcsu";
+let currentServerKey = "gaiaflix";
 try {
   const savedServer = localStorage.getItem("ustream-server");
   if (savedServer && STREAM_SERVERS[savedServer]) {
     currentServerKey = savedServer;
   } else {
-    currentServerKey = "vidsrcsu";
-    localStorage.setItem("ustream-server", "vidsrcsu");
+    currentServerKey = "gaiaflix";
+    localStorage.setItem("ustream-server", "gaiaflix");
   }
 } catch {}
 
@@ -3774,6 +3775,223 @@ function getEmbedStreamUrl(tmdbId, item, season = 1, episode = 1, serverKey = cu
     }
   }
   return url;
+}
+
+function resetDefaultLanguageOptions() {
+  const langSelect = $("#player-language-bar-select");
+  if (!langSelect) return;
+  langSelect.innerHTML = `
+    <option value="auto">Original Audio</option>
+    <option value="en" ${currentLanguageKey === "en" ? "selected" : ""}>English (Original / Dub)</option>
+    <option value="hi" ${currentLanguageKey === "hi" ? "selected" : ""}>Hindi (Subtitles / CC)</option>
+    <option value="ja" ${currentLanguageKey === "ja" ? "selected" : ""}>Japanese (Anime Dub/Sub)</option>
+    <option value="es" ${currentLanguageKey === "es" ? "selected" : ""}>Spanish (Subtitles / CC)</option>
+    <option value="fr" ${currentLanguageKey === "fr" ? "selected" : ""}>French (Subtitles / CC)</option>
+    <option value="de" ${currentLanguageKey === "de" ? "selected" : ""}>German (Subtitles / CC)</option>
+  `;
+}
+
+export async function resolveGaiaflixStream(tmdbId) {
+  if (!tmdbId) return null;
+  let timeout = null;
+  try {
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    timeout = controller ? setTimeout(() => controller.abort(), 15000) : null;
+    let res;
+    try {
+      res = await fetch(`https://gaiaflix.xyz/api/gaiaflix-movie-source?id=${encodeURIComponent(tmdbId)}`, {
+        signal: controller ? controller.signal : undefined,
+        headers: { Accept: "application/json" }
+      });
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+    if (!res || !res.ok) return null;
+    const data = await res.json();
+    const sourceUrl = data?.sources?.[0]?.url;
+    if (!sourceUrl) return null;
+
+    let base64Part = "";
+    if (sourceUrl.includes("?id=")) {
+      base64Part = sourceUrl.split("?id=")[1];
+    } else if (sourceUrl.includes("&id=")) {
+      base64Part = sourceUrl.split("&id=")[1];
+    } else {
+      base64Part = sourceUrl;
+    }
+    if (base64Part.includes("&")) {
+      base64Part = base64Part.split("&")[0];
+    }
+
+    let decoded = "";
+    if (typeof atob === "function") {
+      decoded = atob(base64Part);
+    } else if (typeof Buffer !== "undefined") {
+      decoded = Buffer.from(base64Part, "base64").toString("utf-8");
+    }
+
+    if (decoded && (decoded.startsWith("http://") || decoded.startsWith("https://"))) {
+      return decoded;
+    }
+    return null;
+  } catch (err) {
+    console.warn("[Gaiaflix] resolveGaiaflixStream error:", err?.message || err);
+    return null;
+  }
+}
+if (typeof window !== "undefined") {
+  window.resolveGaiaflixStream = resolveGaiaflixStream;
+}
+
+export function playWithGaiaflixHls(m3u8Url, item) {
+  return new Promise((resolve) => {
+    const embed = $("#embed-player");
+    const video = $("#video-player");
+    const customWrapper = $("#custom-player-wrapper");
+    const playerBackdrop = $("#player-backdrop");
+    if (!video || !customWrapper) {
+      resolve(false);
+      return;
+    }
+
+    if (embed) {
+      embed.src = "about:blank";
+      embed.hidden = true;
+    }
+    customWrapper.hidden = false;
+    video.hidden = false;
+    video.poster = item?.image || "";
+    const titleEl = $("#player-title");
+    if (titleEl) titleEl.textContent = item?.title || "Gaiaflix Pro Stream";
+    if (playerBackdrop) playerBackdrop.hidden = false;
+
+    if (window._currentHlsInstance) {
+      try {
+        window._currentHlsInstance.destroy();
+      } catch {}
+      window._currentHlsInstance = null;
+    }
+
+    const HlsClass = window.Hls;
+    if (HlsClass && HlsClass.isSupported()) {
+      const hls = new HlsClass({
+        capLevelToPlayerSize: true,
+        autoStartLoad: true
+      });
+      window._currentHlsInstance = hls;
+      hls.loadSource(m3u8Url);
+      hls.attachMedia(video);
+
+      let resolved = false;
+
+      hls.on(HlsClass.Events.MANIFEST_PARSED, (event, data) => {
+        const audioTracks = hls.audioTracks || [];
+        const langSelect = $("#player-language-bar-select");
+        if (langSelect && audioTracks.length > 0) {
+          langSelect.innerHTML = "";
+          audioTracks.forEach((track) => {
+            const opt = document.createElement("option");
+            opt.value = track.id !== undefined ? String(track.id) : (track.lang || track.name);
+            opt.textContent = `${track.name || track.lang || "Audio"} (Multi-Audio)`;
+            langSelect.appendChild(opt);
+          });
+
+          // Preferred language matching (e.g. Hindi, English, Tamil, Telugu, Thai)
+          const preferred = (currentLanguageKey || "en").toLowerCase();
+          const langPrefixMap = {
+            hi: ["hi", "hin", "hindi"],
+            en: ["en", "eng", "english"],
+            ta: ["ta", "tam", "tamil"],
+            te: ["te", "tel", "telugu"],
+            th: ["th", "tha", "thai"],
+            ja: ["ja", "jpn", "japanese"],
+            es: ["es", "spa", "spanish"],
+            fr: ["fr", "fra", "french"],
+            de: ["de", "ger", "german"]
+          };
+          const targets = langPrefixMap[preferred] || [preferred];
+
+          const targetTrack = audioTracks.find((t) => {
+            if (String(t.id) === String(currentLanguageKey)) return true;
+            const tLang = (t.lang || "").toLowerCase();
+            const tName = (t.name || "").toLowerCase();
+            return targets.some((target) => tLang === target || tLang.startsWith(target) || tName.includes(target));
+          }) || audioTracks.find((t) => t.default) || audioTracks[0];
+
+          if (targetTrack) {
+            hls.audioTrack = targetTrack.id;
+            langSelect.value = String(targetTrack.id);
+            const trackName = targetTrack.name || targetTrack.lang || "Audio";
+            showToast(`Switched audio to ${trackName} (Multi-Audio)`);
+          }
+        }
+
+        // Start playback on #video-player
+        video.play().then(() => {
+          setPlayerState(PLAYER_STATE.PLAYING, `${item?.title || "Movie"} · Server 1 (Gaiaflix Pro - Multi-Audio)`);
+        }).catch(() => {
+          setPlayerState(PLAYER_STATE.READY, `Ready to play: ${item?.title || "Movie"}`);
+        });
+
+        const popout = $("#player-popout-btn");
+        if (popout) popout.href = m3u8Url;
+        const liveLabel = $("#player-live-label");
+        if (liveLabel) liveLabel.hidden = false;
+        const liveText = $("#player-live-text");
+        if (liveText) liveText.textContent = "Multi-Audio HLS Active";
+        updatePlayerEpisodeFlow();
+
+        if (!resolved) {
+          resolved = true;
+          resolve(true);
+        }
+      });
+
+      hls.on(HlsClass.Events.ERROR, (event, data) => {
+        if (data.fatal) {
+          console.warn("[Hls] Fatal error:", data.type, data.details);
+          switch (data.type) {
+            case HlsClass.ErrorTypes.NETWORK_ERROR:
+              hls.startLoad();
+              break;
+            case HlsClass.ErrorTypes.MEDIA_ERROR:
+              hls.recoverMediaError();
+              break;
+            default:
+              hls.destroy();
+              window._currentHlsInstance = null;
+              if (!resolved) {
+                resolved = true;
+                resolve(false);
+              }
+              break;
+          }
+        }
+      });
+
+      // Safety timeout: if manifest not parsed in 6 seconds, resolve
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          if (video.readyState >= 1) {
+            resolve(true);
+          } else {
+            resolve(false);
+          }
+        }
+      }, 6000);
+    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      // Native Apple/Safari HLS
+      video.src = m3u8Url;
+      video.load();
+      video.play().then(() => {
+        setPlayerState(PLAYER_STATE.PLAYING, `${item?.title || "Movie"} · Server 1 (Gaiaflix Pro - Multi-Audio)`);
+      }).catch(() => {});
+      resolve(true);
+    } else {
+      resolve(false);
+    }
+  });
 }
 
 const HIGH_DEF_STREAMS = [
@@ -4822,10 +5040,51 @@ async function changePlayerQuality(value) {
   await reloadSelectedPlayback(`Loading ${quality}p playback...`, requestId);
 }
 
-function reloadCurrentEmbed() {
+async function reloadCurrentEmbed() {
   const player = state.player;
   const item = player.item;
   if (!item || !player.tmdbId) return;
+
+  const serverSelect = $("#player-server-select");
+  if (serverSelect) serverSelect.value = currentServerKey;
+
+  // Handle Gaiaflix Server 1 (Multi-Audio HLS for movies)
+  if (currentServerKey === "gaiaflix") {
+    if (player.isSeries || (item.type && item.type !== "movie")) {
+      currentServerKey = "vidsrcsu";
+      if (serverSelect) serverSelect.value = "vidsrcsu";
+      showToast("Gaiaflix Multi-Audio is for movies · Switched to Server 2 (VidSrc Pro)");
+    } else {
+      setPlayerState(PLAYER_STATE.LOADING, "Loading Multi-Audio HLS stream from Gaiaflix Pro…");
+      const m3u8Url = await resolveGaiaflixStream(player.tmdbId);
+      let launched = false;
+      if (m3u8Url) {
+        launched = await playWithGaiaflixHls(m3u8Url, item);
+      }
+      if (launched) return;
+
+      currentServerKey = "vidsrcsu";
+      if (serverSelect) serverSelect.value = "vidsrcsu";
+      showToast("Gaiaflix stream unavailable · Cascaded to Server 2 (VidSrc Pro)");
+    }
+  }
+
+  // Clean up native HLS / video player before loading embed
+  if (window._currentHlsInstance) {
+    try { window._currentHlsInstance.destroy(); } catch {}
+    window._currentHlsInstance = null;
+  }
+  const video = $("#video-player");
+  if (video) {
+    video.pause();
+    video.removeAttribute("src");
+    video.hidden = true;
+  }
+  const customWrapper = $("#custom-player-wrapper");
+  if (customWrapper) customWrapper.hidden = true;
+
+  resetDefaultLanguageOptions();
+
   const embed = $("#embed-player");
   if (!embed) return;
   embed.removeAttribute("sandbox");
@@ -4834,8 +5093,6 @@ function reloadCurrentEmbed() {
   const url = getEmbedStreamUrl(player.tmdbId, item, season, episode, currentServerKey);
   embed.src = url;
   embed.hidden = false;
-  const video = $("#video-player");
-  if (video) video.hidden = true;
   const popout = $("#player-popout-btn");
   if (popout) popout.href = url;
   const server = STREAM_SERVERS[currentServerKey];
@@ -4958,13 +5215,53 @@ async function playTitle(title) {
   if (isAnime) {
     currentServerKey = "aniembed";
   } else if (currentServerKey === "aniembed") {
-    currentServerKey = "vidsrcsu";
+    currentServerKey = "gaiaflix";
   }
 
   if (state.player.isSeries) {
     await loadEpisodeState(item.subjectId || item.title, 1, 1, ++state.player.requestId);
   } else {
     updatePlayerSelectionUI();
+  }
+
+  // Handle Gaiaflix Server 1 for movies
+  if (currentServerKey === "gaiaflix" && isSeries) {
+    // Gaiaflix only provides movies; cascade TV series to VidSrc Pro
+    currentServerKey = "vidsrcsu";
+  }
+
+  if (currentServerKey === "gaiaflix" && (!item.type || item.type === "movie")) {
+    const serverSelect = $("#player-server-select");
+    if (serverSelect) serverSelect.value = "gaiaflix";
+    setPlayerState(PLAYER_STATE.LOADING, "Loading Multi-Audio HLS stream from Gaiaflix Pro…");
+    const m3u8Url = await resolveGaiaflixStream(tmdbId);
+    let launched = false;
+    if (m3u8Url) {
+      launched = await playWithGaiaflixHls(m3u8Url, item);
+    }
+    if (launched) {
+      const idx = continuation.findIndex((c) => c.title === item.title);
+      if (idx >= 0) {
+        continuation[idx].progress = Math.min(95, (continuation[idx].progress || 20) + 15);
+      } else {
+        continuation.unshift({ ...item, progress: 15 });
+        if (continuation.length > 6) continuation.pop();
+      }
+      try {
+        localStorage.setItem("ustream-continuation", JSON.stringify(continuation));
+      } catch {}
+      renderContinue();
+      return;
+    }
+    // If Gaiaflix stream is unavailable or fails:
+    // Cascade smoothly to Server 2 (VidSrc Pro).
+    console.warn("[Gaiaflix] Stream unavailable or failed, cascading to Server 2 (VidSrc Pro)");
+    currentServerKey = "vidsrcsu";
+    if (serverSelect) serverSelect.value = "vidsrcsu";
+    try {
+      localStorage.setItem("ustream-server", "vidsrcsu");
+    } catch {}
+    showToast("Gaiaflix multi-audio unavailable for this title · Switched to Server 2 (VidSrc Pro)");
   }
 
   // Load embed player with actual content!
@@ -5053,6 +5350,7 @@ function closePlayer() {
     } catch {}
     window._currentHlsInstance = null;
   }
+  resetDefaultLanguageOptions();
   const resumeBanner = $("#player-resume-banner");
   if (resumeBanner) resumeBanner.hidden = true;
   const episodesSection = $("#player-episodes-section");
@@ -5834,6 +6132,7 @@ function closeDrawer() {
   $("#filter-drawer").setAttribute("aria-hidden", "true");
 }
 
+if (typeof document !== "undefined") {
 document.addEventListener("click", (event) => {
   const arrow = event.target.closest("[data-rail-scroll]");
   if (arrow) {
@@ -6013,10 +6312,23 @@ document.addEventListener("change", (event) => {
     return;
   }
   if (event.target.id === "player-language-bar-select") {
-    currentLanguageKey = event.target.value;
+    const selectedVal = event.target.value;
+    currentLanguageKey = selectedVal;
     try {
       localStorage.setItem("ustream-language", currentLanguageKey);
     } catch {}
+
+    // If playing via native HLS (window._currentHlsInstance):
+    if (window._currentHlsInstance && window._currentHlsInstance.audioTracks && window._currentHlsInstance.audioTracks.length > 0) {
+      const tracks = window._currentHlsInstance.audioTracks;
+      const track = tracks.find((t) => String(t.id) === String(selectedVal)) ||
+                    tracks.find((t) => (t.lang && t.lang.toLowerCase() === selectedVal.toLowerCase()) || (t.name && t.name.toLowerCase().includes(selectedVal.toLowerCase())));
+      if (track) {
+        window._currentHlsInstance.audioTrack = track.id;
+        showToast(`Switched audio to ${track.name || track.lang} (Multi-Audio)`);
+        return;
+      }
+    }
 
     const isAnime = state.player?.item && (state.player.item.type === "anime" || state.player.item.category === "anime");
     if (isAnime && currentServerKey !== "aniembed") {
@@ -6166,6 +6478,7 @@ document.addEventListener("keydown", (event) => {
     $("#search-box")?.classList.remove("mobile-open");
   }
 });
+}
 
 // ==========================================================================
 // Authentication, Viewer Profiles & Security State Controller
@@ -8917,26 +9230,28 @@ function initRouter() {
   handleRoute();
 }
 
-loadShowcaseCatalog();
-setupAuthEventListeners();
-void initAuth();
-initAppearanceSettings();
-initSearchModal();
-initCustomVideoPlayer();
-initCreatorStudioAndUploads();
-void loadCommunityVideos();
-initModalTabsAndHeroInteractions();
-initRouter();
-initInfiniteScroll();
-void loadLiveCatalog();
-void loadNewestRecommendations();
-hideStartupLoader();
-if (document.readyState === "complete" || document.readyState === "interactive") {
+if (typeof window !== "undefined" && typeof document !== "undefined") {
+  loadShowcaseCatalog();
+  setupAuthEventListeners();
+  void initAuth();
+  initAppearanceSettings();
+  initSearchModal();
+  initCustomVideoPlayer();
+  initCreatorStudioAndUploads();
+  void loadCommunityVideos();
+  initModalTabsAndHeroInteractions();
+  initRouter();
+  initInfiniteScroll();
+  void loadLiveCatalog();
+  void loadNewestRecommendations();
   hideStartupLoader();
-} else {
-  window.addEventListener("load", hideStartupLoader);
-  window.addEventListener("DOMContentLoaded", hideStartupLoader);
+  if (document.readyState === "complete" || document.readyState === "interactive") {
+    hideStartupLoader();
+  } else {
+    window.addEventListener("load", hideStartupLoader);
+    window.addEventListener("DOMContentLoaded", hideStartupLoader);
+  }
+  setTimeout(hideStartupLoader, 300);
+  setTimeout(hideStartupLoader, 800);
 }
-setTimeout(hideStartupLoader, 300);
-setTimeout(hideStartupLoader, 800);
 
