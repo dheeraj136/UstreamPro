@@ -1383,16 +1383,72 @@ function stableRatingFor(value, key) {
 
 // Bug 6/7: one identity for a title. TMDB id first (the app already
 // treats `tmdb-<id>` as the global id in subjectId/video URLs); then
-// subjectId; then normalised title+year+type, so remakes (same title,
+// subjectId; then normalised title+year+kind, so remakes (same title,
 // different year) stay distinct while the same title returned by
 // several TMDB endpoints collapses to one entry.
+//
+// Round 2 root causes (live re-audit: "The Odyssey" 3x with ★8.0/★4.0/
+// ★1.0): TMDB really does return several distinct entries for the same
+// film (e.g. three "The Odyssey" 2026 movies, ids 1368337/1756234/
+// 1698863, votes 8.0/4.0/1.0), and the old key missed them:
+//  - TMDB movie ids and TV ids share one numeric space, so a bare
+//    `tmdb:<id>` key can also WRONGLY merge a movie with a TV show.
+//  - the second pass keyed on raw `mediaType || type`, so "movie" vs
+//    "tv" vs "series" vs "cartoons" vs "trending"/"all" (the /api/catalog
+//    fallback category) never matched each other.
+//  - `appendCatalogItems` only checked the first-pass key against the
+//    live catalog, so a same-title/different-id entry appended by a
+//    later infinite-scroll page sailed straight past the dedupe.
+// Canonical kind + canonical title key fix all three.
+function canonicalKind(item) {
+  if (!item) return "";
+  const raw = String(item.mediaType || item.type || item.category || "").toLowerCase().trim();
+  if (raw === "tv" || raw === "series" || raw === "show") return "series";
+  if (raw === "anime") return "anime";
+  if (raw === "cartoon" || raw === "cartoons" || raw === "animation") return "cartoon";
+  if (raw === "movie" || raw === "film") return "movie";
+  // Unknown / fallback categories ("trending", "all", ""): derive the kind
+  // from the item itself instead of baking the category into the key.
+  if (Number(item.seNum) > 0 || /season|episode/i.test(String(item.runtime || ""))) return "series";
+  if (item.first_air_date) return "series";
+  if (item.isJapaneseAnime) return "anime";
+  if (item.isCartoon) return "cartoon";
+  return "movie";
+}
+// Normalised title for dedupe: lower-cased, punctuation stripped, a
+// leading "the " dropped, and a trailing year ("(2026)", " 2026")
+// dropped — the year lives in the key separately, so "The Odyssey
+// (2026)" and "The Odyssey" with year 2026 are the same title.
+function canonicalTitleKey(title = "") {
+  return String(title || "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^the\s+/, "")
+    .replace(/\s+\d{4}$/, "");
+}
+function canonicalDedupeKey(item) {
+  if (!item) return "";
+  const year = Number(item.year) || Number.parseInt(String(item.releaseDate || item.first_air_date || item.release_date || "").slice(0, 4), 10) || "";
+  return `${canonicalTitleKey(item.title)}|${canonicalKind(item)}|${year}`;
+}
 function catalogItemKey(item) {
   if (!item) return "";
+  // Only a numeric id is a TMDB id. `item.id` can also be a local string
+  // id ("tmdb-123", "demo-…") — treating that as a TMDB id would split
+  // one title across two keys. Include the kind: TMDB movie id N and TV
+  // id N are different works.
   const tmdbId = item.tmdbId ?? item.id;
-  if (tmdbId !== undefined && tmdbId !== null && String(tmdbId) !== "") return `tmdb:${String(tmdbId)}`;
+  const numericId = /^\d+$/.test(String(tmdbId ?? "")) ? String(tmdbId) : "";
+  if (numericId) return `tmdb:${canonicalKind(item)}:${numericId}`;
   const subjectId = item.subjectId ? String(item.subjectId) : "";
   if (subjectId) return `subject:${subjectId.toLowerCase()}`;
-  return `title:${String(item.title || "").toLowerCase().trim()}|${item.year || ""}|${String(item.type || item.category || "").toLowerCase()}`;
+  return `title:${canonicalTitleKey(item.title)}|${item.year || ""}|${canonicalKind(item)}`;
+}
+function catalogHasCanonical(items, item) {
+  const key = canonicalDedupeKey(item);
+  if (!key || key.startsWith("|")) return false;
+  return (items || []).some((c) => canonicalDedupeKey(c) === key);
 }
 function dedupeCatalogItems(items) {
   const seen = new Set();
@@ -1404,34 +1460,67 @@ function dedupeCatalogItems(items) {
     seen.add(key);
     out.push(item);
   }
-  // Second pass (bug 11): same canonical title + media kind under a
-  // different TMDB id (e.g. Crayon Shin-chan Japanese vs English,
-  // Ranma 1/2 1989 vs 2024) is one catalogue slot. Keep the higher
-  // rating; the original-language entry wins ties.
+  // Second pass (bug 11): same canonical title + kind + year under a
+  // different TMDB id (TMDB lists duplicate entries for one film, e.g.
+  // three "The Odyssey" 2026 movies) is one catalogue slot. Keep the
+  // entry with the best evidence: a real TMDB id wins over an id-less
+  // record, then the higher rating; the original-language entry wins
+  // ties. Distinct years stay distinct (Doctor Who 1963 vs 2005 are
+  // different shows and both survive).
   const bestByTitle = new Map();
   for (const item of out) {
-    const key = `${canonicalTitleKey(item.title)}|${item.mediaType || item.type || ""}`;
+    const key = canonicalDedupeKey(item);
     const prev = bestByTitle.get(key);
     if (!prev) { bestByTitle.set(key, item); continue; }
+    const prevHasId = /^\d+$/.test(String(prev.tmdbId ?? prev.id ?? ""));
+    const nextHasId = /^\d+$/.test(String(item.tmdbId ?? item.id ?? ""));
     const prevScore = Number(prev.rating) || 0;
     const nextScore = Number(item.rating) || 0;
     const prevOrig = prev.originalLanguage || (prev.isJapaneseAnime ? "ja" : "");
     const nextOrig = item.originalLanguage || (item.isJapaneseAnime ? "ja" : "");
-    if (nextScore > prevScore || (nextScore === prevScore && nextOrig && !prevOrig)) bestByTitle.set(key, item);
+    if ((nextHasId && !prevHasId)
+      || (nextHasId === prevHasId && nextScore > prevScore)
+      || (nextHasId === prevHasId && nextScore === prevScore && nextOrig && !prevOrig)) {
+      bestByTitle.set(key, item);
+    }
   }
-  return [...bestByTitle.values()];
+  const merged = [...bestByTitle.values()];
+  // Central Coming-soon enforcement (bug 10): every item that passes
+  // through dedupe gets its badge/stream re-derived from the single
+  // unreleased rule, so no data source can smuggle an unreleased title
+  // in with a "Popular"/"Top Rated" badge or a playable URL.
+  for (const item of merged) {
+    if (isUnreleasedItem(item)) {
+      item.isComingSoon = true;
+      item.comingSoon = true;
+      item.badge = "Coming soon";
+      item.video = "";
+      if (item.playUrl) item.playUrl = { url: "" };
+    }
+  }
+  return merged;
 }
 // Append, re-checked against the LIVE catalog at push time (not a `seen`
 // snapshot taken before the awaits, which is how concurrent category /
 // live / load-more loads re-added the same titles). Returns the items
 // actually added, capped at MAX_CATALOG_SIZE.
 function appendCatalogItems(items) {
-  const seen = new Set(catalog.map(catalogItemKey));
+  // Round 2 (bug 6/7): the old check compared only the first-pass
+  // (TMDB-id) key against the live catalog, so a later infinite-scroll
+  // page carrying the same film under a different TMDB id (TMDB lists
+  // three "The Odyssey" 2026 entries) was appended as a duplicate.
+  // Check the canonical title+kind+year key too, against the LIVE
+  // catalog — not just within the incoming batch.
+  const seenIds = new Set(catalog.map(catalogItemKey));
+  const seenCanonical = new Set(catalog.map(canonicalDedupeKey));
   const added = [];
   for (const item of dedupeCatalogItems(items)) {
     const key = catalogItemKey(item);
-    if (seen.has(key)) continue;
-    seen.add(key);
+    if (seenIds.has(key)) continue;
+    const cKey = canonicalDedupeKey(item);
+    if (cKey && !cKey.startsWith("|") && seenCanonical.has(cKey)) continue;
+    seenIds.add(key);
+    if (cKey) seenCanonical.add(cKey);
     added.push(item);
     if (catalog.length + added.length >= MAX_CATALOG_SIZE) break;
   }
@@ -1515,9 +1604,14 @@ function loadContinuation() {
           seen.add(e.title);
           const progress = Number(e.progress);
           if (!Number.isFinite(progress) || progress < 0 || progress >= 100) return false;
-          const hasEvidence = Boolean(e.watchedAt)
-            || Number(e.positionSeconds) > 0 || Number(e.durationSeconds) > 0;
-          return hasEvidence;
+          // Round 2 (bug 15): only real playback survives a reload.
+          // Entries with <30s watched and <=1% progress are dropped —
+          // that is what the old "record on player open" code wrote
+          // (position 0, progress 0, watchedAt set), which is why fresh
+          // users saw pre-seeded 0% rows.
+          const pos = Number(e.positionSeconds) || 0;
+          const embedSecs = Number(e.embedWatchedSeconds) || 0;
+          return pos >= 30 || progress > 1 || embedSecs >= 30;
         }).slice(0, 6);
       }
     }
@@ -1546,15 +1640,24 @@ function getSavedPosition(itemOrTitle) {
 }
 
 // Record REAL playback progress only. progress is derived from
-// position/duration, never fabricated. Called on play (position 0 / saved
-// position = "started watching") and on every 5s timeupdate tick.
-function recordPlaybackProgress(item, { positionSeconds = 0, durationSeconds = 0 } = {}) {
+// position/duration, never fabricated. Called on every 5s timeupdate
+// tick (native video) and after 30s of continuous embed playback.
+// Round 2 (bug 15): an entry is created ONLY once there is real
+// progress — at least 30 seconds watched or more than 1% — and a
+// sub-threshold call never creates one and never regresses an existing
+// real entry. Player-open used to record position 0 / progress 0 with
+// watchedAt set, which is exactly how 0% rows appeared for titles
+// nobody had watched.
+function recordPlaybackProgress(item, { positionSeconds = 0, durationSeconds = 0, embedWatchedSeconds = 0 } = {}) {
   if (!item?.title) return;
   const pos = Math.max(0, Math.floor(Number(positionSeconds) || 0));
   const dur = Math.max(0, Math.floor(Number(durationSeconds) || 0));
+  const embedSecs = Math.max(0, Math.floor(Number(embedWatchedSeconds) || 0));
   const existing = continuation.find((c) => c.title === item.title);
   const progress = dur > 0 ? Math.min(99, Math.round((pos / dur) * 100))
     : (existing ? Number(existing.progress) || 0 : 0);
+  const hasRealProgress = pos >= 30 || progress > 1 || embedSecs >= 30;
+  if (!hasRealProgress) return;
   const entry = {
     ...(existing || {}),
     ...item,
@@ -1562,6 +1665,7 @@ function recordPlaybackProgress(item, { positionSeconds = 0, durationSeconds = 0
     progress,
     positionSeconds: pos,
     durationSeconds: dur || existing?.durationSeconds || 0,
+    embedWatchedSeconds: Math.max(embedSecs, Number(existing?.embedWatchedSeconds) || 0),
     watchedAt: new Date().toISOString(),
   };
   const idx = continuation.findIndex((c) => c.title === item.title);
@@ -1647,12 +1751,20 @@ const normalizeApiItem = (item, category) => {
     .split(",")
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean);
-  const type = category === "tv" ? "series" : category;
-  const label = category === "tv" ? "Series" : category === "anime" ? "Anime" : "Movie";
+  // Map the caller's category hint to a canonical kind. The old code
+  // used the raw hint as the type, so /api/catalog fallback batches
+  // (category "trending"/"all") produced type "trending"/"all" — items
+  // that could never dedupe against the same title from TMDB.
+  const cat = String(category || "").toLowerCase();
+  const type = cat === "tv" || cat === "series" ? "series"
+    : cat === "anime" ? "anime"
+    : cat === "cartoon" || cat === "cartoons" ? "cartoon"
+    : cat === "movie" ? "movie"
+    : (Number(item.seNum) > 0 || item.first_air_date ? "series" : "movie");
+  const label = type === "series" ? "Series" : type === "anime" ? "Anime" : type === "cartoon" ? "Cartoon" : "Movie";
   if (type === "anime" && !genres.includes("anime")) genres.unshift("anime");
   const year = Number.parseInt(String(item.releaseDate || "").slice(0, 4), 10);
-  const isComingSoon = Boolean(item.releaseDate)
-    && String(item.releaseDate).slice(0, 10) > new Date().toISOString().slice(0, 10);
+  const isComingSoon = isUnreleasedDate(item.releaseDate, year);
   return {
     title: item.title || "Untitled",
     type,
@@ -1676,14 +1788,40 @@ const normalizeApiItem = (item, category) => {
 };
 
 // --- Patch D helpers (bugs 10/11): unreleased titles + canonical dedupe ---
+// Round 2 (bug 10): the old gate only fired on a full YYYY-MM-DD date
+// in the future. That missed every 2026 title TMDB already lists with a
+// past theatrical date (Resident Evil 2026-09-16, Toy Story 5
+// 2026-06-17) whose stream does not exist yet — Play opened the player
+// and died with "Unable to play media." — and it missed year-only
+// dates ("2026"), for which the regex rejected the value outright.
+// The app has no per-title stream verification at card time, so a
+// current-year-or-later title is treated as not yet streamable:
+// "Coming soon", Play disabled. Titles with no date on file at all are
+// NOT gated by year alone — normalizeTmdbItem defaults a missing year
+// to the current year, and gating those would hide legitimate titles.
+function isUnreleasedDate(dateStr, year) {
+  const today = new Date().toISOString().slice(0, 10);
+  const currentYear = Number(today.slice(0, 4));
+  const raw = String(dateStr || "").trim();
+  const y = Number(year) || Number.parseInt(raw.slice(0, 4), 10) || 0;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    if (raw > today) return true;
+    // A full past date in the current year or later: theatrically out,
+    // but not yet streamable through any server the app knows.
+    return y >= currentYear;
+  }
+  if (/^\d{4}-\d{2}$/.test(raw) || /^\d{4}$/.test(raw)) {
+    // Partial date: release cannot be confirmed.
+    return y >= currentYear;
+  }
+  return false;
+}
 const isUnreleasedItem = (item) => {
   if (!item) return false;
   if (item.isComingSoon) return true;
-  const dateStr = String(item.releaseDate || item.first_air_date || item.release_date || "").slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
-  return dateStr > new Date().toISOString().slice(0, 10);
+  const dateStr = String(item.releaseDate || item.first_air_date || item.release_date || "");
+  return isUnreleasedDate(dateStr, item.year);
 };
-const canonicalTitleKey = (title = "") => String(title || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 const normalizeSearchItem = (item) => {
   const category = String(item.genre || "").toLowerCase().includes("anime") ? "anime" : "tv";
   return normalizeApiItem(item, category);
@@ -1769,7 +1907,7 @@ const normalizeTmdbItem = (item, category = "movie") => {
   const backdrop = item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : (poster || "");
   const rating = stableRatingFor(item.vote_average, String(item.id));
   const tmdbId = String(item.id);
-  const isComingSoon = Boolean(yearStr) && yearStr.slice(0, 10) > new Date().toISOString().slice(0, 10);
+  const isComingSoon = isUnreleasedDate(yearStr, year);
   const isAdult = Boolean(item.adult) || (Array.isArray(item.genre_ids) && item.genre_ids.includes(10749) && /\b(?:erotic|xxx|sex|porn)\b/i.test(item.overview || ""));
 
   const genreSet = new Set(Array.isArray(item.genre_ids) ? item.genre_ids.map(id => TMDB_GENRE_NAMES[id]).filter(Boolean) : []);
@@ -1846,13 +1984,15 @@ function updateStatusBadge(isLive, count) {
 
   // The green dot / "Active" wording now requires a stream actually
   // playing, not merely a loaded catalog or a configured API key.
+  // Round 2: on-demand playback is "Playing now", never "live" — the
+  // service carries no live channels any more.
   if (settingsDot) settingsDot.classList.toggle("live", livePlaybackActive);
   if (settingsTitle) settingsTitle.textContent = livePlaybackActive
-    ? "Live Streaming Active"
+    ? "Playing now"
     : isLive ? "Live Catalog" : "Curated Catalog";
   if (settingsInfo) {
     settingsInfo.textContent = livePlaybackActive
-      ? `Streaming live now · ${count || "multiple"} titles available.`
+      ? `Playing now · ${count || "multiple"} titles available.`
       : isLive
         ? `Live catalog loaded · ${count || "multiple"} titles. No stream is playing — playback is verified only when a title actually starts.`
         : "Curated original streaming collection with multi-resolution playback and episodic support.";
@@ -2250,12 +2390,9 @@ async function loadMoreTitles() {
       if (loadMoreBtn) loadMoreBtn.textContent = "All available titles loaded";
     }
 
-    // Auto-retrigger: keep loading if user viewport is still near bottom
-    setTimeout(() => {
-      if (!isLoadingMore && hasMoreContent) {
-        handleAutoInfiniteScroll();
-      }
-    }, 300);
+    // Auto-retrigger is owned by the sentinel observer and the scroll
+    // listeners now (round 2): a timer here re-fired loads with no user
+    // scrolling, which is how the total grew on its own.
   } catch (err) {
     console.warn("[Ustream LoadMore]", err);
   } finally {
@@ -2273,7 +2410,16 @@ async function loadMoreTitles() {
 }
 
 let scrollTicking = false;
+// Round 2 (bug 6 / new issue C): infinite scroll only ever advances
+// because the USER scrolled. The old code also fired it from an 800ms
+// heartbeat, four staggered startup timers, a 1s timer on every
+// section change, and an immediate call at init — so the first render
+// sometimes showed 35 titles and sometimes 70, and the total ballooned
+// to the 600 cap without anyone scrolling. The Load More button and
+// the sentinel observer below are the only other triggers.
+let userHasScrolled = false;
 function handleAutoInfiniteScroll() {
+  if (!userHasScrolled) return;
   if (isLoadingMore || !hasMoreContent) return;
   const targetSection = state.section;
   if (["explore", "profile", "my-list"].includes(targetSection)) return;
@@ -2320,10 +2466,13 @@ function initInfiniteScroll() {
     loadMoreBtn.addEventListener("click", () => void loadMoreTitles());
   }
 
-  // 1. High-sensitivity IntersectionObserver with generous 1400px threshold
+  // 1. High-sensitivity IntersectionObserver with generous 1400px threshold.
+  // Round 2: gated on real user scrolling — the observer fires on
+  // observe() for short pages, which used to auto-load before the user
+  // did anything.
   if (sentinel && "IntersectionObserver" in window) {
     const observer = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting) && !isLoadingMore && hasMoreContent) {
+      if (userHasScrolled && entries.some((e) => e.isIntersecting) && !isLoadingMore && hasMoreContent) {
         void loadMoreTitles();
       }
     }, {
@@ -2334,6 +2483,7 @@ function initInfiniteScroll() {
 
   // 2. Smooth requestAnimationFrame-backed scroll and touchmove listener
   const onScrollFrame = () => {
+    userHasScrolled = true;
     const topbar = $(".topbar");
     if (topbar) {
       topbar.classList.toggle("scrolled", window.scrollY > 20);
@@ -2351,20 +2501,9 @@ function initInfiniteScroll() {
   window.addEventListener("touchmove", onScrollFrame, { passive: true });
   window.addEventListener("wheel", onScrollFrame, { passive: true });
   window.addEventListener("resize", () => handleAutoInfiniteScroll(), { passive: true });
-  onScrollFrame();
-
-  // 3. Heartbeat scroll proximity monitor (polls every 800ms to guarantee continuous auto-loading)
-  setInterval(() => {
-    if (!isLoadingMore && hasMoreContent) {
-      handleAutoInfiniteScroll();
-    }
-  }, 800);
-
-  // Initial trigger checks after startup — stagger to allow catalog to load
-  setTimeout(() => handleAutoInfiniteScroll(), 800);
-  setTimeout(() => handleAutoInfiniteScroll(), 1500);
-  setTimeout(() => handleAutoInfiniteScroll(), 3000);
-  setTimeout(() => handleAutoInfiniteScroll(), 5000);
+  // No immediate onScrollFrame() call and no heartbeat/staggered
+  // timers here any more (round 2): the first render must show exactly
+  // CONTENT_BATCH_SIZE titles until the user scrolls or taps Load More.
 }
 
 async function loadNewestRecommendations() {
@@ -2868,13 +3007,11 @@ function setSection(section, updateHash = true) {
   if (loadMoreWrap) {
     loadMoreWrap.hidden = ["explore", "profile", "my-list"].includes(target);
   }
-  if (visible.length < CONTENT_BATCH_SIZE && !["explore", "profile", "my-list"].includes(target) && hasMoreContent) {
-    void loadMoreTitles();
-  }
-
-  setTimeout(() => {
-    if (!isLoadingMore && hasMoreContent) handleAutoInfiniteScroll();
-  }, 1000);
+  // Round 2 (new issue C): no auto-fetch on section change. The old code
+  // called loadMoreTitles() for short sections and fired
+  // handleAutoInfiniteScroll() on a 1s timer, so the first render's
+  // count depended on load timing. A section shows its first
+  // CONTENT_BATCH_SIZE titles; more load on scroll or Load More.
 }
 
 function isDarkModeActive() {
@@ -3076,7 +3213,16 @@ function renderContinue() {
   }
 
   const adultEnabled = isAdultEnabled();
-  const visibleItems = continuation.filter((item) => adultEnabled || !isAdultContent(item));
+  // Round 2 (bug 15): belt-and-braces with loadContinuation — a row
+  // with no real progress never renders, even if an old localStorage
+  // entry slips past the load filter.
+  const visibleItems = continuation.filter((item) => {
+    if (!adultEnabled && isAdultContent(item)) return false;
+    const pos = Number(item.positionSeconds) || 0;
+    const pct = Number(item.progress) || 0;
+    const embedSecs = Number(item.embedWatchedSeconds) || 0;
+    return pos >= 30 || pct > 1 || embedSecs >= 30;
+  });
 
   if (visibleItems.length === 0) {
     row.innerHTML = `
@@ -3096,14 +3242,18 @@ function renderContinue() {
   row.innerHTML = visibleItems.map((item) => {
     const pos = Number(item.positionSeconds) || 0;
     const dur = Number(item.durationSeconds) || 0;
+    const pct = Math.round(Number(item.progress) || 0);
     const resumeLabel = pos > 0
       ? `Resume at ${formatTime(pos)}${dur > 0 ? ` / ${formatTime(dur)}` : ""}`
       : "Resume watching";
+    // Never show "· 0%": embed playback has no position to report, so
+    // a watched embed row shows no percentage at all.
+    const pctLabel = pct > 0 ? ` · ${pct}%` : "";
     return `
-    <button class="continue-card" style="--card-gradient:${item.gradient}" data-action="resume" data-title="${escapeHtml(item.title)}" aria-label="Resume ${escapeHtml(item.title)} at ${formatTime(pos)}">
+    <button class="continue-card" style="--card-gradient:${item.gradient}" data-action="resume" data-title="${escapeHtml(item.title)}" aria-label="Resume ${escapeHtml(item.title)}${pos > 0 ? ` at ${formatTime(pos)}` : ""}">
       <span class="card-label">Continue watching</span><strong>${escapeHtml(item.title)}</strong>
-      <span class="continue-resume">${escapeHtml(resumeLabel)} · ${Math.round(Number(item.progress) || 0)}%</span>
-      <span class="watch-progress"><span style="width:${Math.round(Number(item.progress) || 0)}%"></span></span>
+      <span class="continue-resume">${escapeHtml(resumeLabel)}${pctLabel}</span>
+      ${pct > 0 ? `<span class="watch-progress"><span style="width:${pct}%"></span></span>` : ""}
     </button>
   `;
   }).join("");
@@ -3738,11 +3888,25 @@ function openDetails(title, { updateHash = true } = {}) {
   if (modalPlay) {
     const savedPos = getSavedPosition(item);
     const playLabel = modalPlay.querySelector("span");
-    if (playLabel) playLabel.textContent = savedPos > 0 ? `Resume · ${formatTime(savedPos)}` : "Play Now";
-    modalPlay.onclick = () => {
-      closeDetails();
-      playTitle(item.title, { resumeTime: savedPos });
-    };
+    // Round 2 (bug 10): an unreleased title's Play button is disabled
+    // up front — it shows "Coming soon" and explains why, instead of
+    // opening a player that dies with "Unable to play media."
+    if (isUnreleasedItem(item)) {
+      if (playLabel) playLabel.textContent = "Coming soon";
+      modalPlay.disabled = true;
+      modalPlay.setAttribute("aria-disabled", "true");
+      modalPlay.onclick = () => {
+        showToast(`${item.title} is coming soon — not yet released, so it cannot be played yet.`);
+      };
+    } else {
+      modalPlay.disabled = false;
+      modalPlay.removeAttribute("aria-disabled");
+      if (playLabel) playLabel.textContent = savedPos > 0 ? `Resume · ${formatTime(savedPos)}` : "Play Now";
+      modalPlay.onclick = () => {
+        closeDetails();
+        playTitle(item.title, { resumeTime: savedPos });
+      };
+    }
   }
 
   const modalTrailerBtn = $("#modal-trailer");
@@ -4054,16 +4218,57 @@ const STREAM_SERVERS = {
   }
 };
 
-let currentServerKey = "gaiaflix";
+// --- Unified server selection (round 2: all video servers merged) ---
+// Servers the player already knows — no new sources invented:
+//   gaiaflix  native multi-audio HLS via gaiaflix.xyz (movies only)
+//   vidsrcsu  VidSrc embed (vidsrc.su)
+//   vidlink   VidLink embed (vidlink.pro)
+//   twoembed  2Embed mirror (2embed.cc)
+//   vidstuck  Vidstuck embed (vidstuck.cc)
+//   aniembed  AniEmbed (aniembed.se, anime only)
+// NOTE: the old STREAM_SERVERS.gaiaflix embed entry pointed at the same
+// vidsrc.su URLs as vidsrcsu, so "trying" both was trying one server
+// twice. In the chain below, "gaiaflix" means the native HLS step only;
+// getEmbedStreamUrl maps it to the VidSrc embed for any caller that
+// still asks for an embed URL for it.
+let serverMode = "auto"; // "auto" | "manual"
+let manualServerKey = "vidsrcsu"; // honoured only when serverMode === "manual"
+let currentServerKey = "vidsrcsu"; // server actually playing right now
 try {
   const savedServer = localStorage.getItem("ustream-server");
-  if (savedServer && STREAM_SERVERS[savedServer]) {
+  if (savedServer === "auto" || !savedServer) {
+    serverMode = "auto";
+    try { localStorage.setItem("ustream-server", "auto"); } catch {}
+  } else if (STREAM_SERVERS[savedServer]) {
+    serverMode = "manual";
+    manualServerKey = savedServer;
     currentServerKey = savedServer;
   } else {
-    currentServerKey = "gaiaflix";
-    localStorage.setItem("ustream-server", "gaiaflix");
+    serverMode = "auto";
+    try { localStorage.setItem("ustream-server", "auto"); } catch {}
   }
 } catch {}
+function getAutoServerChain(item) {
+  const isAnime = item?.type === "anime" || item?.category === "anime";
+  if (isAnime) return ["aniembed", "vidsrcsu", "vidlink", "twoembed", "vidstuck"];
+  if (isItemSeries(item)) return ["vidsrcsu", "vidlink", "twoembed", "vidstuck"];
+  return ["gaiaflix", "vidsrcsu", "vidlink", "twoembed", "vidstuck"];
+}
+function getPlaybackChain(item) {
+  if (serverMode === "manual") {
+    // Gaiaflix is movies-only; a manual Gaiaflix pick for a series plays
+    // that title's VidSrc embed instead of erroring outright.
+    if (manualServerKey === "gaiaflix" && isItemSeries(item)) return ["vidsrcsu"];
+    return [manualServerKey];
+  }
+  return getAutoServerChain(item);
+}
+function syncServerSelect() {
+  const serverSelect = $("#player-server-select");
+  if (!serverSelect) return;
+  const value = serverMode === "auto" ? "auto" : manualServerKey;
+  if (serverSelect.value !== value) serverSelect.value = value;
+}
 
 const LANGUAGE_LABELS = {
   en: "English",
@@ -4256,14 +4461,17 @@ async function resolveTmdbId(item) {
 }
 
 function getEmbedStreamUrl(tmdbId, item, season = 1, episode = 1, serverKey = currentServerKey) {
-  const server = STREAM_SERVERS[serverKey] || STREAM_SERVERS.vidsrcsu;
+  // "gaiaflix" is the native-HLS step, not an embed: an embed URL for it
+  // is the VidSrc embed (the old gaiaflix embed entry duplicated it).
+  const embedKey = serverKey === "gaiaflix" ? "vidsrcsu" : serverKey;
+  const server = STREAM_SERVERS[embedKey] || STREAM_SERVERS.vidsrcsu;
   const isSeries = isItemSeries(item);
   let url = isSeries
     ? server.getTvUrl(tmdbId, Math.max(1, Number(season) || 1), Math.max(1, Number(episode) || 1))
     : server.getMovieUrl(tmdbId);
 
   // AniEmbed natively supports sub vs dub switching for anime
-  if (serverKey === "aniembed") {
+  if (embedKey === "aniembed") {
     const animeLang = currentLanguageKey === "en" ? "dub" : "sub";
     if (/lang=(?:sub|dub)/.test(url)) {
       url = url.replace(/lang=(?:sub|dub)/, `lang=${animeLang}`);
@@ -4289,12 +4497,12 @@ function resetDefaultLanguageOptions() {
   `;
 }
 
-export async function resolveGaiaflixStream(tmdbId) {
+export async function resolveGaiaflixStream(tmdbId, timeoutMs = 15000) {
   if (!tmdbId) return null;
   let timeout = null;
   try {
     const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-    timeout = controller ? setTimeout(() => controller.abort(), 15000) : null;
+    timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
     let res;
     try {
       res = await fetch(`https://gaiaflix.xyz/api/gaiaflix-movie-source?id=${encodeURIComponent(tmdbId)}`, {
@@ -4607,7 +4815,16 @@ function startPlayerLoadingTimer(baseMessage) {
     if (progress) progress.setAttribute("aria-valuenow", String(pct));
     if (elapsed >= 20) {
       clearPlayerLoadingTimer();
-      setPlayerState(PLAYER_STATE.ERROR, "Stream did not start within 20 seconds. Try another server or Retry.");
+      // If a unified chain is mid-attempt, abort it: the 20s budget is
+      // the hard cap for the whole attempt, and the chain respects the
+      // same budget, so this only fires when an attempt hung.
+      if (playbackChain) {
+        playbackChain.aborted = true;
+        const embed = $("#embed-player");
+        if (embed) { try { embed.src = "about:blank"; } catch {} }
+        playbackChain = null;
+      }
+      setPlayerState(PLAYER_STATE.ERROR, "Stream did not start within 20 seconds. Retry to run auto server selection again.");
     }
   }, 1000);
 }
@@ -4619,6 +4836,7 @@ function setPlayerState(nextState, customMessage = "") {
   livePlaybackActive = nextState === PLAYER_STATE.PLAYING;
   if (wasLivePlayback !== livePlaybackActive) updateStatusBadge(catalogIsLive, catalogLiveCount);
   if (nextState !== PLAYER_STATE.LOADING) clearPlayerLoadingTimer();
+  if (nextState !== PLAYER_STATE.PLAYING) clearEmbedWatchTimer();
 
   const liveLabel = $("#player-live-label");
   const liveText = $("#player-live-text");
@@ -4696,7 +4914,10 @@ function setPlayerState(nextState, customMessage = "") {
     case PLAYER_STATE.PLAYING:
       if (liveLabel) {
         liveLabel.hidden = false;
-        if (liveText) liveText.textContent = "Streaming live";
+        // Round 2: nothing on this service is live any more (Sports /
+        // Live TV are gone) — an on-demand title is "Now playing",
+        // never "Streaming live".
+        if (liveText) liveText.textContent = "Now playing";
       }
       if (statusEl) {
         statusEl.hidden = false;
@@ -4709,6 +4930,7 @@ function setPlayerState(nextState, customMessage = "") {
         startBtn.disabled = false;
         startBtn.innerHTML = `${renderIcon("pause", "icon-sm")} <span>Pause</span>`;
       }
+      armEmbedWatchTimer();
       break;
 
     case PLAYER_STATE.ERROR:
@@ -4739,6 +4961,142 @@ function setPlayerLoading(message, isLoading = true) {
   } else {
     setPlayerState(PLAYER_STATE.READY, message);
   }
+}
+
+// --- Unified playback chain (round 2: one Play action, all servers) ---
+// One Play action tries the servers in order and uses the first that
+// actually loads. A single 20s budget covers the whole attempt (the
+// existing loading watchdog): each attempt is capped by the remaining
+// budget, and the elapsed timer is started once at chain start and
+// never reset per server. Only when every server has failed (or the
+// budget is spent) does the user see an error — Retry re-runs the
+// auto-selection.
+const PLAYBACK_CHAIN_BUDGET_MS = 20000;
+const EMBED_ATTEMPT_MS = 8000;
+let playbackChain = null; // { order, index, item, tmdbId, season, episode, startedAt, requestId, aborted }
+let embedWatchTimer = null; // 30s continuous-embed-playback recorder (bug 15)
+
+function chainRemainingMs() {
+  if (!playbackChain) return 0;
+  return Math.max(0, PLAYBACK_CHAIN_BUDGET_MS - (Date.now() - playbackChain.startedAt));
+}
+function setChainLoadingMessage(message) {
+  // Update the loading line without restarting the elapsed timer: the
+  // timer re-renders playerLoadingBaseMessage every second, so setting
+  // the base message is what keeps the server name + elapsed time
+  // coherent across attempts.
+  playerLoadingBaseMessage = message;
+  const loadingText = $("#player-loading-text");
+  if (loadingText) loadingText.textContent = `${message} (${Math.floor((Date.now() - (playbackChain?.startedAt || Date.now())) / 1000)}s)`;
+}
+function clearEmbedWatchTimer() {
+  if (embedWatchTimer) { clearTimeout(embedWatchTimer); embedWatchTimer = null; }
+}
+function armEmbedWatchTimer() {
+  clearEmbedWatchTimer();
+  const item = state.player?.item;
+  const embed = $("#embed-player");
+  if (!item || !embed || embed.hidden) return;
+  embedWatchTimer = setTimeout(() => {
+    // 30s of continuous embed playback = real progress, even though a
+    // cross-origin frame reports no position to resume from.
+    if (currentPlayerState === PLAYER_STATE.PLAYING && state.player?.item?.title === item.title) {
+      recordPlaybackProgress(item, { embedWatchedSeconds: 30 });
+    }
+  }, 30000);
+}
+async function attemptGaiaflixHls(item, tmdbId) {
+  const timeoutMs = Math.min(8000, chainRemainingMs());
+  if (timeoutMs <= 500) return false;
+  const m3u8Url = await resolveGaiaflixStream(tmdbId, timeoutMs);
+  if (!m3u8Url || !playbackChain || playbackChain.aborted) return false;
+  return await playWithGaiaflixHls(m3u8Url, item);
+}
+function attemptEmbedServer(url) {
+  return new Promise((resolve) => {
+    const embed = $("#embed-player");
+    if (!embed) return resolve(false);
+    const chain = playbackChain;
+    let settled = false;
+    const done = (ok) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      embed.removeEventListener("load", onLoad);
+      resolve(ok);
+    };
+    const onLoad = () => {
+      // Ignore the about:blank navigation used to reset the frame, and
+      // loads that belong to a superseded attempt.
+      if (!embed.src || embed.src === "about:blank") return;
+      if (chain !== playbackChain || !playbackChain || playbackChain.aborted) return done(false);
+      done(true);
+    };
+    const timeoutMs = Math.min(EMBED_ATTEMPT_MS, chainRemainingMs());
+    if (timeoutMs <= 500) return done(false);
+    const timer = setTimeout(() => {
+      // Dead server: blank the frame so a late load can never promote
+      // this attempt after we moved on, then fail the attempt.
+      try { embed.src = "about:blank"; } catch {}
+      done(false);
+    }, timeoutMs);
+    embed.addEventListener("load", onLoad);
+    // Force a fresh navigation even when retrying the same URL.
+    try { embed.src = "about:blank"; } catch {}
+    setTimeout(() => {
+      if (settled || chain !== playbackChain || !playbackChain || playbackChain.aborted) return;
+      embed.removeAttribute("sandbox");
+      embed.src = url;
+      embed.hidden = false;
+    }, 50);
+  });
+}
+async function runPlaybackChain(item, tmdbId, { season = 1, episode = 1 } = {}) {
+  const order = getPlaybackChain(item);
+  playbackChain = {
+    order, index: -1, item, tmdbId, season, episode,
+    startedAt: Date.now(), requestId: state.player.requestId, aborted: false,
+  };
+  return continuePlaybackChain();
+}
+async function continuePlaybackChain() {
+  const chain = playbackChain;
+  if (!chain) return null;
+  for (let i = chain.index + 1; i < chain.order.length; i++) {
+    if (chain.aborted || chain.requestId !== state.player.requestId || $("#player-backdrop")?.hidden) {
+      playbackChain = null;
+      return null;
+    }
+    if (chainRemainingMs() <= 1500) break;
+    const key = chain.order[i];
+    chain.index = i;
+    currentServerKey = key;
+    syncServerSelect();
+    const server = STREAM_SERVERS[key];
+    const seasonEpLabel = isItemSeries(chain.item) ? ` · S${chain.season}:E${chain.episode}` : "";
+    const langLabel = currentLanguageKey !== "auto" ? ` · ${LANGUAGE_LABELS[currentLanguageKey] || currentLanguageKey.toUpperCase()}` : "";
+    setChainLoadingMessage(`Trying ${server?.name || key} for ${chain.item.title}${seasonEpLabel}${langLabel}…`);
+    let ok = false;
+    try {
+      if (key === "gaiaflix") {
+        ok = await attemptGaiaflixHls(chain.item, chain.tmdbId);
+      } else {
+        const url = getEmbedStreamUrl(chain.tmdbId, chain.item, chain.season, chain.episode, key);
+        const popout = $("#player-popout-btn");
+        if (popout) popout.href = url;
+        ok = await attemptEmbedServer(url);
+      }
+    } catch (err) {
+      console.warn(`[Ustream Playback] ${key} failed:`, err);
+      ok = false;
+    }
+    if (ok) return key;
+    // Dead server: fall through to the next one automatically. The user
+    // only sees an error once the whole chain is exhausted.
+    console.warn(`[Ustream Playback] ${key} did not load — trying the next server`);
+  }
+  playbackChain = null;
+  return null;
 }
 
 function ensurePlayerFlowUI() {
@@ -5595,33 +5953,12 @@ async function changePlayerQuality(value) {
 async function reloadCurrentEmbed() {
   const player = state.player;
   const item = player.item;
-  if (!item || !player.tmdbId) return;
+  if (!item || !player.tmdbId) return null;
 
-  const serverSelect = $("#player-server-select");
-  if (serverSelect) serverSelect.value = currentServerKey;
+  syncServerSelect();
 
-  // Handle Gaiaflix Server 1 (Multi-Audio HLS for movies)
-  if (currentServerKey === "gaiaflix") {
-    if (player.isSeries || (item.type && item.type !== "movie")) {
-      currentServerKey = "vidsrcsu";
-      if (serverSelect) serverSelect.value = "vidsrcsu";
-      showToast("Gaiaflix Multi-Audio is for movies · Switched to Server 2 (VidSrc Pro)");
-    } else {
-      setPlayerState(PLAYER_STATE.LOADING, "Loading Multi-Audio HLS stream from Gaiaflix Pro…");
-      const m3u8Url = await resolveGaiaflixStream(player.tmdbId);
-      let launched = false;
-      if (m3u8Url) {
-        launched = await playWithGaiaflixHls(m3u8Url, item);
-      }
-      if (launched) return;
-
-      currentServerKey = "vidsrcsu";
-      if (serverSelect) serverSelect.value = "vidsrcsu";
-      showToast("Gaiaflix stream unavailable · Cascaded to Server 2 (VidSrc Pro)");
-    }
-  }
-
-  // Clean up native HLS / video player before loading embed
+  // Clean up native HLS / video player before the chain starts. The
+  // Gaiaflix HLS step re-shows the video element itself when it runs.
   if (window._currentHlsInstance) {
     try { window._currentHlsInstance.destroy(); } catch {}
     window._currentHlsInstance = null;
@@ -5637,24 +5974,20 @@ async function reloadCurrentEmbed() {
 
   resetDefaultLanguageOptions();
 
-  const embed = $("#embed-player");
-  if (!embed) return;
-  embed.removeAttribute("sandbox");
   const season = player.selectedSeason || 1;
   const episode = player.selectedEpisode || 1;
-  const url = getEmbedStreamUrl(player.tmdbId, item, season, episode, currentServerKey);
-  embed.src = url;
-  embed.hidden = false;
-  const popout = $("#player-popout-btn");
-  if (popout) popout.href = url;
-  const server = STREAM_SERVERS[currentServerKey];
-  const langLabel = currentLanguageKey !== "auto" ? ` · ${LANGUAGE_LABELS[currentLanguageKey] || currentLanguageKey.toUpperCase()}` : "";
-  const seasonEpLabel = player.isSeries ? ` · S${season}:E${episode}` : "";
-  // Do not claim PLAYING / "HD Stream Online" before the embed loads —
-  // the #embed-player load listener promotes LOADING -> PLAYING, and the
-  // loading timer errors out after 20s if nothing loads (bug 24).
-  setPlayerState(PLAYER_STATE.LOADING, `Loading ${item.title}${seasonEpLabel} · ${server?.name || "HD Stream"}${langLabel}…`);
+  // One LOADING state for the whole chain: the 20s elapsed timer starts
+  // here and is never reset per server (bug 24).
+  setPlayerState(PLAYER_STATE.LOADING, `Loading ${item.title}${player.isSeries ? ` · S${season}:E${episode}` : ""} · Auto server selection…`);
+  const key = await runPlaybackChain(item, player.tmdbId, { season, episode });
+  if (!key) {
+    // Only now does the user see an error: every server failed or the
+    // 20s budget ran out. Retry re-runs auto selection.
+    setPlayerState(PLAYER_STATE.ERROR, "No server could play this title. Retry to run auto server selection again.");
+    return null;
+  }
   updatePlayerEpisodeFlow();
+  return key;
 }
 
 async function changePlayerSeason(seasonNumber) {
@@ -5780,13 +6113,8 @@ async function playTitle(title, { resumeTime = 0 } = {}) {
   state.player.isSeries = isSeries;
   state.player.selectedSeason = 1;
   state.player.selectedEpisode = 1;
-
-  const isAnime = item.type === "anime" || item.category === "anime";
-  if (isAnime) {
-    currentServerKey = "aniembed";
-  } else if (currentServerKey === "aniembed") {
-    currentServerKey = "gaiaflix";
-  }
+  // New attempt id: any chain still running for a previous title aborts.
+  state.player.requestId = (state.player.requestId || 0) + 1;
 
   if (state.player.isSeries) {
     await loadEpisodeState(item.subjectId || item.title, 1, 1, ++state.player.requestId);
@@ -5794,57 +6122,13 @@ async function playTitle(title, { resumeTime = 0 } = {}) {
     updatePlayerSelectionUI();
   }
 
-  // Handle Gaiaflix Server 1 for movies
-  if (currentServerKey === "gaiaflix" && isSeries) {
-    // Gaiaflix only provides movies; cascade TV series to VidSrc Pro
-    currentServerKey = "vidsrcsu";
-  }
-
-  if (currentServerKey === "gaiaflix" && (!item.type || item.type === "movie")) {
-    const serverSelect = $("#player-server-select");
-    if (serverSelect) serverSelect.value = "gaiaflix";
-    setPlayerState(PLAYER_STATE.LOADING, "Loading Multi-Audio HLS stream from Gaiaflix Pro…");
-    const m3u8Url = await resolveGaiaflixStream(tmdbId);
-    let launched = false;
-    if (m3u8Url) {
-      launched = await playWithGaiaflixHls(m3u8Url, item);
-    }
-    if (launched) {
-      recordPlaybackProgress(item, { positionSeconds: savedPosition, durationSeconds: getSavedDuration(item) });
-      return;
-    }
-    // If Gaiaflix stream is unavailable or fails:
-    // Cascade smoothly to Server 2 (VidSrc Pro).
-    console.warn("[Gaiaflix] Stream unavailable or failed, cascading to Server 2 (VidSrc Pro)");
-    currentServerKey = "vidsrcsu";
-    if (serverSelect) serverSelect.value = "vidsrcsu";
-    try {
-      localStorage.setItem("ustream-server", "vidsrcsu");
-    } catch {}
-    showToast("Gaiaflix multi-audio unavailable for this title · Switched to Server 2 (VidSrc Pro)");
-  }
-
-  // Load embed player with actual content!
-  const serverSelect = $("#player-server-select");
-  if (serverSelect) serverSelect.value = currentServerKey;
-  const streamUrl = getEmbedStreamUrl(tmdbId, item, state.player.selectedSeason || 1, state.player.selectedEpisode || 1, currentServerKey);
-  if (embed) {
-    embed.removeAttribute("sandbox");
-    embed.src = streamUrl;
-    embed.hidden = false;
-  }
-  const popout = $("#player-popout-btn");
-  if (popout) popout.href = streamUrl;
-
-  const server = STREAM_SERVERS[currentServerKey];
-  const langLabel = currentLanguageKey !== "auto" ? ` · ${LANGUAGE_LABELS[currentLanguageKey] || currentLanguageKey.toUpperCase()}` : "";
-  const seasonEpLabel = isSeries ? ` · S${state.player.selectedSeason || 1}:E${state.player.selectedEpisode || 1}` : "";
-  // See reloadCurrentEmbed: PLAYING is only claimed once the embed frame
-  // actually loads (bug 24).
-  setPlayerState(PLAYER_STATE.LOADING, `Loading ${item.title}${seasonEpLabel} · ${server?.name || "HD Stream"}${langLabel}…`);
-  updatePlayerEpisodeFlow();
-
-  recordPlaybackProgress(item, { positionSeconds: savedPosition, durationSeconds: getSavedDuration(item) });
+  // One Play action, one auto chain: reloadCurrentEmbed tries the
+  // servers in order (Gaiaflix HLS for movies, then VidSrc, VidLink,
+  // 2Embed, Vidstuck — AniEmbed first for anime) and uses the first
+  // that actually loads. A manual server override, if set, is honoured
+  // instead. No recordPlaybackProgress here (bug 15): Continue
+  // Watching is only written after 30s of real playback.
+  await reloadCurrentEmbed();
 }
 
 function getSavedDuration(item) {
@@ -5858,22 +6142,25 @@ function startPlayer() {
 
 async function retryPlayback() {
   if (!state.player?.item) return;
-  setPlayerState(PLAYER_STATE.LOADING, "Reconnecting to HD stream…");
+  // Retry always re-runs auto server selection (round 2 merge), even if
+  // a manual server was picked before.
+  serverMode = "auto";
+  try { localStorage.setItem("ustream-server", "auto"); } catch {}
+  syncServerSelect();
+  setPlayerState(PLAYER_STATE.LOADING, "Reconnecting with auto server selection…");
   await playTitle(state.player.item.title);
 }
 
 function handlePlaybackError() {
-  const embed = $("#embed-player");
-  if (embed && state.player?.tmdbId && state.player?.item) {
-    // Switch to alternate server
-    const isAnime = state.player.item.type === "anime" || state.player.item.category === "anime";
-    const serverKeys = Object.keys(STREAM_SERVERS).filter(k => isAnime || k !== "aniembed");
-    const nextIdx = (serverKeys.indexOf(currentServerKey) + 1) % serverKeys.length;
-    currentServerKey = serverKeys[nextIdx];
-    const serverSelect = $("#player-server-select");
-    if (serverSelect) serverSelect.value = currentServerKey;
-    reloadCurrentEmbed();
-    showToast(`Switched to ${STREAM_SERVERS[currentServerKey]?.name}`);
+  // Advance the unified chain to the next untried server instead of
+  // cycling forever through the server list; only error once every
+  // server has failed.
+  if (playbackChain && playbackChain.index + 1 < playbackChain.order.length) {
+    showToast("This server failed · Trying the next server…");
+    setPlayerState(PLAYER_STATE.LOADING, "Trying the next server…");
+    void continuePlaybackChain().then((key) => {
+      if (!key) setPlayerState(PLAYER_STATE.ERROR, "Playback failed on every server. Retry to try again.");
+    });
     return;
   }
   setPlayerState(PLAYER_STATE.ERROR, "Playback failed");
@@ -5881,6 +6168,9 @@ function handlePlaybackError() {
 
 function closePlayer() {
   clearLiveStatus();
+  clearEmbedWatchTimer();
+  if (playbackChain) playbackChain.aborted = true;
+  playbackChain = null;
   const bufferingSpinner = $("#player-buffering-spinner");
   if (bufferingSpinner) bufferingSpinner.hidden = true;
   const embed = $("#embed-player");
@@ -5994,19 +6284,9 @@ function playNativeVideo(streamUrl, title, poster = "", { videoId = null, resume
     setPlayerState(PLAYER_STATE.READY, `Ready to play: ${title}`);
   });
 
-  // Track continuation row with the real position (resume target or 0
-  // when playback just started), never a fabricated progress value.
-  const item = {
-    title,
-    image: poster,
-    type: "video",
-    streamUrl,
-    videoId
-  };
-  recordPlaybackProgress(item, {
-    positionSeconds: resumeTime > 0 ? resumeTime : (savedPos || 0),
-    durationSeconds: 0,
-  });
+  // No continuation entry here (bug 15): Continue Watching is only
+  // written after 30s of real playback (see the timeupdate handler
+  // below) — opening the player must not create a 0% row.
 }
 
 function initCustomVideoPlayer() {
@@ -6120,8 +6400,10 @@ function initCustomVideoPlayer() {
       } catch {}
     }
 
-    // Save playback position periodically (real progress, not fabricated)
-    if (current > 5 && Math.floor(current) % 5 === 0) {
+    // Save playback position periodically (real progress, not fabricated).
+    // Round 2 (bug 15): only once 30s have actually been watched, so
+    // opening a title never seeds Continue Watching.
+    if (current >= 30 && Math.floor(current) % 5 === 0) {
       const vidKey = video.dataset.itemTitle || state.player?.item?.title;
       if (vidKey) {
         storage.setDebounced(`ustream-pos-${vidKey}`, Math.floor(current), 800);
@@ -6647,7 +6929,7 @@ async function loadUserUploads() {
   }
 }
 
-function closeDetails() {
+function closeDetails({ updateHash = true } = {}) {
   clearLiveStatus();
   const mb = $("#modal-backdrop");
   if (mb) {
@@ -6655,6 +6937,22 @@ function closeDetails() {
     mb.setAttribute("hidden", "true");
   }
   state.activeModal = null;
+  // Round 2 (bug: URL stuck on #/title/... after Escape/X/backdrop):
+  // closing a deep-linked dialog reverts the hash to the section route
+  // so the URL and the back button stay consistent. pushState does not
+  // fire hashchange, so the router does not re-open the dialog.
+  // Callers that are themselves responding to a hash change (the router)
+  // or about to navigate elsewhere pass updateHash: false.
+  if (updateHash) {
+    const hash = window.location.hash || "";
+    if (/^#\/(title|movies|series|anime|cartoons)\//.test(hash)) {
+      const target = ["home", "movies", "series", "anime", "cartoons", "explore", "my-list", "profile"].includes(state.section) ? state.section : "home";
+      const newHash = target === "home" ? "#/home" : `#/${target}`;
+      if (hash !== newHash) {
+        try { history.pushState(null, "", newHash); } catch { window.location.hash = newHash; }
+      }
+    }
+  }
 }
 
 function toggleList(title) {
@@ -6665,7 +6963,7 @@ function toggleList(title) {
     showToast(`${title} removed from My List`);
   } else {
     state.watchlist.add(title);
-    if (item && !catalog.some((c) => catalogItemKey(c) === catalogItemKey(item))) {
+    if (item && !catalog.some((c) => catalogItemKey(c) === catalogItemKey(item) || canonicalDedupeKey(c) === canonicalDedupeKey(item))) {
       catalog.push(item);
     }
     showToast(`${title} added to My List`);
@@ -6948,12 +7246,22 @@ $("#filter-groups")?.addEventListener("change", (event) => {
 
 document.addEventListener("change", (event) => {
   if (event.target.id === "player-server-select") {
-    currentServerKey = event.target.value;
-    try {
-      localStorage.setItem("ustream-server", currentServerKey);
-    } catch {}
+    // Round 2 merge: "auto" (default) runs the unified chain; the six
+    // servers are only an advanced manual override.
+    const value = event.target.value;
+    if (value === "auto") {
+      serverMode = "auto";
+      try { localStorage.setItem("ustream-server", "auto"); } catch {}
+      showToast("Auto server selection on — the first working server plays");
+    } else if (STREAM_SERVERS[value]) {
+      serverMode = "manual";
+      manualServerKey = value;
+      currentServerKey = value;
+      try { localStorage.setItem("ustream-server", value); } catch {}
+      showToast(`Manual server: ${STREAM_SERVERS[value]?.name || "HD Server"}`);
+    }
+    syncServerSelect();
     reloadCurrentEmbed();
-    showToast(`Switched to ${STREAM_SERVERS[currentServerKey]?.name || "HD Server"}`);
     return;
   }
   if (event.target.id === "player-language-bar-select") {
@@ -6990,16 +7298,9 @@ document.addEventListener("change", (event) => {
       }
     }
 
+    // Round 2 merge: no forced server switch on language change — the
+    // auto chain already tries AniEmbed first for anime.
     const isAnime = state.player?.item && (state.player.item.type === "anime" || state.player.item.category === "anime");
-    if (isAnime && currentServerKey !== "aniembed") {
-      currentServerKey = "aniembed";
-      const serverSelect = $("#player-server-select");
-      if (serverSelect) serverSelect.value = "aniembed";
-      try {
-        localStorage.setItem("ustream-server", "aniembed");
-      } catch {}
-    }
-
     const langName = LANGUAGE_LABELS[currentLanguageKey] || currentLanguageKey.toUpperCase();
     if (isAnime) {
       const animeMode = currentLanguageKey === "en" ? "English Dub" : "Japanese Sub (Original)";
@@ -7465,14 +7766,20 @@ async function initAuth() {
     try {
       const histRes = await authApi("/api/profile/history");
       if (histRes.ok && Array.isArray(histRes.data.history) && histRes.data.history.length > 0) {
-        // Merge into continuation
+        // Merge into continuation — only entries with real progress
+        // (bug 15): a 0% server-side row must not seed the row.
         histRes.data.history.forEach((h) => {
-          if (!continuation.some((c) => c.title === h.title)) {
+          const histProgress = Math.round((h.progressSeconds / (h.durationSeconds || 1)) * 100);
+          if (!continuation.some((c) => c.title === h.title)
+              && (Number(h.progressSeconds) >= 30 || histProgress > 1)) {
             continuation.unshift({
               title: h.title,
               season: h.season,
               episode: h.episode,
-              progress: Math.round((h.progressSeconds / (h.durationSeconds || 1)) * 100),
+              progress: histProgress,
+              positionSeconds: Number(h.progressSeconds) || 0,
+              durationSeconds: Number(h.durationSeconds) || 0,
+              watchedAt: h.watchedAt || new Date().toISOString(),
               image: h.itemData?.image || h.itemData?.cover?.url || ""
             });
           }
