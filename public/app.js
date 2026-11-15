@@ -1792,27 +1792,28 @@ const normalizeApiItem = (item, category) => {
 // in the future. That missed every 2026 title TMDB already lists with a
 // past theatrical date (Resident Evil 2026-09-16, Toy Story 5
 // 2026-06-17) whose stream does not exist yet — Play opened the player
-// and died with "Unable to play media." — and it missed year-only
-// dates ("2026"), for which the regex rejected the value outright.
-// The app has no per-title stream verification at card time, so a
-// current-year-or-later title is treated as not yet streamable:
-// "Coming soon", Play disabled. Titles with no date on file at all are
-// NOT gated by year alone — normalizeTmdbItem defaults a missing year
-// to the current year, and gating those would hide legitimate titles.
+// "Coming soon" is strictly future-dated: a title is unreleased only
+// when its known release date is still in the future. The previous
+// round-2 rule also gated every title dated in the current year, which
+// marked most of the 2026 catalog (films released months ago) as
+// "Coming soon". A year-only date in the current year is not gated —
+// the release month is unknown, so it cannot be shown to be unreleased.
+// Titles with no date on file at all are NOT gated.
 function isUnreleasedDate(dateStr, year) {
   const today = new Date().toISOString().slice(0, 10);
   const currentYear = Number(today.slice(0, 4));
+  const currentMonth = Number(today.slice(5, 7));
   const raw = String(dateStr || "").trim();
   const y = Number(year) || Number.parseInt(raw.slice(0, 4), 10) || 0;
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-    if (raw > today) return true;
-    // A full past date in the current year or later: theatrically out,
-    // but not yet streamable through any server the app knows.
-    return y >= currentYear;
+    return raw > today;
   }
-  if (/^\d{4}-\d{2}$/.test(raw) || /^\d{4}$/.test(raw)) {
-    // Partial date: release cannot be confirmed.
-    return y >= currentYear;
+  if (/^\d{4}-\d{2}$/.test(raw)) {
+    const m = Number(raw.slice(5, 7));
+    return y > currentYear || (y === currentYear && m > currentMonth);
+  }
+  if (/^\d{4}$/.test(raw)) {
+    return y > currentYear;
   }
   return false;
 }
