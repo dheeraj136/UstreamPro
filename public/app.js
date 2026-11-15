@@ -1346,6 +1346,28 @@ const FALLBACK_RATING = 8.0;
 // Infinite scroll is endless by design, but the in-memory catalog must
 // not grow without bound in one session (audit: 150 -> 520).
 const MAX_CATALOG_SIZE = 600;
+// Round 3 (bug 6): the "Showing X of Y" total is frozen from a
+// snapshot of the deduped catalog taken when a full load completes.
+// `catalog` keeps growing as infinite-scroll batches append, so a total
+// computed from the live list grew while scrolling (258 -> 540 -> 592).
+// Scrolling only ever grows X. The snapshot is re-taken only when the
+// catalog is replaced wholesale (full live load, showcase fallback,
+// search results) — never by a scroll batch.
+let frozenCatalog = [...DEMO_ITEMS];
+let frozenCatalogTotal = frozenCatalog.length;
+function freezeCatalogTotal(items) {
+  frozenCatalog = [...(items || [])];
+  frozenCatalogTotal = frozenCatalog.length;
+}
+// Pure rule for the counter (also covered by the harness): the frozen
+// total is claimed only while the displayed count is within it. Once
+// the user has viewed past it, more titles arrived after the full load
+// — claim no total rather than a growing or contradictory one
+// ("293 of 258").
+function frozenCounterTotal(frozenTotal, displayedCount) {
+  if (!frozenTotal || frozenTotal <= 0) return null;
+  return displayedCount <= frozenTotal ? frozenTotal : null;
+}
 // The cold-start cache is truncated to this size; it must cover a full
 // live catalog (~14 TMDB pages) or the "of N" total jumps on load.
 const MAX_CACHED_CATALOG_SIZE = 400;
@@ -1399,56 +1421,150 @@ function stableRatingFor(value, key) {
 //  - `appendCatalogItems` only checked the first-pass key against the
 //    live catalog, so a same-title/different-id entry appended by a
 //    later infinite-scroll page sailed straight past the dedupe.
-// Canonical kind + canonical title key fix all three.
-function canonicalKind(item) {
-  if (!item) return "";
-  const raw = String(item.mediaType || item.type || item.category || "").toLowerCase().trim();
-  if (raw === "tv" || raw === "series" || raw === "show") return "series";
-  if (raw === "anime") return "anime";
-  if (raw === "cartoon" || raw === "cartoons" || raw === "animation") return "cartoon";
-  if (raw === "movie" || raw === "film") return "movie";
-  // Unknown / fallback categories ("trending", "all", ""): derive the kind
-  // from the item itself instead of baking the category into the key.
-  if (Number(item.seNum) > 0 || /season|episode/i.test(String(item.runtime || ""))) return "series";
-  if (item.first_air_date) return "series";
-  if (item.isJapaneseAnime) return "anime";
-  if (item.isCartoon) return "cartoon";
-  return "movie";
-}
-// Normalised title for dedupe: lower-cased, punctuation stripped, a
-// leading "the " dropped, and a trailing year ("(2026)", " 2026")
-// dropped — the year lives in the key separately, so "The Odyssey
-// (2026)" and "The Odyssey" with year 2026 are the same title.
+// Round 3 root causes (live re-audit 2026-11-15: Spirited Away 2x,
+// Spider-Verse 2x, "Jujutsu Kaisen" vs "JUJUTSU KAISEN", "Crayon
+// Shin-chan" vs "クレヨンしんちゃん"): the kind itself was the problem
+// — the same work arrived as "movie", "anime", "cartoon" or "series"
+// depending on which endpoint/category normalised it (TMDB mediaType
+// "tv" vs the DEMO "anime" type; the /api/catalog demo fallback
+// re-typing DEMO movies by its category), so a kind-in-key could never
+// merge them. Dedupe now keys on a binary work kind (movie vs
+// episodic) + overlapping title spellings (display title and original
+// title) + compatible year.
+// Normalised title for dedupe: NFKD-folded (accents stripped: "Amélie"
+// -> "amelie"), lower-cased, punctuation stripped, a leading "the "
+// dropped, and a trailing year ("(2026)", " 2026") dropped — the year
+// lives in the key separately, so "The Odyssey (2026)" and "The Odyssey"
+// with year 2026 are the same title.
+// Round 3: the old regex `[^a-z0-9]` deleted every non-Latin letter, so
+// a Japanese title normalised to "" ("クレヨンしんちゃん" -> "") and
+// could never match its romanised twin ("Crayon Shin-chan"); worse,
+// two different Japanese titles in the same year both normalised to ""
+// and would WRONGLY merge. Keep all Unicode letters/numbers now.
 function canonicalTitleKey(title = "") {
-  return String(title || "").toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
+  return String(title || "").normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
     .replace(/\s+/g, " ")
     .trim()
     .replace(/^the\s+/, "")
     .replace(/\s+\d{4}$/, "");
 }
-function canonicalDedupeKey(item) {
+// Every title spelling an entry is known by: its display title plus its
+// original title (TMDB `original_title` / `original_name`). An entry
+// matches another when ANY variant overlaps — that is how "Crayon
+// Shin-chan" (title) meets "クレヨンしんちゃん" (the same TMDB record's
+// original_name, or a ja-language copy whose title IS the kana string).
+function canonicalTitleKeys(item) {
+  if (!item) return [];
+  const keys = new Set();
+  for (const raw of [item.title, item.originalTitle, item.original_title, item.originalName, item.original_name]) {
+    const key = canonicalTitleKey(raw);
+    if (key) keys.add(key);
+  }
+  return [...keys];
+}
+// Round 3: the work kind for dedupe is binary — movie vs episodic —
+// derived from episodic signals, NOT from the category label. The same
+// work arrived as "movie" (DEMO / /movie/popular), "anime" (TMDB ja
+// animation or the /api/catalog anime fallback re-typing a DEMO movie),
+// "cartoon" (the cartoons fallback), or "series" (canonicalKind reads
+// mediaType "tv" first, so a TMDB anime series was "series" while the
+// DEMO copy was "anime"), and the old kind-in-key could never merge
+// those. A movie and a series with the same title+year stay distinct;
+// anime/cartoon are presentation categories, not separate works.
+function dedupeWorkKind(item) {
   if (!item) return "";
-  const year = Number(item.year) || Number.parseInt(String(item.releaseDate || item.first_air_date || item.release_date || "").slice(0, 4), 10) || "";
-  return `${canonicalTitleKey(item.title)}|${canonicalKind(item)}|${year}`;
+  if (Number(item.seNum) > 0) return "series";
+  if (item.first_air_date || item.firstAirDate) return "series";
+  if (/season|episode/i.test(String(item.runtime || item.duration || ""))) return "series";
+  if (String(item.mediaType || "").toLowerCase() === "tv") return "series";
+  const t = String(item.type || item.category || "").toLowerCase().trim();
+  if (t === "series" || t === "tv" || t === "show") return "series";
+  return "movie";
+}
+// Round 3: the dedupe year comes ONLY from a real date field. Both
+// normalizers used to default a missing date to the current year, so a
+// dateless fallback copy (year 2026) could never match its dated twin
+// (year 2001/2020/2023). "" means "unknown" and never blocks a merge.
+function dedupeYear(item) {
+  if (!item) return "";
+  const raw = String(item.releaseDate || item.first_air_date || item.release_date || "").trim();
+  const y = Number.parseInt(raw.slice(0, 4), 10);
+  return Number.isFinite(y) ? String(y) : "";
+}
+function dedupeYearsCompatible(a, b) {
+  return !a || !b || a === b;
 }
 function catalogItemKey(item) {
   if (!item) return "";
   // Only a numeric id is a TMDB id. `item.id` can also be a local string
   // id ("tmdb-123", "demo-…") — treating that as a TMDB id would split
-  // one title across two keys. Include the kind: TMDB movie id N and TV
-  // id N are different works.
+  // one title across two keys. Include the work kind: TMDB movie id N
+  // and TV id N are different works.
   const tmdbId = item.tmdbId ?? item.id;
   const numericId = /^\d+$/.test(String(tmdbId ?? "")) ? String(tmdbId) : "";
-  if (numericId) return `tmdb:${canonicalKind(item)}:${numericId}`;
+  if (numericId) return `tmdb:${dedupeWorkKind(item)}:${numericId}`;
   const subjectId = item.subjectId ? String(item.subjectId) : "";
   if (subjectId) return `subject:${subjectId.toLowerCase()}`;
-  return `title:${canonicalTitleKey(item.title)}|${item.year || ""}|${canonicalKind(item)}`;
+  return `title:${canonicalTitleKeys(item)[0] || ""}|${dedupeYear(item)}|${dedupeWorkKind(item)}`;
+}
+// Round 3: two entries are the same work when any title spelling
+// overlaps AND the work kind matches AND the years are equal (or either
+// is unknown). This is the single matching rule for the dedupe second
+// pass, the append path and the watchlist guard, so no path can
+// reintroduce a duplicate another path removed.
+function catalogItemsMatch(a, b) {
+  if (!a || !b) return false;
+  const keyA = catalogItemKey(a);
+  if (keyA && keyA === catalogItemKey(b)) return true;
+  if (dedupeWorkKind(a) !== dedupeWorkKind(b)) return false;
+  if (!dedupeYearsCompatible(dedupeYear(a), dedupeYear(b))) return false;
+  const keysA = new Set(canonicalTitleKeys(a));
+  if (!keysA.size) return false;
+  return canonicalTitleKeys(b).some((key) => keysA.has(key));
 }
 function catalogHasCanonical(items, item) {
-  const key = canonicalDedupeKey(item);
-  if (!key || key.startsWith("|")) return false;
-  return (items || []).some((c) => canonicalDedupeKey(c) === key);
+  if (!item) return false;
+  return (items || []).some((c) => catalogItemsMatch(c, item));
+}
+// Best-evidence rule (round 2, unchanged): a real TMDB id wins over an
+// id-less record, then the higher rating; the original-language entry
+// wins ties.
+function isBetterEvidence(next, prev) {
+  const prevHasId = /^\d+$/.test(String(prev.tmdbId ?? prev.id ?? ""));
+  const nextHasId = /^\d+$/.test(String(next.tmdbId ?? next.id ?? ""));
+  const prevScore = Number(prev.rating) || 0;
+  const nextScore = Number(next.rating) || 0;
+  const prevOrig = prev.originalLanguage || (prev.isJapaneseAnime ? "ja" : "");
+  const nextOrig = next.originalLanguage || (next.isJapaneseAnime ? "ja" : "");
+  return (nextHasId && !prevHasId)
+    || (nextHasId === prevHasId && nextScore > prevScore)
+    || (nextHasId === prevHasId && nextScore === prevScore && nextOrig && !prevOrig);
+}
+function buildCatalogMatchIndex(items) {
+  const index = new Map();
+  for (const item of items || []) {
+    for (const key of canonicalTitleKeys(item)) {
+      if (!index.has(key)) index.set(key, []);
+      index.get(key).push(item);
+    }
+  }
+  return index;
+}
+function catalogIndexHas(index, item) {
+  if (!index || !item) return false;
+  const kind = dedupeWorkKind(item);
+  const year = dedupeYear(item);
+  for (const key of canonicalTitleKeys(item)) {
+    const candidates = index.get(key);
+    if (!candidates) continue;
+    for (const candidate of candidates) {
+      if (dedupeWorkKind(candidate) === kind && dedupeYearsCompatible(dedupeYear(candidate), year)) return true;
+    }
+  }
+  return false;
 }
 function dedupeCatalogItems(items) {
   const seen = new Set();
@@ -1460,31 +1576,56 @@ function dedupeCatalogItems(items) {
     seen.add(key);
     out.push(item);
   }
-  // Second pass (bug 11): same canonical title + kind + year under a
-  // different TMDB id (TMDB lists duplicate entries for one film, e.g.
-  // three "The Odyssey" 2026 movies) is one catalogue slot. Keep the
-  // entry with the best evidence: a real TMDB id wins over an id-less
-  // record, then the higher rating; the original-language entry wins
-  // ties. Distinct years stay distinct (Doctor Who 1963 vs 2005 are
-  // different shows and both survive).
-  const bestByTitle = new Map();
+  // Second pass (bug 11, round 3): same work under a different TMDB id
+  // (TMDB lists duplicate entries for one film, e.g. three "The
+  // Odyssey" 2026 movies) is one catalogue slot — and so is the same
+  // work under a different category label ("movie" vs "anime" vs
+  // "cartoon" vs "series" for one title), a different spelling/case
+  // ("Jujutsu Kaisen" vs TMDB's literal "JUJUTSU KAISEN"), or an
+  // original-language title ("クレヨンしんちゃん" vs "Crayon
+  // Shin-chan"). Matching is by overlapping title spellings + binary
+  // work kind + compatible year (unknown year never blocks). Keep the
+  // entry with the best evidence (see isBetterEvidence). Distinct
+  // years stay distinct (Doctor Who 1963 vs 2005 are different shows
+  // and both survive), as do a movie and a series sharing a title+year.
+  const kept = [];
+  const byTitleKey = new Map();
   for (const item of out) {
-    const key = canonicalDedupeKey(item);
-    const prev = bestByTitle.get(key);
-    if (!prev) { bestByTitle.set(key, item); continue; }
-    const prevHasId = /^\d+$/.test(String(prev.tmdbId ?? prev.id ?? ""));
-    const nextHasId = /^\d+$/.test(String(item.tmdbId ?? item.id ?? ""));
-    const prevScore = Number(prev.rating) || 0;
-    const nextScore = Number(item.rating) || 0;
-    const prevOrig = prev.originalLanguage || (prev.isJapaneseAnime ? "ja" : "");
-    const nextOrig = item.originalLanguage || (item.isJapaneseAnime ? "ja" : "");
-    if ((nextHasId && !prevHasId)
-      || (nextHasId === prevHasId && nextScore > prevScore)
-      || (nextHasId === prevHasId && nextScore === prevScore && nextOrig && !prevOrig)) {
-      bestByTitle.set(key, item);
+    const kind = dedupeWorkKind(item);
+    const year = dedupeYear(item);
+    const titleKeys = canonicalTitleKeys(item);
+    let matchIdx = -1;
+    for (const key of titleKeys) {
+      const candidates = byTitleKey.get(key);
+      if (!candidates) continue;
+      for (const idx of candidates) {
+        const prev = kept[idx];
+        if (dedupeWorkKind(prev) !== kind) continue;
+        if (!dedupeYearsCompatible(dedupeYear(prev), year)) continue;
+        matchIdx = idx;
+        break;
+      }
+      if (matchIdx >= 0) break;
+    }
+    if (matchIdx < 0) {
+      const idx = kept.length;
+      kept.push(item);
+      for (const key of titleKeys) {
+        if (!byTitleKey.has(key)) byTitleKey.set(key, []);
+        byTitleKey.get(key).push(idx);
+      }
+      continue;
+    }
+    if (isBetterEvidence(item, kept[matchIdx])) kept[matchIdx] = item;
+    // Register the loser's spellings against the kept slot too, so a
+    // third spelling of the same work still finds it.
+    for (const key of titleKeys) {
+      const list = byTitleKey.get(key) || [];
+      if (!list.includes(matchIdx)) list.push(matchIdx);
+      byTitleKey.set(key, list);
     }
   }
-  const merged = [...bestByTitle.values()];
+  const merged = kept;
   // Central Coming-soon enforcement (bug 10): every item that passes
   // through dedupe gets its badge/stream re-derived from the single
   // unreleased rule, so no data source can smuggle an unreleased title
@@ -1505,22 +1646,23 @@ function dedupeCatalogItems(items) {
 // live / load-more loads re-added the same titles). Returns the items
 // actually added, capped at MAX_CATALOG_SIZE.
 function appendCatalogItems(items) {
-  // Round 2 (bug 6/7): the old check compared only the first-pass
-  // (TMDB-id) key against the live catalog, so a later infinite-scroll
-  // page carrying the same film under a different TMDB id (TMDB lists
-  // three "The Odyssey" 2026 entries) was appended as a duplicate.
-  // Check the canonical title+kind+year key too, against the LIVE
-  // catalog — not just within the incoming batch.
+  // Round 3: match incoming items against the LIVE catalog with the
+  // same rule as the dedupe second pass (overlapping title spellings +
+  // work kind + compatible year) — the old check compared single
+  // canonical keys, so a later page carrying the same film under a
+  // different label, spelling, or script sailed straight past it.
   const seenIds = new Set(catalog.map(catalogItemKey));
-  const seenCanonical = new Set(catalog.map(canonicalDedupeKey));
+  const matchIndex = buildCatalogMatchIndex(catalog);
   const added = [];
   for (const item of dedupeCatalogItems(items)) {
     const key = catalogItemKey(item);
-    if (seenIds.has(key)) continue;
-    const cKey = canonicalDedupeKey(item);
-    if (cKey && !cKey.startsWith("|") && seenCanonical.has(cKey)) continue;
+    if (key && seenIds.has(key)) continue;
+    if (catalogIndexHas(matchIndex, item)) continue;
     seenIds.add(key);
-    if (cKey) seenCanonical.add(cKey);
+    for (const titleKey of canonicalTitleKeys(item)) {
+      if (!matchIndex.has(titleKey)) matchIndex.set(titleKey, []);
+      matchIndex.get(titleKey).push(item);
+    }
     added.push(item);
     if (catalog.length + added.length >= MAX_CATALOG_SIZE) break;
   }
@@ -1767,6 +1909,7 @@ const normalizeApiItem = (item, category) => {
   const isComingSoon = isUnreleasedDate(item.releaseDate, year);
   return {
     title: item.title || "Untitled",
+    originalTitle: item.originalTitle || item.original_title || item.originalName || item.original_name || "",
     type,
     genre: genres.length ? genres : [type],
     country: item.countryName || "Other",
@@ -1928,6 +2071,10 @@ const normalizeTmdbItem = (item, category = "movie") => {
     tmdbId,
     subjectId: `tmdb-${tmdbId}`,
     title,
+    // Round 3: keep the original title — it is the bridge that lets
+    // the dedupe match a romanised title against a ja-language copy
+    // ("Crayon Shin-chan" vs "クレヨンしんちゃん").
+    originalTitle: item.original_title || item.original_name || "",
     category: isAnime ? "anime" : isCartoon ? "cartoons" : isMovie ? "movie" : "series",
     type,
     isJapaneseAnime: isAnime,
@@ -2063,6 +2210,7 @@ function clearErrorState() {
 function loadShowcaseCatalog() {
   clearErrorState();
   catalog = dedupeCatalogItems([...DEMO_ITEMS]);
+  freezeCatalogTotal(catalog);
   recommendations = DEMO_ITEMS.slice(0, 6);
   setFeatured(pickRandomFeatured(DEMO_ITEMS));
   updateStatusBadge(false, DEMO_ITEMS.length);
@@ -2124,8 +2272,9 @@ async function loadLiveCatalog(isRetry = false) {
     try {
       if (Array.isArray(cached) && cached.length >= 20 && cached[0]?.kicker) {
         catalog = dedupeCatalogItems(cached);
+        freezeCatalogTotal(catalog);
         setFeatured(pickRandomFeatured(catalog));
-        updateStatusBadge(true, catalog.length);
+        updateStatusBadge(true, frozenCatalogTotal);
         render();
       }
     } catch {}
@@ -2193,9 +2342,10 @@ async function loadLiveCatalog(isRetry = false) {
 
     if (successfulItems.length >= 20) {
       catalog = replaceCatalogItems(successfulItems);
+      freezeCatalogTotal(catalog);
       hasMoreContent = true;
       setFeatured(pickRandomFeatured(successfulItems));
-      updateStatusBadge(true, successfulItems.length);
+      updateStatusBadge(true, frozenCatalogTotal);
       clearErrorState();
       render();
       try {
@@ -2324,7 +2474,9 @@ async function fetchNextRemoteBatch(targetSection) {
   }
 
   if (newItems.length > 0) {
-    updateStatusBadge(true, catalog.length);
+    // Round 3: the settings badge shows the frozen total, not the
+    // growing live list — same rule as the "Showing X of Y" counter.
+    updateStatusBadge(true, frozenCatalogTotal);
     try {
       storage.set("ustream-catalog-cache-v2", storage.compactCatalog(catalog, MAX_CACHED_CATALOG_SIZE));
     } catch {}
@@ -2518,7 +2670,9 @@ async function loadNewestRecommendations() {
     } catch {}
 
     if (recItems.length) {
-      recommendations = recItems;
+      // Round 3: recommendations are a merge point too — dedupe the row
+      // so the same title cannot appear twice in it.
+      recommendations = dedupeCatalogItems(recItems);
     } else {
       recommendations = DEMO_ITEMS.slice(0, 6);
     }
@@ -2765,6 +2919,7 @@ async function loadSearchResults(query) {
 
     if (ranked.length) {
       catalog = ranked;
+      freezeCatalogTotal(catalog);
       state.displayLimit = CONTENT_BATCH_SIZE;
       // Search results are complete: Load More must not append unrelated
       // popular titles into them (or grow the total after a search).
@@ -2774,6 +2929,7 @@ async function loadSearchResults(query) {
       showToast(`Found ${ranked.length} live results for "${trimmed}"`);
     } else {
       catalog = [];
+      freezeCatalogTotal(catalog);
       state.displayLimit = CONTENT_BATCH_SIZE;
       hasMoreContent = false;
       render();
@@ -3093,14 +3249,16 @@ function isAdultContent(item) {
   return false;
 }
 
-function getVisibleCards() {
+function getVisibleCards(source = catalog) {
   const query = state.search.trim().toLowerCase();
   const targetSection = state.section || "home";
   const apiGenre = state.filters.genre || "All";
   const apiLanguage = state.filters.classify || "All";
   const adultEnabled = isAdultEnabled();
 
-  let visible = catalog.filter((card) => {
+  // Round 3: `source` lets the counter run the same filters over the
+  // frozen snapshot, so the total is the frozen total for this view.
+  let visible = (source || []).filter((card) => {
     // Adult-content setting (independent of theme): unless 18+ mode was
     // explicitly enabled with an age confirmation, hide adult content.
     if (!adultEnabled && isAdultContent(card)) {
@@ -3314,10 +3472,18 @@ function updateCatalogCounters(visible, displayed) {
 
   const catalogStatus = $("#catalog-live-status");
   if (catalogStatus) {
+    // Round 3: Y comes from the frozen snapshot taken at the last full
+    // load, filtered with the same state as the live list — never from
+    // the live list itself, which grows as scroll batches append
+    // (258 -> 540 -> 592). Scrolling only ever grows X.
+    const frozenTotal = getVisibleCards(frozenCatalog).length;
     if (visible.length === 0) {
       catalogStatus.textContent = state.section === "my-list" ? "Your list is empty." : "No titles found matching your criteria.";
-    } else if (visible.length > displayed.length) {
-      catalogStatus.textContent = `Showing ${displayed.length} of ${visible.length} available titles.`;
+    } else if (displayed.length < visible.length) {
+      const total = frozenCounterTotal(frozenTotal, displayed.length);
+      catalogStatus.textContent = total !== null
+        ? `Showing ${displayed.length} of ${total} available titles.`
+        : `Showing ${displayed.length} titles · more available.`;
     } else {
       catalogStatus.textContent = `Showing all ${visible.length} title${visible.length === 1 ? "" : "s"}.`;
     }
@@ -6964,7 +7130,7 @@ function toggleList(title) {
     showToast(`${title} removed from My List`);
   } else {
     state.watchlist.add(title);
-    if (item && !catalog.some((c) => catalogItemKey(c) === catalogItemKey(item) || canonicalDedupeKey(c) === canonicalDedupeKey(item))) {
+    if (item && !catalog.some((c) => catalogItemsMatch(c, item))) {
       catalog.push(item);
     }
     showToast(`${title} added to My List`);
