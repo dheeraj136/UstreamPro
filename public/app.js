@@ -148,7 +148,7 @@ const animeFilterResponse = {
             filterType: "sort",
             filterVals: [],
             filterValsV2: [
-              { id: "ForYou", name: "ForYou" },
+              { id: "ForYou", name: "For You" },
               { id: "Hottest", name: "Hottest" },
               { id: "Latest", name: "Latest" },
             ],
@@ -175,10 +175,11 @@ const animeFilterResponse = {
 
 const animeChannel = animeFilterResponse.data.typeList.find((entry) => entry.channelName === "Anime");
 
+const FILTER_VALUE_LABELS = { ForYou: "For You" };
 const enumFilter = (filterType, title, values, showOut) => ({
   filterType,
   filterVals: [],
-  filterValsV2: values.map((value) => ({ id: value, name: value })),
+  filterValsV2: values.map((value) => ({ id: value, name: FILTER_VALUE_LABELS[value] || value })),
   rangeVals: null,
   showOut,
   title,
@@ -759,8 +760,8 @@ const DEMO_ITEMS = [
     "releaseDate": "2016-07-15",
     "rating": 8.7,
     "imdbRatingValue": "8.7",
-    "runtime": "4 Seasons · 34 Episodes",
-    "duration": "4 Seasons",
+    "runtime": "5 Seasons · 42 Episodes",
+    "duration": "5 Seasons",
     "language": "English, Multi Sub",
     "badge": "Global Phenomenon",
     "kicker": "Duffer Brothers",
@@ -775,7 +776,7 @@ const DEMO_ITEMS = [
       "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
     },
     "hasResource": true,
-    "seNum": 4
+    "seNum": 5
   },
   {
     "subjectId": "series-last-of-us",
@@ -796,8 +797,8 @@ const DEMO_ITEMS = [
     "releaseDate": "2023-01-15",
     "rating": 8.8,
     "imdbRatingValue": "8.8",
-    "runtime": "1 Season · 9 Episodes",
-    "duration": "1 Season",
+    "runtime": "2 Seasons · 16 Episodes",
+    "duration": "2 Seasons",
     "language": "English, Multi Sub",
     "badge": "HBO Original",
     "kicker": "Craig Mazin & Neil Druckmann",
@@ -812,7 +813,7 @@ const DEMO_ITEMS = [
       "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4"
     },
     "hasResource": true,
-    "seNum": 1
+    "seNum": 2
   },
   {
     "subjectId": "series-game-of-thrones",
@@ -1337,15 +1338,246 @@ function pickRandomFeatured(items, poolSize = 20) {
 }
 let featured = pickRandomFeatured(DEMO_ITEMS);
 
+// --- Bug 6/7/9/29 shared helpers: single source of truth for catalog
+// identity, ratings and search relevance. -------------------------------
+// One fallback rating everywhere (was 7.5 / 8.0 / 8.5 / 8.6 depending on
+// which code path rendered the same title).
+const FALLBACK_RATING = 8.0;
+// Infinite scroll is endless by design, but the in-memory catalog must
+// not grow without bound in one session (audit: 150 -> 520).
+const MAX_CATALOG_SIZE = 600;
+// The cold-start cache is truncated to this size; it must cover a full
+// live catalog (~14 TMDB pages) or the "of N" total jumps on load.
+const MAX_CACHED_CATALOG_SIZE = 400;
+
+// Bug 9: clamp to a plausible 0..9.9 (TMDB vote_average can be 10.0 on a
+// handful of votes); null when there is no real rating at all.
+function clampRating(value) {
+  const rating = Number.parseFloat(value);
+  if (!Number.isFinite(rating) || rating <= 0) return null;
+  return Math.min(9.9, Math.max(0, Math.round(rating * 10) / 10));
+}
+function normalizeRating(value, fallback = FALLBACK_RATING) {
+  const clamped = clampRating(value);
+  return clamped === null ? fallback : clamped;
+}
+// Bug 9: within one session, the first real rating seen for a TMDB id is
+// the rating everywhere that id is shown (home, search, modal, cache),
+// so a title cannot read 10.0 on one load and 9.3 on the next. Curated
+// DEMO ratings seed the map, so DEMO is the source of truth for them.
+const tmdbRatingById = new Map();
+DEMO_ITEMS.forEach((item) => {
+  const real = clampRating(item.rating);
+  if (real === null) return;
+  if (item.tmdbId) tmdbRatingById.set(String(item.tmdbId), real);
+  if (item.subjectId) tmdbRatingById.set(String(item.subjectId), real);
+});
+function stableRatingFor(value, key) {
+  const k = key === undefined || key === null ? "" : String(key);
+  if (k && tmdbRatingById.has(k)) return tmdbRatingById.get(k);
+  const real = clampRating(value);
+  if (real === null) return FALLBACK_RATING;
+  if (k) tmdbRatingById.set(k, real);
+  return real;
+}
+
+// Bug 6/7: one identity for a title. TMDB id first (the app already
+// treats `tmdb-<id>` as the global id in subjectId/video URLs); then
+// subjectId; then normalised title+year+type, so remakes (same title,
+// different year) stay distinct while the same title returned by
+// several TMDB endpoints collapses to one entry.
+function catalogItemKey(item) {
+  if (!item) return "";
+  const tmdbId = item.tmdbId ?? item.id;
+  if (tmdbId !== undefined && tmdbId !== null && String(tmdbId) !== "") return `tmdb:${String(tmdbId)}`;
+  const subjectId = item.subjectId ? String(item.subjectId) : "";
+  if (subjectId) return `subject:${subjectId.toLowerCase()}`;
+  return `title:${String(item.title || "").toLowerCase().trim()}|${item.year || ""}|${String(item.type || item.category || "").toLowerCase()}`;
+}
+function dedupeCatalogItems(items) {
+  const seen = new Set();
+  const out = [];
+  for (const item of items || []) {
+    if (!item || !item.title) continue;
+    const key = catalogItemKey(item);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+  // Second pass (bug 11): same canonical title + media kind under a
+  // different TMDB id (e.g. Crayon Shin-chan Japanese vs English,
+  // Ranma 1/2 1989 vs 2024) is one catalogue slot. Keep the higher
+  // rating; the original-language entry wins ties.
+  const bestByTitle = new Map();
+  for (const item of out) {
+    const key = `${canonicalTitleKey(item.title)}|${item.mediaType || item.type || ""}`;
+    const prev = bestByTitle.get(key);
+    if (!prev) { bestByTitle.set(key, item); continue; }
+    const prevScore = Number(prev.rating) || 0;
+    const nextScore = Number(item.rating) || 0;
+    const prevOrig = prev.originalLanguage || (prev.isJapaneseAnime ? "ja" : "");
+    const nextOrig = item.originalLanguage || (item.isJapaneseAnime ? "ja" : "");
+    if (nextScore > prevScore || (nextScore === prevScore && nextOrig && !prevOrig)) bestByTitle.set(key, item);
+  }
+  return [...bestByTitle.values()];
+}
+// Append, re-checked against the LIVE catalog at push time (not a `seen`
+// snapshot taken before the awaits, which is how concurrent category /
+// live / load-more loads re-added the same titles). Returns the items
+// actually added, capped at MAX_CATALOG_SIZE.
+function appendCatalogItems(items) {
+  const seen = new Set(catalog.map(catalogItemKey));
+  const added = [];
+  for (const item of dedupeCatalogItems(items)) {
+    const key = catalogItemKey(item);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    added.push(item);
+    if (catalog.length + added.length >= MAX_CATALOG_SIZE) break;
+  }
+  if (added.length) catalog.push(...added);
+  return added;
+}
+function replaceCatalogItems(items) {
+  catalog = dedupeCatalogItems(items).slice(0, MAX_CATALOG_SIZE);
+  return catalog;
+}
+// Bug 6: guards so concurrent / stale live-catalog loads cannot each
+// build and assign their own catalog (the "total" then depended on which
+// racing load finished last).
+let catalogGeneration = 0;
+let liveCatalogLoading = false;
+
+// Bug 6: count the curated breakdown from DEMO_ITEMS instead of
+// hardcoding it (the hardcoded "10 Movies, 5 Series, 5 Anime" summed to
+// 20 while DEMO_ITEMS actually holds 23).
+function curatedBreakdownLabel() {
+  const counts = { movie: 0, series: 0, anime: 0, cartoon: 0 };
+  DEMO_ITEMS.forEach((item) => {
+    const t = String(item.type || "").toLowerCase();
+    if (t === "movie") counts.movie++;
+    else if (t === "series") counts.series++;
+    else if (t === "anime") counts.anime++;
+    else if (t === "cartoon") counts.cartoon++;
+  });
+  const parts = [`${counts.movie} Movies`, `${counts.series} Series`, `${counts.anime} Anime`];
+  if (counts.cartoon) parts.push(`${counts.cartoon} Cartoon`);
+  return parts.join(", ");
+}
+
+// Bug 29: relevance of a title for a query. 0 exact, 1 starts-with,
+// 2 query starts a word, 3 substring, 4 no title match (e.g. a
+// genre/country-only match, which ranks last).
+function normalizeSearchText(value) {
+  return String(value || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+}
+function searchRelevanceScore(title, query) {
+  const t = normalizeSearchText(title);
+  const q = normalizeSearchText(query);
+  if (!q) return 4;
+  if (t === q) return 0;
+  if (t.startsWith(q)) return 1;
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (new RegExp(`(?:^| )${escaped}`).test(t)) return 2;
+  if (t.includes(q)) return 3;
+  return 4;
+}
+function sortBySearchRelevance(items, query) {
+  return [...(items || [])].sort((a, b) => {
+    const diff = searchRelevanceScore(a.title, query) - searchRelevanceScore(b.title, query);
+    return diff !== 0 ? diff : (normalizeRating(b.rating) - normalizeRating(a.rating));
+  });
+}
+
+function formatTime(seconds) {
+  const s = Math.max(0, Math.floor(Number(seconds) || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mm = h > 0 ? String(m).padStart(2, "0") : String(m);
+  return h > 0 ? `${h}:${mm}:${String(sec).padStart(2, "0")}` : `${mm}:${String(sec).padStart(2, "0")}`;
+}
+
 function loadContinuation() {
   try {
     const raw = localStorage.getItem("ustream-continuation");
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) {
+        // Only keep entries with evidence of real playback. Legacy rows
+        // written by the old fake "+15 progress" code have no watchedAt
+        // and no position/duration, so they are dropped here: a fresh
+        // user starts with an empty Continue Watching row.
+        const seen = new Set();
+        return parsed.filter((e) => {
+          if (!e || typeof e.title !== "string" || !e.title) return false;
+          if (seen.has(e.title)) return false;
+          seen.add(e.title);
+          const progress = Number(e.progress);
+          if (!Number.isFinite(progress) || progress < 0 || progress >= 100) return false;
+          const hasEvidence = Boolean(e.watchedAt)
+            || Number(e.positionSeconds) > 0 || Number(e.durationSeconds) > 0;
+          return hasEvidence;
+        }).slice(0, 6);
+      }
     }
   } catch {}
   return [];
+}
+
+function persistContinuation() {
+  try {
+    localStorage.setItem("ustream-continuation", JSON.stringify(continuation));
+  } catch {}
+}
+
+// Saved resume position (seconds) for a title, from the continuation entry
+// or from the per-title position key written by the player timeupdate.
+function getSavedPosition(itemOrTitle) {
+  const title = typeof itemOrTitle === "string" ? itemOrTitle : itemOrTitle?.title;
+  if (!title) return 0;
+  const entry = continuation.find((c) => c.title === title);
+  if (entry && Number(entry.positionSeconds) > 0) return Number(entry.positionSeconds);
+  try {
+    const pos = parseFloat(localStorage.getItem(`ustream-pos-${title}`) || "0");
+    if (Number.isFinite(pos) && pos > 0) return pos;
+  } catch {}
+  return 0;
+}
+
+// Record REAL playback progress only. progress is derived from
+// position/duration, never fabricated. Called on play (position 0 / saved
+// position = "started watching") and on every 5s timeupdate tick.
+function recordPlaybackProgress(item, { positionSeconds = 0, durationSeconds = 0 } = {}) {
+  if (!item?.title) return;
+  const pos = Math.max(0, Math.floor(Number(positionSeconds) || 0));
+  const dur = Math.max(0, Math.floor(Number(durationSeconds) || 0));
+  const existing = continuation.find((c) => c.title === item.title);
+  const progress = dur > 0 ? Math.min(99, Math.round((pos / dur) * 100))
+    : (existing ? Number(existing.progress) || 0 : 0);
+  const entry = {
+    ...(existing || {}),
+    ...item,
+    title: item.title,
+    progress,
+    positionSeconds: pos,
+    durationSeconds: dur || existing?.durationSeconds || 0,
+    watchedAt: new Date().toISOString(),
+  };
+  const idx = continuation.findIndex((c) => c.title === item.title);
+  if (idx >= 0) continuation[idx] = entry;
+  else continuation.unshift(entry);
+  if (continuation.length > 6) continuation.length = 6;
+  persistContinuation();
+  renderContinue();
+}
+
+async function resumeTitle(title) {
+  const item = findTitle(title);
+  if (!item) return;
+  const pos = getSavedPosition(item);
+  closeDetails({ updateHash: false });
+  await playTitle(title, { resumeTime: pos });
 }
 
 const continuation = loadContinuation();
@@ -1405,8 +1637,9 @@ let searchTimer;
 let searchRequestId = 0;
 
 const parseApiRating = (value) => {
-  const rating = Number.parseFloat(value);
-  return Number.isFinite(rating) ? rating : 0;
+  // Clamped (<=9.9); 0 preserved as "no rating" for existing callers.
+  const rating = clampRating(value);
+  return rating === null ? 0 : rating;
 };
 
 const normalizeApiItem = (item, category) => {
@@ -1418,6 +1651,8 @@ const normalizeApiItem = (item, category) => {
   const label = category === "tv" ? "Series" : category === "anime" ? "Anime" : "Movie";
   if (type === "anime" && !genres.includes("anime")) genres.unshift("anime");
   const year = Number.parseInt(String(item.releaseDate || "").slice(0, 4), 10);
+  const isComingSoon = Boolean(item.releaseDate)
+    && String(item.releaseDate).slice(0, 10) > new Date().toISOString().slice(0, 10);
   return {
     title: item.title || "Untitled",
     type,
@@ -1426,19 +1661,29 @@ const normalizeApiItem = (item, category) => {
     year: Number.isFinite(year) ? year : new Date().getFullYear(),
     releaseDate: item.releaseDate || "",
     updatedAt: item.updatedAt || item.updateTime || item.resourceDetectors?.[0]?.uploadTime || "",
-    rating: parseApiRating(item.imdbRatingValue),
-    runtime: item.duration || (item.seNum ? `${item.seNum} season${item.seNum === 1 ? "" : "s"}` : "Live title"),
+    rating: stableRatingFor(item.imdbRatingValue, item.tmdbId || item.subjectId),
+    runtime: item.duration || (item.seNum ? `${item.seNum} season${item.seNum === 1 ? "" : "s"}` : "—"),
+    isComingSoon,
     language: item.language || item.corner || "",
-    badge: item.hasResource ? "Ready" : "Info",
+    badge: isComingSoon ? "Coming soon" : (item.hasResource ? "Ready" : "Info"),
     kicker: `Ustream · ${label}`,
     image: item.cover?.url || "",
     gradient: "linear-gradient(145deg, #293569, #111827 58%, #080a12)",
     subjectId: item.subjectId,
     description: item.description || "Stream this title in high definition on Ustream.",
-    video: item.playUrl?.url || item.playUrl?.playUrl || "",
+    video: isComingSoon ? "" : (item.playUrl?.url || item.playUrl?.playUrl || ""),
   };
 };
 
+// --- Patch D helpers (bugs 10/11): unreleased titles + canonical dedupe ---
+const isUnreleasedItem = (item) => {
+  if (!item) return false;
+  if (item.isComingSoon) return true;
+  const dateStr = String(item.releaseDate || item.first_air_date || item.release_date || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+  return dateStr > new Date().toISOString().slice(0, 10);
+};
+const canonicalTitleKey = (title = "") => String(title || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 const normalizeSearchItem = (item) => {
   const category = String(item.genre || "").toLowerCase().includes("anime") ? "anime" : "tv";
   return normalizeApiItem(item, category);
@@ -1505,17 +1750,26 @@ async function fetchTmdbResults(path) {
 }
 
 const normalizeTmdbItem = (item, category = "movie") => {
-  const isMovie = category === "movie" || item.media_type === "movie" || (!item.first_air_date && !!item.release_date);
-  const isAnime = category === "anime" || (item.original_language === "ja" && (item.genre_ids || []).includes(16));
-  const isCartoon = category === "cartoons" || category === "cartoon" || (item.original_language === "en" && (item.genre_ids || []).includes(16));
+  // media_type from TMDB wins over the caller's category hint: a TV
+  // series fetched via a "movie"/trending batch (e.g. IT: Welcome to
+  // Derry) is a series, not a movie. Anime/cartoon require the
+  // animation genre (16): a Japanese live-action film (e.g. Godzilla
+  // Minus One / Minus Zero) is not anime.
+  const mediaIsMovie = item.media_type === "movie";
+  const mediaIsTv = item.media_type === "tv";
+  const hasAnimationGenre = (item.genre_ids || []).includes(16);
+  const isMovie = mediaIsMovie || (!mediaIsTv && (category === "movie" || (!item.first_air_date && !!item.release_date)));
+  const isAnime = hasAnimationGenre && (category === "anime" || item.original_language === "ja");
+  const isCartoon = hasAnimationGenre && (category === "cartoons" || category === "cartoon" || item.original_language === "en");
   const type = isAnime ? "anime" : isCartoon ? "cartoon" : isMovie ? "movie" : "series";
   const title = (item.title || item.name || item.original_title || item.original_name || "Untitled").trim();
   const yearStr = item.release_date || item.first_air_date || "";
   const year = parseInt(yearStr.slice(0, 4), 10) || new Date().getFullYear();
   const poster = item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : "";
   const backdrop = item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : (poster || "");
-  const rating = item.vote_average ? Number(item.vote_average.toFixed(1)) : 8.0;
+  const rating = stableRatingFor(item.vote_average, String(item.id));
   const tmdbId = String(item.id);
+  const isComingSoon = Boolean(yearStr) && yearStr.slice(0, 10) > new Date().toISOString().slice(0, 10);
   const isAdult = Boolean(item.adult) || (Array.isArray(item.genre_ids) && item.genre_ids.includes(10749) && /\b(?:erotic|xxx|sex|porn)\b/i.test(item.overview || ""));
 
   const genreSet = new Set(Array.isArray(item.genre_ids) ? item.genre_ids.map(id => TMDB_GENRE_NAMES[id]).filter(Boolean) : []);
@@ -1539,6 +1793,7 @@ const normalizeTmdbItem = (item, category = "movie") => {
     type,
     isJapaneseAnime: isAnime,
     isCartoon: isCartoon,
+    originalLanguage: item.original_language || "",
     adult: Boolean(item.adult || isAdult),
     isAdult: Boolean(item.adult || isAdult),
     genre: [...genreSet],
@@ -1548,25 +1803,38 @@ const normalizeTmdbItem = (item, category = "movie") => {
     releaseDate: yearStr,
     rating,
     imdbRatingValue: String(rating),
-    runtime: isMovie ? "Feature film" : "Series",
-    duration: isMovie ? "Feature film" : "Series",
+    // TMDB list endpoints carry no runtime: never invent one.
+    runtime: "—",
+    duration: "—",
+    isComingSoon,
+    comingSoon: isComingSoon,
     language: item.original_language === "ja" ? "Japanese, English Dub" : "English, Multi Sub",
-    badge: rating >= 8.0 ? "Top Rated" : "Popular",
+    badge: isComingSoon ? "Coming soon" : (rating >= 8.0 ? "Top Rated" : "Popular"),
     kicker: isAnime ? "Anime Series" : isCartoon ? "Animation" : isMovie ? "Blockbuster" : "Hit Series",
     image: poster,
     cover: { url: poster },
     backdrop,
     gradient: isAnime ? "linear-gradient(145deg, #b45309, #78350f 50%, #451a03)" : isCartoon ? "linear-gradient(145deg, #db2777, #831843 50%, #4c0519)" : isMovie ? "linear-gradient(145deg, #1e293b, #0f172a 50%, #020617)" : "linear-gradient(145deg, #0369a1, #0c4a6e 50%, #082f49)",
     description: item.overview || `Stream ${title} in high definition on Ustream.`,
-    video: `https://vidlink.pro/${isMovie ? "movie" : "tv"}/${tmdbId}${isMovie ? "" : "/1/1"}?primaryColor=e7ff51`,
-    playUrl: { url: `https://vidlink.pro/${isMovie ? "movie" : "tv"}/${tmdbId}${isMovie ? "" : "/1/1"}?primaryColor=e7ff51` },
-    hasResource: true,
+    video: isComingSoon ? "" : `https://vidlink.pro/${isMovie ? "movie" : "tv"}/${tmdbId}${isMovie ? "" : "/1/1"}?primaryColor=e7ff51`,
+    playUrl: { url: isComingSoon ? "" : `https://vidlink.pro/${isMovie ? "movie" : "tv"}/${tmdbId}${isMovie ? "" : "/1/1"}?primaryColor=e7ff51` },
+    hasResource: !isComingSoon,
     seNum: isMovie ? 0 : 1,
     mediaType: isMovie ? "movie" : "tv",
   };
 };
 
+// Catalog liveness (TMDB/catalog loaded) is NOT playback liveness. The old
+// code labelled any configured catalog "Live Streaming Active — Connected"
+// even while every player was black. These flags are the single source of
+// truth for the Settings/header status text (bug 2).
+let catalogIsLive = false;
+let catalogLiveCount = 0;
+let livePlaybackActive = false;
+
 function updateStatusBadge(isLive, count) {
+  catalogIsLive = !!isLive;
+  if (count !== undefined && count !== null) catalogLiveCount = count;
   const dot = $("#status-dot");
   const label = $("#status-label");
   const settingsDot = $("#settings-status-dot");
@@ -1576,12 +1844,18 @@ function updateStatusBadge(isLive, count) {
   if (dot) dot.classList.toggle("live", !!isLive);
   if (label) label.textContent = isLive ? "Live" : "Curated";
 
-  if (settingsDot) settingsDot.classList.toggle("live", !!isLive);
-  if (settingsTitle) settingsTitle.textContent = isLive ? "Live Streaming Active" : "Curated Catalog";
+  // The green dot / "Active" wording now requires a stream actually
+  // playing, not merely a loaded catalog or a configured API key.
+  if (settingsDot) settingsDot.classList.toggle("live", livePlaybackActive);
+  if (settingsTitle) settingsTitle.textContent = livePlaybackActive
+    ? "Live Streaming Active"
+    : isLive ? "Live Catalog" : "Curated Catalog";
   if (settingsInfo) {
-    settingsInfo.textContent = isLive
-      ? `Connected to live streaming service · ${count || "multiple"} titles available.`
-      : "Curated original streaming collection with multi-resolution playback and episodic support.";
+    settingsInfo.textContent = livePlaybackActive
+      ? `Streaming live now · ${count || "multiple"} titles available.`
+      : isLive
+        ? `Live catalog loaded · ${count || "multiple"} titles. No stream is playing — playback is verified only when a title actually starts.`
+        : "Curated original streaming collection with multi-resolution playback and episodic support.";
   }
 }
 
@@ -1647,12 +1921,13 @@ function clearErrorState() {
 
 function loadShowcaseCatalog() {
   clearErrorState();
-  catalog = [...DEMO_ITEMS];
+  catalog = dedupeCatalogItems([...DEMO_ITEMS]);
   recommendations = DEMO_ITEMS.slice(0, 6);
   setFeatured(pickRandomFeatured(DEMO_ITEMS));
   updateStatusBadge(false, DEMO_ITEMS.length);
+  hasMoreContent = true;
   render();
-  showToast(`Loaded ${DEMO_ITEMS.length} curated titles (10 Movies, 5 Series, 5 Anime)`);
+  showToast(`Loaded ${DEMO_ITEMS.length} curated titles (${curatedBreakdownLabel()})`);
 }
 
 async function retryCatalog() {
@@ -1696,13 +1971,18 @@ function buildApiUrl(action, params = {}) {
 
 async function loadLiveCatalog(isRetry = false) {
   clearErrorState();
+  // Do not stack a second full live load on top of one already in flight:
+  // each load built its own catalog and the total depended on which won.
+  if (liveCatalogLoading && !isRetry) return;
+  const catalogGen = ++catalogGeneration;
+  liveCatalogLoading = true;
   
   // Instant Cold-Start Rendering: Check if cached catalog exists to show immediately (0ms delay)
   const cached = storage.get("ustream-catalog-cache-v2");
   if (cached) {
     try {
       if (Array.isArray(cached) && cached.length >= 20 && cached[0]?.kicker) {
-        catalog = cached;
+        catalog = dedupeCatalogItems(cached);
         setFeatured(pickRandomFeatured(catalog));
         updateStatusBadge(true, catalog.length);
         render();
@@ -1758,34 +2038,27 @@ async function loadLiveCatalog(isRetry = false) {
       return { ok: false, items: [], cat };
     }));
 
-    const successfulItems = [];
-    const seenTitles = new Set();
+    // A superseded load (e.g. a retry started while this one was in
+    // flight) must not overwrite the newer catalog with stale results.
+    if (catalogGen !== catalogGeneration) return;
 
-    // Include DEMO_ITEMS so all 20 curated premier items are always present
-    DEMO_ITEMS.forEach((d) => {
-      const key = d.title.toLowerCase().trim();
-      seenTitles.add(key);
-      successfulItems.push(d);
-    });
-
-    results.forEach(({ items }) => {
-      items.forEach((item) => {
-        const key = item.title.toLowerCase().trim();
-        if (!seenTitles.has(key)) {
-          seenTitles.add(key);
-          successfulItems.push(item);
-        }
-      });
-    });
+    // Single source of truth: DEMO first, then live items, deduped by
+    // TMDB id (then subject/title+year+type). First copy wins, so curated
+    // titles keep their curated ratings.
+    const successfulItems = dedupeCatalogItems([
+      ...DEMO_ITEMS,
+      ...results.flatMap(({ items }) => items || []),
+    ]);
 
     if (successfulItems.length >= 20) {
-      catalog = successfulItems;
+      catalog = replaceCatalogItems(successfulItems);
+      hasMoreContent = true;
       setFeatured(pickRandomFeatured(successfulItems));
       updateStatusBadge(true, successfulItems.length);
       clearErrorState();
       render();
       try {
-        storage.set("ustream-catalog-cache-v2", storage.compactCatalog(catalog, 150));
+        storage.set("ustream-catalog-cache-v2", storage.compactCatalog(catalog, MAX_CACHED_CATALOG_SIZE));
       } catch {}
       if (!cached) {
         showToast(`Loaded ${successfulItems.length} titles across all categories`);
@@ -1798,6 +2071,10 @@ async function loadLiveCatalog(isRetry = false) {
   } catch (error) {
     console.error("[Ustream Unhandled Catalog Error]", error);
     loadShowcaseCatalog();
+  } finally {
+    // Only the newest generation releases the lock; a stale load's
+    // finally must not unlock a retry that is still running.
+    if (catalogGen === catalogGeneration) liveCatalogLoading = false;
   }
 }
 
@@ -1815,7 +2092,6 @@ let isLoadingMore = false;
 let hasMoreContent = true;
 
 async function fetchNextRemoteBatch(targetSection) {
-  const seen = new Set(catalog.map((c) => (c.title || "").toLowerCase().trim()));
   const newItems = [];
   let attempts = 0;
 
@@ -1889,14 +2165,11 @@ async function fetchNextRemoteBatch(targetSection) {
     }));
 
     const flatItems = fetchedBatches.flat();
-    flatItems.forEach((item) => {
-      if (!item || !item.title) return;
-      const key = item.title.toLowerCase().trim();
-      if (!seen.has(key)) {
-        seen.add(key);
-        newItems.push(item);
-      }
-    });
+    // Append against the *live* catalog, not a `seen` snapshot taken
+    // before the awaits: a category/live load resolving mid-fetch may
+    // already have added these titles, which is how Load More produced
+    // exact duplicates.
+    newItems.push(...appendCatalogItems(flatItems));
 
     // Only stop if TMDB actually returned nothing after 500 pages (max TMDB limit)
     if (flatItems.length === 0 && nextPage >= 500) {
@@ -1910,12 +2183,12 @@ async function fetchNextRemoteBatch(targetSection) {
   }
 
   if (newItems.length > 0) {
-    catalog.push(...newItems);
     updateStatusBadge(true, catalog.length);
     try {
-      storage.set("ustream-catalog-cache-v2", storage.compactCatalog(catalog, 150));
+      storage.set("ustream-catalog-cache-v2", storage.compactCatalog(catalog, MAX_CACHED_CATALOG_SIZE));
     } catch {}
   }
+  if (catalog.length >= MAX_CATALOG_SIZE) hasMoreContent = false;
 
   return newItems.length;
 }
@@ -1923,7 +2196,7 @@ async function fetchNextRemoteBatch(targetSection) {
 async function loadMoreTitles() {
   if (isLoadingMore) return;
   const targetSection = state.section;
-  if (["sports", "explore", "profile", "my-list"].includes(targetSection)) return;
+  if (["explore", "profile", "my-list"].includes(targetSection)) return;
 
   isLoadingMore = true;
   const loader = $("#catalog-infinite-loader");
@@ -1988,10 +2261,14 @@ async function loadMoreTitles() {
   } finally {
     isLoadingMore = false;
     if (loader) loader.hidden = true;
-    if (loadMoreBtn) {
-      loadMoreBtn.disabled = false;
-      loadMoreBtn.classList.remove("loading");
-    }
+    if (loadMoreBtn) loadMoreBtn.classList.remove("loading");
+    // Re-sync the button from the real state (remaining / hasMoreContent)
+    // instead of blindly re-enabling it when nothing is left, or leaving
+    // it disabled when titles remain.
+    try {
+      const visibleNow = getVisibleCards();
+      updateCatalogCounters(visibleNow, visibleNow.slice(0, state.displayLimit));
+    } catch {}
   }
 }
 
@@ -1999,7 +2276,7 @@ let scrollTicking = false;
 function handleAutoInfiniteScroll() {
   if (isLoadingMore || !hasMoreContent) return;
   const targetSection = state.section;
-  if (["sports", "explore", "profile", "my-list"].includes(targetSection)) return;
+  if (["explore", "profile", "my-list"].includes(targetSection)) return;
 
   const grid = $("#card-grid");
   const sentinel = $("#catalog-sentinel");
@@ -2115,7 +2392,12 @@ async function loadNewestRecommendations() {
 
 function setFeatured(item) {
   if (!item) return;
-  if (!isDarkModeActive() && isAdultContent(item)) {
+  // Never feature an unreleased title as the playable hero.
+  if (isUnreleasedItem(item)) {
+    const released = catalog.find((c) => c.title !== item.title && !isUnreleasedItem(c));
+    if (released) return setFeatured(released);
+  }
+  if (!isAdultEnabled() && isAdultContent(item)) {
     const cleanItem = catalog.find((i) => !isAdultContent(i)) || DEMO_ITEMS.find((i) => !isAdultContent(i));
     if (cleanItem && cleanItem !== item) {
       return setFeatured(cleanItem);
@@ -2134,7 +2416,7 @@ function setFeatured(item) {
     heroDesc.textContent = item.description || `Stream ${item.title} in pristine high definition with surround audio on Ustream.`;
   }
 
-  const ratingVal = item.rating || 8.6;
+  const ratingVal = normalizeRating(item.rating);
   const matchPercent = Math.min(99, Math.max(88, Math.round(ratingVal * 10 + (item.title.length % 5))));
   const maturityRating = item.maturityRating || (isAdultContent(item) ? "18+" : item.type === "movie" ? "PG-13" : "TV-MA");
 
@@ -2175,6 +2457,7 @@ function setFeatured(item) {
 
   const trailerBtn = $("#hero-trailer");
   if (trailerBtn) trailerBtn.dataset.title = item.title;
+  if (trailerBtn) trailerBtn.hidden = trailerUnavailableTitles.has(item.title);
 
   const detailsBtn = $("#hero-details");
   if (detailsBtn) detailsBtn.dataset.title = item.title;
@@ -2201,6 +2484,31 @@ function setFeatured(item) {
   stopHeroMotionPreview();
 }
 
+// Titles for which TMDB returned no official trailer: their Trailer
+// buttons are hidden instead of opening the full stream (bug 14).
+const trailerUnavailableTitles = new Set();
+
+// Only an official landscape Trailer/Teaser counts as a trailer. The old
+// code fell back to ANY YouTube video for the title, which is how a
+// vertical YouTube Short / clip ("Avengers Endgame: Encore…") was shown
+// as the "official trailer". Shorts and unrelated clips are rejected.
+function pickOfficialTrailer(videos) {
+  const list = (videos || []).filter((v) => v && v.site === "YouTube" && v.key);
+  if (!list.length) return null;
+  const official = list.filter((v) => v.official === true);
+  const pool = official.length ? official : list;
+  return pool.find((v) => v.type === "Trailer")
+    || pool.find((v) => v.type === "Teaser")
+    || null;
+}
+
+function setTrailerButtonsHidden(hidden) {
+  ["#hero-trailer", "#modal-trailer"].forEach((sel) => {
+    const btn = $(sel);
+    if (btn) btn.hidden = hidden;
+  });
+}
+
 async function playTrailer(title) {
   const item = findTitle(title) || featured;
   if (!item) return;
@@ -2214,7 +2522,7 @@ async function playTrailer(title) {
       try {
         const videoData = await fetchTmdbApi(`/${mediaType}/${tmdbId}/videos`);
         const videos = videoData?.results || [];
-        const trailer = videos.find((v) => v.site === "YouTube" && (v.type === "Trailer" || v.type === "Teaser")) || videos.find((v) => v.site === "YouTube");
+        const trailer = pickOfficialTrailer(videos);
         if (trailer?.key) {
           trailerKey = trailer.key;
         }
@@ -2228,7 +2536,7 @@ async function playTrailer(title) {
         if (found?.id) {
           const videoData = await fetchTmdbApi(`/${mediaType}/${found.id}/videos`);
           const videos = videoData?.results || [];
-          const trailer = videos.find((v) => v.site === "YouTube" && (v.type === "Trailer" || v.type === "Teaser")) || videos.find((v) => v.site === "YouTube");
+          const trailer = pickOfficialTrailer(videos);
           if (trailer?.key) {
             trailerKey = trailer.key;
           }
@@ -2248,16 +2556,23 @@ async function playTrailer(title) {
         embedPlayer.src = `https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&rel=0&modestbranding=1`;
       }
       if (playerTitle) playerTitle.textContent = `${item.title} — Official Trailer`;
+      if (embedPlayer) embedPlayer.title = `${item.title} — Official Trailer`;
       if (playerBackdrop) playerBackdrop.hidden = false;
+      setPlayerState(PLAYER_STATE.PLAYING, `Playing trailer: ${item.title}`);
       return;
     }
 
-    // Fallback: regular playTitle if trailer unavailable
-    showToast(`Opening stream for ${item.title}`);
-    playTitle(item.title);
+    // No official (landscape) trailer: do NOT fall back to the full stream
+    // or to an arbitrary YouTube video. Hide the Trailer buttons for this
+    // title instead (bug 14).
+    trailerUnavailableTitles.add(item.title);
+    setTrailerButtonsHidden(true);
+    showToast(`No official trailer available for ${item.title}`);
+    return;
   } catch (e) {
     console.warn("Could not load trailer:", e);
-    playTitle(item.title);
+    clearLiveStatus();
+    showToast(`Trailer unavailable for ${item.title} — try again later`);
   }
 }
 
@@ -2288,7 +2603,7 @@ async function loadSearchResults(query) {
               title: it.title,
               poster_path: it.poster_path || "",
               backdrop_path: it.backdrop_path || "",
-              vote_average: it.rating || 8.0,
+              vote_average: it.rating,
               release_date: String(it.year || ""),
               first_air_date: String(it.year || "")
             }));
@@ -2299,19 +2614,28 @@ async function loadSearchResults(query) {
 
     if (requestId !== searchRequestId) return;
 
-    const isDark = isDarkModeActive();
+    const adultEnabled = isAdultEnabled();
     const filtered = (results || [])
       .filter((item) => item.media_type === "movie" || item.media_type === "tv")
       .map((item) => normalizeTmdbItem(item, item.media_type === "movie" ? "movie" : "tv"))
-      .filter((item) => isDark || !isAdultContent(item));
+      .filter((item) => adultEnabled || !isAdultContent(item));
+    // Rank by relevance (exact title first) and dedupe by TMDB id, so a
+    // substring match can never outrank an exact match.
+    const ranked = sortBySearchRelevance(dedupeCatalogItems(filtered), trimmed);
 
-    if (filtered.length) {
-      catalog = filtered;
-      setFeatured(filtered[0]);
+    if (ranked.length) {
+      catalog = ranked;
+      state.displayLimit = CONTENT_BATCH_SIZE;
+      // Search results are complete: Load More must not append unrelated
+      // popular titles into them (or grow the total after a search).
+      hasMoreContent = false;
+      setFeatured(ranked[0]);
       render();
-      showToast(`Found ${filtered.length} live results for "${trimmed}"`);
+      showToast(`Found ${ranked.length} live results for "${trimmed}"`);
     } else {
       catalog = [];
+      state.displayLimit = CONTENT_BATCH_SIZE;
+      hasMoreContent = false;
       render();
       showToast(`No results found for "${trimmed}"`);
     }
@@ -2328,11 +2652,25 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 function loadWatchlist() {
   try {
     const savedKey = "ustream-watchlist";
-    const legacyKey = "cinewave-watchlist";
-    const stored = localStorage.getItem(savedKey) ?? localStorage.getItem(legacyKey) ?? "[]";
+    const stored = localStorage.getItem(savedKey) ?? "[]";
     const saved = JSON.parse(stored);
-    if (!localStorage.getItem(savedKey) && localStorage.getItem(legacyKey)) localStorage.setItem(savedKey, JSON.stringify(saved));
-    return Array.isArray(saved) ? saved : [];
+    if (!Array.isArray(saved)) return [];
+    const list = saved.filter((t) => typeof t === "string" && t.trim());
+    // One-time migration: the legacy app (cinewave-watchlist) is no longer
+    // imported, and a stored list that was never explicitly added by the
+    // user and matches the old demo seed (a lone "Interstellar") is
+    // cleared once, so a fresh user starts with an empty My List. Lists
+    // the user built with the + / heart button carry the explicit marker
+    // (set in toggleList) and are never touched.
+    if (!localStorage.getItem("ustream-watchlist-v2")) {
+      localStorage.setItem("ustream-watchlist-v2", "1");
+      if (!localStorage.getItem("ustream-watchlist-explicit")
+          && list.length === 1 && list[0] === "Interstellar") {
+        localStorage.setItem(savedKey, "[]");
+        return [];
+      }
+    }
+    return list;
   } catch {
     return [];
   }
@@ -2350,6 +2688,29 @@ function showToast(message) {
   showToast.timeout = window.setTimeout(() => toast.classList.remove("show"), 2300);
 }
 
+function clearToast() {
+  const toast = $("#toast");
+  if (!toast) return;
+  window.clearTimeout(showToast.timeout);
+  toast.classList.remove("show");
+  toast.textContent = "";
+}
+
+// Central live-region cleanup (bugs 14/27): stale "Loading trailer for …",
+// "Loading stream…" and catalog status text must not survive a dialog
+// close. Called by closePlayer / closeDetails and by
+// the trailer no-trailer / error paths. Note showToast() only removes the
+// CSS class after 2.3s — the textContent itself stayed in the live region.
+function clearLiveStatus() {
+  clearToast();
+  const catalogStatus = $("#catalog-live-status");
+  if (catalogStatus) catalogStatus.textContent = "";
+  const loadingText = $("#player-loading-text");
+  if (loadingText) loadingText.textContent = "Loading stream…";
+  const liveText = $("#player-live-text");
+  if (liveText) liveText.textContent = "Ready to watch";
+}
+
 function focusSearch() {
   openSearchModal();
   $("#search-box")?.classList.add("mobile-open");
@@ -2365,8 +2726,9 @@ function updateProfileStats() {
 }
 
 function setSection(section, updateHash = true) {
-  const validSections = ["home", "movies", "series", "anime", "cartoons", "sports", "explore", "my-list", "profile"];
+  const validSections = ["home", "movies", "series", "anime", "cartoons", "explore", "my-list", "profile"];
   const target = validSections.includes(section) ? section : "home";
+  if (state.activeModal) closeDetails({ updateHash: false });
   state.section = target;
   state.genre = "all"; // Reset genre sub-tab so all titles in this section are visible!
   state.displayLimit = CONTENT_BATCH_SIZE; // Always start with 35 content at a time
@@ -2395,7 +2757,6 @@ function setSection(section, updateHash = true) {
   const recommendationsSection = $("#recommendations-section");
   const catalogSection = $("#catalog");
   const profileSection = $("#profile-section");
-  const sportsSection = $("#sports-section");
   const exploreSection = $("#explore-section");
 
   const titles = {
@@ -2404,7 +2765,6 @@ function setSection(section, updateHash = true) {
     series: ["Your next obsession", "Binge-worthy series"],
     anime: ["Anime Collection", "Anime picks"],
     cartoons: ["Western Animation", "Cartoons & Animated Features"],
-    sports: ["BinTV Live", "Live & Upcoming Sports"],
     explore: ["Streaming Network Directory", "Explore by Service"],
     "my-list": ["Saved for later", "My list"],
     profile: ["Account & Preferences", "Your Profile"],
@@ -2423,24 +2783,12 @@ function setSection(section, updateHash = true) {
   // Reset genre pills to 'all' (For you)
   $$(".genre-tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.genre === "all"));
 
-  if (target === "sports") {
+  if (target === "explore") {
     if (heroSection) heroSection.hidden = true;
     if (quickPicks) quickPicks.hidden = true;
     if (recommendationsSection) recommendationsSection.hidden = true;
     if (catalogSection) catalogSection.hidden = true;
     if (profileSection) profileSection.hidden = true;
-    if (exploreSection) exploreSection.hidden = true;
-    if (sportsSection) {
-      sportsSection.hidden = false;
-      initSportsSection();
-    }
-  } else if (target === "explore") {
-    if (heroSection) heroSection.hidden = true;
-    if (quickPicks) quickPicks.hidden = true;
-    if (recommendationsSection) recommendationsSection.hidden = true;
-    if (catalogSection) catalogSection.hidden = true;
-    if (profileSection) profileSection.hidden = true;
-    if (sportsSection) sportsSection.hidden = true;
     if (exploreSection) {
       exploreSection.hidden = false;
       initExploreSection();
@@ -2450,7 +2798,6 @@ function setSection(section, updateHash = true) {
     if (quickPicks) quickPicks.hidden = true;
     if (recommendationsSection) recommendationsSection.hidden = true;
     if (catalogSection) catalogSection.hidden = true;
-    if (sportsSection) sportsSection.hidden = true;
     if (exploreSection) exploreSection.hidden = true;
     if (profileSection) {
       profileSection.hidden = false;
@@ -2463,7 +2810,6 @@ function setSection(section, updateHash = true) {
     if (recommendationsSection) recommendationsSection.hidden = true;
     if (catalogSection) catalogSection.hidden = false;
     if (profileSection) profileSection.hidden = true;
-    if (sportsSection) sportsSection.hidden = true;
     if (exploreSection) exploreSection.hidden = true;
   } else if (target === "movies" || target === "series" || target === "anime" || target === "cartoons") {
     if (heroSection) heroSection.hidden = false;
@@ -2471,7 +2817,6 @@ function setSection(section, updateHash = true) {
     if (recommendationsSection) recommendationsSection.hidden = true;
     if (catalogSection) catalogSection.hidden = false;
     if (profileSection) profileSection.hidden = true;
-    if (sportsSection) sportsSection.hidden = true;
     if (exploreSection) exploreSection.hidden = true;
     loadCategoryTmdb(target);
   } else {
@@ -2481,7 +2826,6 @@ function setSection(section, updateHash = true) {
     if (recommendationsSection) recommendationsSection.hidden = recommendations.length === 0;
     if (catalogSection) catalogSection.hidden = false;
     if (profileSection) profileSection.hidden = true;
-    if (sportsSection) sportsSection.hidden = true;
     if (exploreSection) exploreSection.hidden = true;
   }
 
@@ -2501,7 +2845,7 @@ function setSection(section, updateHash = true) {
   if (visible.length > 0 && target !== "home") {
     setFeatured(visible[0]);
   } else if (catalog.length > 0 && target === "home") {
-    const cleanItem = catalog.find((i) => isDarkModeActive() || !isAdultContent(i));
+    const cleanItem = catalog.find((i) => isAdultEnabled() || !isAdultContent(i));
     if (cleanItem) setFeatured(cleanItem);
   }
 
@@ -2514,7 +2858,7 @@ function setSection(section, updateHash = true) {
     }
   } else if (target === "my-list") {
     $("#catalog")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  } else if (target === "sports" || target === "explore" || target === "profile") {
+  } else if (target === "explore" || target === "profile") {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -2522,9 +2866,9 @@ function setSection(section, updateHash = true) {
   isLoadingMore = false;
   const loadMoreWrap = $("#catalog-load-more-wrap");
   if (loadMoreWrap) {
-    loadMoreWrap.hidden = ["sports", "explore", "profile", "my-list"].includes(target);
+    loadMoreWrap.hidden = ["explore", "profile", "my-list"].includes(target);
   }
-  if (visible.length < CONTENT_BATCH_SIZE && !["sports", "explore", "profile", "my-list"].includes(target) && hasMoreContent) {
+  if (visible.length < CONTENT_BATCH_SIZE && !["explore", "profile", "my-list"].includes(target) && hasMoreContent) {
     void loadMoreTitles();
   }
 
@@ -2536,6 +2880,39 @@ function setSection(section, updateHash = true) {
 function isDarkModeActive() {
   const current = document.documentElement.getAttribute("data-theme") || localStorage.getItem("ustream-theme") || "dark";
   return current === "dark";
+}
+
+// Adult (18+) content is a separate, opt-in setting. It is OFF by default
+// and is NOT tied to the Dark Mode theme any more. Enabling it requires an
+// explicit age confirmation (see requestAdultEnable) and is stored under
+// its own key, so a fresh user never sees adult/parody titles.
+function isAdultEnabled() {
+  try {
+    return localStorage.getItem("ustream-adult-enabled") === "1"
+      && localStorage.getItem("ustream-adult-confirmed") === "1";
+  } catch { return false; }
+}
+
+function setAdultEnabled(enabled) {
+  try {
+    if (enabled) {
+      localStorage.setItem("ustream-adult-enabled", "1");
+      localStorage.setItem("ustream-adult-confirmed", "1");
+      localStorage.setItem("ustream-adult-confirmed-at", new Date().toISOString());
+    } else {
+      localStorage.removeItem("ustream-adult-enabled");
+      localStorage.removeItem("ustream-adult-confirmed");
+    }
+  } catch {}
+}
+
+// Explicit age gate: enabling 18+ content requires the user to confirm
+// they are 18 or older. Returns true only when confirmed.
+function requestAdultEnable() {
+  const ok = window.confirm(
+    "Adult content (18+)\n\nYou must be 18 years or older to enable adult content.\n\nSelect OK only if you confirm you are 18 or older."
+  );
+  return Boolean(ok);
 }
 
 function isAdultContent(item) {
@@ -2553,6 +2930,9 @@ function isAdultContent(item) {
 
   const text = `${item.title || ""} ${item.description || ""}`.toLowerCase();
   if (/\b(?:hentai|erotic|nsfw|xxx|porn|softcore|18\+\s*only)\b/i.test(text)) return true;
+  // Suggestive / adult-parody titles (e.g. "Bikini Inception") are adult
+  // even when the upstream record does not carry an adult flag.
+  if (/\b(?:bikini|parody)\b/i.test(item.title || "")) return true;
 
   const adultTitles = [
     "deadpool & wolverine",
@@ -2580,11 +2960,12 @@ function getVisibleCards() {
   const targetSection = state.section || "home";
   const apiGenre = state.filters.genre || "All";
   const apiLanguage = state.filters.classify || "All";
-  const isDark = isDarkModeActive();
+  const adultEnabled = isAdultEnabled();
 
   let visible = catalog.filter((card) => {
-    // Dark Mode Setting: If Dark Mode is OFF, strictly hide all 18+ and adult content across all categories
-    if (!isDark && isAdultContent(card)) {
+    // Adult-content setting (independent of theme): unless 18+ mode was
+    // explicitly enabled with an age confirmation, hide adult content.
+    if (!adultEnabled && isAdultContent(card)) {
       return false;
     }
 
@@ -2599,14 +2980,12 @@ function getVisibleCards() {
       const isCart = card.type === "cartoon" || card.isCartoon || card.category === "cartoons";
       matchesSection = (card.type === "series" || card.category === "series" || card.category === "tv") && !isAnim && !isCart;
     } else if (targetSection === "anime") {
-      matchesSection = card.type === "anime" || 
-                       card.isJapaneseAnime || 
-                       card.category === "anime" || 
-                       card.genre?.includes("anime") ||
-                       (card.language && /japanese/i.test(card.language)) ||
-                       card.country === "Japan" || 
-                       card.countryName === "Japan" ||
-                       card.origin_country?.[0] === "JP";
+      // Language/country alone do not make a title anime: a Japanese
+      // live-action film (Godzilla Minus One) must not land here.
+      matchesSection = card.type === "anime" ||
+                       card.isJapaneseAnime ||
+                       card.category === "anime" ||
+                       card.genre?.includes("anime");
     } else if (targetSection === "cartoons") {
       const isJapanese = card.type === "anime" || 
                          card.isJapaneseAnime || 
@@ -2667,6 +3046,15 @@ function getVisibleCards() {
   if (state.filters.sort === "Hottest") visible.sort((a, b) => (b.rating || 0) - (a.rating || 0));
   if (state.filters.sort === "Latest") visible.sort((a, b) => (b.year || 0) - (a.year || 0));
 
+  // While searching, relevance beats catalog order: exact title first,
+  // then starts-with, then word-boundary, then substring.
+  if (query) {
+    visible.sort((a, b) => {
+      const diff = searchRelevanceScore(a.title, query) - searchRelevanceScore(b.title, query);
+      return diff !== 0 ? diff : (normalizeRating(b.rating) - normalizeRating(a.rating));
+    });
+  }
+
   return visible;
 }
 
@@ -2687,8 +3075,8 @@ function renderContinue() {
     return;
   }
 
-  const isDark = isDarkModeActive();
-  const visibleItems = continuation.filter((item) => isDark || !isAdultContent(item));
+  const adultEnabled = isAdultEnabled();
+  const visibleItems = continuation.filter((item) => adultEnabled || !isAdultContent(item));
 
   if (visibleItems.length === 0) {
     row.innerHTML = `
@@ -2705,12 +3093,20 @@ function renderContinue() {
   }
 
   section.hidden = false;
-  row.innerHTML = visibleItems.map((item) => `
-    <button class="continue-card" style="--card-gradient:${item.gradient}" data-action="details" data-title="${escapeHtml(item.title)}" aria-label="Continue watching ${escapeHtml(item.title)}">
+  row.innerHTML = visibleItems.map((item) => {
+    const pos = Number(item.positionSeconds) || 0;
+    const dur = Number(item.durationSeconds) || 0;
+    const resumeLabel = pos > 0
+      ? `Resume at ${formatTime(pos)}${dur > 0 ? ` / ${formatTime(dur)}` : ""}`
+      : "Resume watching";
+    return `
+    <button class="continue-card" style="--card-gradient:${item.gradient}" data-action="resume" data-title="${escapeHtml(item.title)}" aria-label="Resume ${escapeHtml(item.title)} at ${formatTime(pos)}">
       <span class="card-label">Continue watching</span><strong>${escapeHtml(item.title)}</strong>
-      <span class="watch-progress"><span style="width:${item.progress}%"></span></span>
+      <span class="continue-resume">${escapeHtml(resumeLabel)} · ${Math.round(Number(item.progress) || 0)}%</span>
+      <span class="watch-progress"><span style="width:${Math.round(Number(item.progress) || 0)}%"></span></span>
     </button>
-  `).join("");
+  `;
+  }).join("");
 }
 
 function renderRecommendations() {
@@ -2721,8 +3117,8 @@ function renderRecommendations() {
     section.hidden = true;
     return;
   }
-  const isDark = isDarkModeActive();
-  const visibleRecs = recommendations.filter((item) => isDark || !isAdultContent(item));
+  const adultEnabled = isAdultEnabled();
+  const visibleRecs = recommendations.filter((item) => adultEnabled || !isAdultContent(item));
   section.hidden = visibleRecs.length === 0;
   row.innerHTML = visibleRecs.map(renderCard).join("");
   observeLazyImages(row);
@@ -2738,7 +3134,7 @@ function renderCard(card, { isNew = false } = {}) {
     ? `<span class="card-badge adult-badge" style="background:#ef4444;color:#fff;font-weight:800;">18+</span>`
     : (card.badge ? `<span class="card-badge">${escapeHtml(card.badge)}</span>` : "");
 
-  const ratingVal = typeof card.rating === "number" && !isNaN(card.rating) ? card.rating : (parseFloat(card.rating) || 8.0);
+  const ratingVal = normalizeRating(card.rating);
   const scoreHtml = `<span class="score">★ ${ratingVal.toFixed(1)}</span>`;
   const cont = continuation.find((c) => c.title === card.title);
   const progressBarHtml = cont && cont.progress > 0
@@ -2749,14 +3145,14 @@ function renderCard(card, { isNew = false } = {}) {
     <article class="media-card ${isNew ? "card-enter" : ""}" data-title="${cleanTitle}">
       <div class="poster" style="--poster-gradient:${card.gradient}">
         ${card.image ? `<img class="poster-image" src="${card.image}" alt="${escapeHtml(cleanTitle)} official poster" loading="lazy" decoding="async" />` : ""}
-        <span class="poster-kicker">${escapeHtml(card.kicker)}</span>
+        <span class="poster-kicker" title="${escapeHtml(card.kicker)}">${escapeHtml(card.kicker)}</span>
         ${badgeHtml}
-        <span class="poster-title">${cleanTitle}</span>
+        <span class="poster-title" title="${cleanTitle}">${cleanTitle}</span>
         ${progressBarHtml}
         <button class="list-toggle ${saved ? "saved" : ""}" data-action="toggle-list" data-title="${cleanTitle}" aria-label="${saved ? "Remove" : "Add"} ${cleanTitle} ${saved ? "from" : "to"} my list">${saved ? renderIcon("heartFilled", "icon-sm") : renderIcon("plus", "icon-sm")}</button>
         <button class="card-hover" data-action="play" data-title="${cleanTitle}" aria-label="Play ${cleanTitle}"><span class="play-circle">${renderIcon("play", "icon-md")}</span></button>
       </div>
-      <div class="card-info"><h3>${cleanTitle}</h3><div class="card-meta"><span>${card.year}</span><span>${card.runtime}</span>${scoreHtml}</div></div>
+      <div class="card-info"><h3 title="${cleanTitle}">${cleanTitle}</h3><div class="card-meta"><span>${card.year}</span><span>${card.runtime}</span>${scoreHtml}</div></div>
     </article>
   `;
 }
@@ -2779,11 +3175,20 @@ function updateCatalogCounters(visible, displayed) {
   const loadMoreWrap = $("#catalog-load-more-wrap");
   const loadMoreBtn = $("#load-more-btn");
   if (loadMoreWrap && loadMoreBtn) {
-    const isExcluded = ["sports", "explore", "profile", "my-list"].includes(state.section);
+    const isExcluded = ["explore", "profile", "my-list"].includes(state.section);
     if (isExcluded) {
       loadMoreWrap.hidden = true;
     } else {
       const remaining = visible.length - displayed.length;
+      // Only disable when there is genuinely nothing more to load: no
+      // buffered titles left AND no further remote batch available.
+      // Never leave it disabled while `remaining > 0`; the transient
+      // disabled state during a fetch is owned by loadMoreTitles() via
+      // isLoadingMore. (Previously this function never set .disabled at
+      // all, so a button disabled at the start of a slow fetch stayed
+      // disabled while the counters already showed e.g. "115 ready".)
+      const exhausted = remaining === 0 && !hasMoreContent;
+      loadMoreBtn.disabled = isLoadingMore || exhausted;
       if (remaining > 0) {
         loadMoreWrap.hidden = false;
         loadMoreBtn.hidden = false;
@@ -2808,7 +3213,7 @@ function renderHomeRails() {
   if (!container) return;
 
   const isHomeView = state.section === "home" && !state.search.trim();
-  const isNonCatalogSection = ["sports", "explore", "profile"].includes(state.section);
+  const isNonCatalogSection = ["explore", "profile"].includes(state.section);
   container.hidden = !isHomeView;
   if (catalogSection) {
     catalogSection.hidden = isNonCatalogSection;
@@ -2818,12 +3223,12 @@ function renderHomeRails() {
   }
   if (!isHomeView) return;
 
-  const isDark = isDarkModeActive();
-  const cleanCatalog = catalog.filter((card) => isDark || !isAdultContent(card));
+  const adultEnabled = isAdultEnabled();
+  const cleanCatalog = catalog.filter((card) => adultEnabled || !isAdultContent(card));
 
   const isMovie = (c) => (c.type === "movie" || c.category === "movie") && c.type !== "anime" && !c.isJapaneseAnime && c.type !== "cartoon";
   const isSeries = (c) => (c.type === "series" || c.category === "series" || c.category === "tv") && c.type !== "anime" && !c.isJapaneseAnime && c.type !== "cartoon";
-  const isAnime = (c) => c.type === "anime" || c.isJapaneseAnime || c.category === "anime" || (c.genre || []).includes("anime") || (c.language && /japanese/i.test(c.language));
+  const isAnime = (c) => c.type === "anime" || c.isJapaneseAnime || c.category === "anime" || (c.genre || []).includes("anime");
   const isCartoon = (c) => !isAnime(c) && (c.type === "cartoon" || c.isCartoon || c.category === "cartoons" || c.category === "cartoon" || (c.genre || []).includes("animation"));
 
   const rails = [
@@ -2878,9 +3283,7 @@ function renderHomeRails() {
           </div>
         </div>
         <div class="rail-wrapper">
-          <button class="rail-arrow-float left" data-rail-scroll="left" aria-label="Scroll ${escapeHtml(r.title)} left"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg></button>
           <div class="media-rail">${r.items.map((card) => renderCard(card)).join("")}</div>
-          <button class="rail-arrow-float right" data-rail-scroll="right" aria-label="Scroll ${escapeHtml(r.title)} right"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg></button>
         </div>
       </section>
     `)
@@ -3026,7 +3429,7 @@ function startHeroMotionPreview(item) {
         try {
           const videoData = await fetchTmdbApi(`/${mediaType}/${tmdbId}/videos`);
           const videos = videoData?.results || [];
-          const trailer = videos.find((v) => v.site === "YouTube" && (v.type === "Trailer" || v.type === "Teaser")) || videos.find((v) => v.site === "YouTube");
+          const trailer = pickOfficialTrailer(videos);
           if (trailer?.key) trailerKey = trailer.key;
         } catch {}
       }
@@ -3038,7 +3441,7 @@ function startHeroMotionPreview(item) {
           if (found?.id) {
             const videoData = await fetchTmdbApi(`/${mediaType}/${found.id}/videos`);
             const videos = videoData?.results || [];
-            const trailer = videos.find((v) => v.site === "YouTube" && (v.type === "Trailer" || v.type === "Teaser")) || videos.find((v) => v.site === "YouTube");
+            const trailer = pickOfficialTrailer(videos);
             if (trailer?.key) trailerKey = trailer.key;
           }
         } catch {}
@@ -3071,14 +3474,31 @@ async function fetchTitleCredits(item) {
     try {
       const data = await fetchTmdbApi(`/${mediaType}/${tmdbId}/credits`);
       if (data && (data.cast || data.crew)) {
+        // Studio/network comes from the title details endpoint, never
+        // from origin_country: "United States" is a country, not a studio.
+        let studio = "";
+        try {
+          const details = await fetchTmdbApi(`/${mediaType}/${tmdbId}`);
+          studio = isSeries
+            ? (details?.networks || []).map(n => n.name).filter(Boolean).join(", ")
+            : (details?.production_companies || []).map(c => c.name).filter(Boolean).join(", ");
+        } catch {}
         return {
           cast: (data.cast || []).slice(0, 10).map(c => ({
             name: c.name,
             character: c.character || "Cast Member",
             photo: c.profile_path ? `https://image.tmdb.org/t/p/w185${c.profile_path}` : null
           })),
-          directors: (data.crew || []).filter(c => c.job === "Director" || c.job === "Executive Producer").slice(0, 3).map(c => c.name),
-          writers: (data.crew || []).filter(c => c.department === "Writing" || c.job === "Screenplay" || c.job === "Writer").slice(0, 3).map(c => c.name)
+          // Director = job "Director" only. Executive producers (e.g.
+          // Louis D'Esposito, Jon Favreau, Victoria Alonso on
+          // Avengers: Endgame) are producers, not directors.
+          directors: (data.crew || []).filter(c => c.job === "Director").slice(0, 3).map(c => c.name),
+          // Writers = Writer/Screenplay/Story jobs only. The whole
+          // "Writing" department also holds comic-book/characters
+          // credits (Jim Starlin, Joe Simon, Jack Kirby), who did not
+          // write the screenplay.
+          writers: (data.crew || []).filter(c => ["Writer", "Screenplay", "Story"].includes(c.job)).slice(0, 3).map(c => c.name),
+          studio
         };
       }
     } catch {}
@@ -3094,12 +3514,13 @@ async function fetchTitleCredits(item) {
       { name: "Special Appearance", character: "Antagonist", photo: null }
     ],
     directors: ["Acclaimed Director"],
-    writers: [`${genres[0] || "Creative"} Studio Team`]
+    writers: [`${genres[0] || "Creative"} Studio Team`],
+    studio: ""
   };
 }
 
 function getTitleTrivia(item) {
-  const ratingVal = (item.rating || 8.5).toFixed(1);
+  const ratingVal = normalizeRating(item.rating).toFixed(1);
   return [
     `Critical Reception: Certified Fresh with an IMDb score of ★ ${ratingVal} and universal acclaim for cinematic direction.`,
     `Audio & Vision: Mastered in Ultra High Definition 4K with Dolby Atmos object-based multi-channel surround sound.`,
@@ -3120,7 +3541,9 @@ function renderModalEpisodes(item, season = 1) {
   const mappedEpisodes = key && EPISODE_MAP[key] ? EPISODE_MAP[key] : null;
 
   let totalSeasons = 1;
-  if (mappedEpisodes) {
+  if (Number(item.seNum) > 1) {
+    totalSeasons = Number(item.seNum);
+  } else if (mappedEpisodes) {
     const seasons = new Set(mappedEpisodes.map(e => e.season || 1));
     totalSeasons = Math.max(1, seasons.size);
   } else if (item.runtime && item.runtime.includes("Season")) {
@@ -3149,7 +3572,6 @@ function renderModalEpisodes(item, season = 1) {
   let episodesForSeason = [];
   if (mappedEpisodes) {
     episodesForSeason = mappedEpisodes.filter(e => (e.season || 1) === season);
-    if (!episodesForSeason.length) episodesForSeason = mappedEpisodes;
   } else {
     // Generate authentic episode list for series
     episodesForSeason = Array.from({ length: 8 }, (_, idx) => ({
@@ -3204,10 +3626,69 @@ function renderModalEpisodes(item, season = 1) {
 }
 
 
-function openDetails(title) {
+// Deep-link ids: stable subjectId when present, else tmdb id, else a slug.
+function titleIdFor(item) {
+  if (!item) return "";
+  if (item.subjectId) return String(item.subjectId);
+  if (item.tmdbId) return `tmdb-${item.tmdbId}`;
+  return String(item.title || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function findTitleById(id) {
+  if (!id) return null;
+  const needle = decodeURIComponent(String(id)).trim().toLowerCase();
+  const pool = [featured, ...catalog, ...recommendations, ...DEMO_ITEMS];
+  const seen = new Set();
+  for (const item of pool) {
+    if (!item?.title || seen.has(item.title)) continue;
+    seen.add(item.title);
+    const ids = [titleIdFor(item), String(item.tmdbId || ""), `tmdb-${item.tmdbId || ""}`];
+    if (ids.some((x) => x && x.toLowerCase() === needle)) return item;
+    if (item.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") === needle) return item;
+  }
+  for (const [key, item] of extraTitlesMap.entries()) {
+    if (key && key.toLowerCase() === needle) return item;
+  }
+  return null;
+}
+
+// Scored "More Like This": same type/category is mandatory, shared genres
+// score highest, then rating. Adult titles are excluded unless 18+ mode is
+// on. Never falls back to an unrelated type (no anime for a movie).
+function getRelatedTitles(currentItem, limit = 4) {
+  if (!currentItem) return [];
+  const adultEnabled = isAdultEnabled();
+  const currentGenres = new Set((Array.isArray(currentItem.genre) ? currentItem.genre : []).map((g) => String(g).toLowerCase()));
+  const byTitle = new Map();
+  for (const cand of [...catalog, ...recommendations, ...DEMO_ITEMS]) {
+    if (cand?.title && !byTitle.has(cand.title)) byTitle.set(cand.title, cand);
+  }
+  const scored = [];
+  for (const cand of byTitle.values()) {
+    if (cand.title === currentItem.title) continue;
+    if (!adultEnabled && isAdultContent(cand)) continue;
+    const sameType = cand.type === currentItem.type || cand.category === currentItem.category;
+    if (!sameType) continue;
+    const candGenres = (Array.isArray(cand.genre) ? cand.genre : []).map((g) => String(g).toLowerCase());
+    const shared = candGenres.filter((g) => currentGenres.has(g)).length;
+    scored.push({ cand, score: shared * 10 + (Number(cand.rating) || 0) });
+  }
+  scored.sort((a, b) => b.score - a.score || (b.cand.rating || 0) - (a.cand.rating || 0));
+  return scored.slice(0, limit).map((s) => s.cand);
+}
+
+function openDetails(title, { updateHash = true } = {}) {
   const item = findTitle(title);
   if (!item) return;
   state.activeModal = item;
+  // Deep link: opening a title updates the URL (e.g. #/title/movie-avengers-endgame)
+  // so it can be shared / bookmarked, and the back button works via hashchange.
+  if (updateHash) {
+    const hash = `#/title/${encodeURIComponent(titleIdFor(item))}`;
+    if (window.location.hash !== hash) {
+      try { history.pushState(null, "", hash); } catch { window.location.hash = hash; }
+    }
+  }
 
   const modalBackdrop = $("#modal-backdrop");
   const modalArt = $("#modal-art");
@@ -3227,7 +3708,7 @@ function openDetails(title) {
   if (modalTitle) modalTitle.textContent = item.title;
   if (modalKicker) modalKicker.textContent = item.kicker || (item.type === "series" ? "Binge-Worthy Series" : item.type === "anime" ? "Anime Masterpiece" : "Feature Film");
 
-  const ratingVal = item.rating || 8.6;
+  const ratingVal = normalizeRating(item.rating);
   const matchPercent = Math.min(99, Math.max(88, Math.round(ratingVal * 10 + (item.title.length % 5))));
   const maturityRating = item.maturityRating || (isAdultContent(item) ? "18+" : item.type === "movie" ? "PG-13" : "TV-MA");
 
@@ -3255,11 +3736,17 @@ function openDetails(title) {
   }
 
   if (modalPlay) {
+    const savedPos = getSavedPosition(item);
+    const playLabel = modalPlay.querySelector("span");
+    if (playLabel) playLabel.textContent = savedPos > 0 ? `Resume · ${formatTime(savedPos)}` : "Play Now";
     modalPlay.onclick = () => {
       closeDetails();
-      playTitle(item.title);
+      playTitle(item.title, { resumeTime: savedPos });
     };
   }
+
+  const modalTrailerBtn = $("#modal-trailer");
+  if (modalTrailerBtn) modalTrailerBtn.hidden = trailerUnavailableTitles.has(item.title);
 
   // Populate Specs Grid in Overview
   const specsGrid = $("#modal-specs-grid");
@@ -3280,7 +3767,7 @@ function openDetails(title) {
       </div>
       <div class="modal-spec-item">
         <strong>Studio / Network</strong>
-        <span>${escapeHtml(item.country || "Ustream Originals")}</span>
+        <span id="modal-studio-value">${escapeHtml(item.studio || item.network || "—")}</span>
       </div>
     `;
   }
@@ -3349,14 +3836,15 @@ function openDetails(title) {
     const credits = await fetchTitleCredits(item);
     if (state.activeModal?.title === item.title) {
       renderXrayCredits(credits);
+      const studioEl = $("#modal-studio-value");
+      if (studioEl && credits.studio) studioEl.textContent = credits.studio;
     }
   })();
 
-  // Populate More Like This
+  // Populate More Like This (same type + shared genres only)
   const relatedGrid = $("#modal-related-grid");
   if (relatedGrid) {
-    const related = catalog.filter(c => c.title !== item.title && (c.type === item.type || (c.genre && item.genre && c.genre.some(g => item.genre.includes(g))))).slice(0, 4);
-    const fallbackList = related.length ? related : catalog.slice(0, 4);
+    const fallbackList = getRelatedTitles(item, 4);
     relatedGrid.innerHTML = fallbackList.map(c => renderCard(c, { isNew: false })).join("");
     observeLazyImages(relatedGrid);
     relatedGrid.onclick = (e) => {
@@ -3394,6 +3882,9 @@ function openDetails(title) {
     modalBackdrop.hidden = false;
     modalBackdrop.removeAttribute("hidden");
   }
+  // Focus the dialog itself (tabindex="-1" in index.html) so Escape is
+  // received by this document; focusing a button would let Space close it.
+  $("#detail-modal")?.focus({ preventScroll: true });
 }
 
 const isHttpUrl = (value) => typeof value === "string" && /^https?:\/\//i.test(value);
@@ -3627,7 +4118,7 @@ async function fetchTmdbSeriesSeasons(tmdbId) {
     if (!validSeasons.length) return null;
     return validSeasons.map((s) => ({
       season: s.season_number,
-      title: s.name || `Season ${s.season_number}`,
+      title: `Season ${s.season_number}`,
       episodesCount: s.episode_count,
       episodes: Array.from({ length: s.episode_count }, (_, i) => ({
         season: s.season_number,
@@ -3676,7 +4167,7 @@ function isValidTmdbId(id) {
 }
 
 async function resolveTmdbId(item) {
-  if (!item) return "27205";
+  if (!item) return null;
 
   // If item already has a verified TMDB ID
   if (isValidTmdbId(item.tmdbId)) return String(item.tmdbId);
@@ -3718,10 +4209,15 @@ async function resolveTmdbId(item) {
       const data = await fetchTmdbApi(`${searchPath}?query=${encodeURIComponent(searchQuery)}`);
       if (data) {
         const results = data?.results || [];
-        const top = isSeries
+        const yearOf = (r) => Number(String(r?.release_date || r?.first_air_date || "").slice(0, 4)) || 0;
+        const wantedYear = Number(item.year) || 0;
+        const yearMatched = wantedYear ? results.find(r => yearOf(r) === wantedYear) : null;
+        const top = yearMatched || (isSeries
           ? (results.find(r => r.media_type === "tv" || (!r.media_type && r.first_air_date)) || results[0])
-          : (results.find(r => r.media_type === "movie" || (!r.media_type && r.release_date)) || results[0]);
-        if (top?.id && isValidTmdbId(top.id)) {
+          : (results.find(r => r.media_type === "movie" || (!r.media_type && r.release_date)) || results[0]));
+        // If the item's year is known and the best hit is from another
+        // year, do not map this title to that older film's stream.
+        if (top?.id && isValidTmdbId(top.id) && (!wantedYear || yearOf(top) === wantedYear)) {
           const foundId = String(top.id);
           const mediaType = isSeries ? "tv" : (top.media_type || (top.first_air_date ? "tv" : "movie"));
           item.mediaType = mediaType;
@@ -3751,11 +4247,12 @@ async function resolveTmdbId(item) {
     return String(item.subjectId);
   }
 
-  // Safe fallback default IDs that always stream without crash
-  const isTv = isSeries;
-  const fallbackId = isTv ? "1396" : (item.type === "anime" ? "916192" : "27205");
-  TMDB_CACHE.set(cacheKey, { id: fallbackId, mediaType: isTv ? "tv" : "movie" });
-  return fallbackId;
+  // No verified TMDB id for this title: return null instead of
+  // mapping it to an unrelated film/series (the old fallback
+  // returned Inception 27205 / Breaking Bad 1396 for every
+  // unresolvable title — guaranteed wrong content under the
+  // requested title). Callers must handle null.
+  return null;
 }
 
 function getEmbedStreamUrl(tmdbId, item, season = 1, episode = 1, serverKey = currentServerKey) {
@@ -3782,6 +4279,7 @@ function resetDefaultLanguageOptions() {
   if (!langSelect) return;
   langSelect.innerHTML = `
     <option value="auto">Original Audio</option>
+    <option value="off">Subtitles Off</option>
     <option value="en" ${currentLanguageKey === "en" ? "selected" : ""}>English (Original / Dub)</option>
     <option value="hi" ${currentLanguageKey === "hi" ? "selected" : ""}>Hindi (Subtitles / CC)</option>
     <option value="ja" ${currentLanguageKey === "ja" ? "selected" : ""}>Japanese (Anime Dub/Sub)</option>
@@ -3926,6 +4424,13 @@ export function playWithGaiaflixHls(m3u8Url, item) {
           }
         }
 
+        // Subtitles default to Off (bug 24): HLS subtitle tracks default
+        // to the first track, which on multi-audio sources is often Hindi.
+        try { if (state.player?.selectedSubtitle === "off") hls.subtitleTrack = -1; } catch {}
+        if (state.player?.selectedSubtitle === "off") {
+          Array.from(video.textTracks || []).forEach((t) => { t.mode = "disabled"; });
+        }
+
         // Start playback on #video-player
         video.play().then(() => {
           setPlayerState(PLAYER_STATE.PLAYING, `${item?.title || "Movie"} · Server 1 (Gaiaflix Pro - Multi-Audio)`);
@@ -4017,6 +4522,10 @@ function isDirectPlayableVideoUrl(url) {
 
 function getStreamForTitle(title = "", episodeNum = 1) {
   const cleanTitle = String(title || "Ustream").trim();
+  // Never map an unreleased title to a sample stream: the hash picks
+  // unrelated footage, so a 2026 title would play the wrong film.
+  const known = typeof findTitle === "function" ? findTitle(cleanTitle) : null;
+  if (known && isUnreleasedItem(known)) return "";
   let hash = 0;
   for (let i = 0; i < cleanTitle.length; i++) {
     hash = (hash * 31 + cleanTitle.charCodeAt(i)) >>> 0;
@@ -4047,6 +4556,8 @@ function toPlayableUrl(url, fallbackTitle = "", episodeNum = 1) {
   if (isDirectPlayableVideoUrl(url)) {
     return url;
   }
+  const fallbackItem = findTitle(fallbackTitle || state?.player?.item?.title || "");
+  if (fallbackItem && isUnreleasedItem(fallbackItem)) return "";
   return getStreamForTitle(fallbackTitle || state?.player?.item?.title || "Ustream", episodeNum);
 }
 
@@ -4063,8 +4574,51 @@ const PLAYER_STATE = {
 
 let currentPlayerState = PLAYER_STATE.IDLE;
 
+// Real loading progress (bug 24): elapsed seconds + a determinate-ish
+// progress bar, and a hard 20s timeout to a real error state. The old code
+// showed a static "Loading…"/"CONNECTING…" with no progress and no end.
+let playerLoadingTimer = null;
+let playerLoadingStartedAt = 0;
+let playerLoadingBaseMessage = "Loading stream…";
+
+function clearPlayerLoadingTimer() {
+  if (playerLoadingTimer) {
+    clearInterval(playerLoadingTimer);
+    playerLoadingTimer = null;
+  }
+  const bar = $("#player-loading-bar");
+  if (bar) bar.style.width = "0%";
+  const progress = $("#player-loading-progress");
+  if (progress) progress.setAttribute("aria-valuenow", "0");
+}
+
+function startPlayerLoadingTimer(baseMessage) {
+  clearPlayerLoadingTimer();
+  playerLoadingBaseMessage = baseMessage || "Loading stream…";
+  playerLoadingStartedAt = Date.now();
+  playerLoadingTimer = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - playerLoadingStartedAt) / 1000);
+    const loadingText = $("#player-loading-text");
+    if (loadingText) loadingText.textContent = `${playerLoadingBaseMessage} (${elapsed}s)`;
+    const pct = Math.min(100, Math.round((elapsed / 20) * 100));
+    const bar = $("#player-loading-bar");
+    if (bar) bar.style.width = `${pct}%`;
+    const progress = $("#player-loading-progress");
+    if (progress) progress.setAttribute("aria-valuenow", String(pct));
+    if (elapsed >= 20) {
+      clearPlayerLoadingTimer();
+      setPlayerState(PLAYER_STATE.ERROR, "Stream did not start within 20 seconds. Try another server or Retry.");
+    }
+  }, 1000);
+}
+
 function setPlayerState(nextState, customMessage = "") {
   currentPlayerState = nextState;
+
+  const wasLivePlayback = livePlaybackActive;
+  livePlaybackActive = nextState === PLAYER_STATE.PLAYING;
+  if (wasLivePlayback !== livePlaybackActive) updateStatusBadge(catalogIsLive, catalogLiveCount);
+  if (nextState !== PLAYER_STATE.LOADING) clearPlayerLoadingTimer();
 
   const liveLabel = $("#player-live-label");
   const liveText = $("#player-live-text");
@@ -4111,6 +4665,7 @@ function setPlayerState(nextState, customMessage = "") {
         loadingEl.hidden = false;
         loadingEl.style.display = "flex";
         if (loadingText) loadingText.textContent = customMessage || "Loading stream…";
+        startPlayerLoadingTimer(customMessage || "Loading stream…");
       }
       if (startBtn) {
         startBtn.hidden = false;
@@ -4191,13 +4746,9 @@ function ensurePlayerFlowUI() {
 }
 
 function getRelatedTitle(currentItem) {
-  if (!currentItem) return null;
-  const currentGenre = Array.isArray(currentItem.genre) ? currentItem.genre[0] : "";
-  const currentType = currentItem.type;
-  const pool = [...catalog, ...recommendations, ...DEMO_ITEMS];
-  const match = pool.find((cand) => cand.title !== currentItem.title && ((currentGenre && cand.genre?.includes(currentGenre)) || cand.type === currentType))
-    || pool.find((cand) => cand.title !== currentItem.title);
-  return match || null;
+  // Same-type / shared-genre only; the old fallback returned the first
+  // unrelated title in the pool (e.g. Chainsaw Man for Avengers: Endgame).
+  return getRelatedTitles(currentItem, 1)[0] || null;
 }
 
 function isEpisodicPlayer(player = state.player) {
@@ -4307,7 +4858,7 @@ function updatePlayerEpisodeFlow() {
       if (upNextLabel) upNextLabel.textContent = "Recommended next";
       if (upNextTitle) upNextTitle.textContent = related.title;
       if (upNextDescription) {
-        upNextDescription.textContent = `${related.year || ""} · ${related.genre?.slice(0, 2).join(", ") || "Featured"} · ★ ${related.rating ? related.rating.toFixed(1) : "8.5"}`;
+        upNextDescription.textContent = `${related.year || ""} · ${related.genre?.slice(0, 2).join(", ") || "Featured"} · ★ ${normalizeRating(related.rating).toFixed(1)}`;
       }
       if (upNextButton) {
         upNextButton.disabled = false;
@@ -4822,6 +5373,7 @@ async function resolveCurrentPlayback(requestId) {
   const player = state.player;
   const item = player.item;
   if (!item) return null;
+  if (isUnreleasedItem(item)) return null;
   if (requestId !== player.requestId) return null;
 
   const currentEp = player.selectedEpisode || 1;
@@ -5098,11 +5650,10 @@ async function reloadCurrentEmbed() {
   const server = STREAM_SERVERS[currentServerKey];
   const langLabel = currentLanguageKey !== "auto" ? ` · ${LANGUAGE_LABELS[currentLanguageKey] || currentLanguageKey.toUpperCase()}` : "";
   const seasonEpLabel = player.isSeries ? ` · S${season}:E${episode}` : "";
-  setPlayerState(PLAYER_STATE.PLAYING, `${item.title}${seasonEpLabel} · ${server?.name || "HD Stream"}${langLabel}`);
-  const liveLabel = $("#player-live-label");
-  if (liveLabel) liveLabel.hidden = false;
-  const liveText = $("#player-live-text");
-  if (liveText) liveText.textContent = "HD Stream Online";
+  // Do not claim PLAYING / "HD Stream Online" before the embed loads —
+  // the #embed-player load listener promotes LOADING -> PLAYING, and the
+  // loading timer errors out after 20s if nothing loads (bug 24).
+  setPlayerState(PLAYER_STATE.LOADING, `Loading ${item.title}${seasonEpLabel} · ${server?.name || "HD Stream"}${langLabel}…`);
   updatePlayerEpisodeFlow();
 }
 
@@ -5183,9 +5734,20 @@ async function handlePlayerEnded() {
   setPlayerLoading(`Episode complete · ${nextLabel} is up next`, false);
 }
 
-async function playTitle(title) {
+async function playTitle(title, { resumeTime = 0 } = {}) {
   const item = findTitle(title);
   if (!item) return;
+  // Bug 10: never play an unreleased title — and never let it fall
+  // through to the hash-based sample stream or an embed URL.
+  if (isUnreleasedItem(item)) {
+    showToast(`${item.title} is coming soon — not yet released, so it cannot be played yet.`);
+    return;
+  }
+  // Resume: prefer the explicit resume request, else the saved position.
+  const savedPosition = resumeTime > 0 ? resumeTime : getSavedPosition(item);
+  if (savedPosition > 0) {
+    showToast(`Resuming ${item.title} at ${formatTime(savedPosition)}`);
+  }
   const embed = $("#embed-player");
   const video = $("#video-player");
   const player = $("#player-backdrop");
@@ -5201,9 +5763,17 @@ async function playTitle(title) {
   }
   setPlayerState(PLAYER_STATE.LOADING, "Connecting to HD streaming server…");
   player.hidden = false;
+  player.removeAttribute("hidden");
+  document.querySelector("#player-backdrop .player-modal")?.focus({ preventScroll: true });
 
   // Resolve actual TMDB ID for full movie / TV show stream
   const tmdbId = await resolveTmdbId(item);
+  // No verified stream id: do not open an embed for another title.
+  if (!tmdbId) {
+    showToast(`No stream is available for ${item.title} yet.`);
+    try { closePlayer(); } catch {}
+    return;
+  }
   state.player.item = item;
   state.player.tmdbId = tmdbId;
   const isSeries = isItemSeries(item);
@@ -5240,17 +5810,7 @@ async function playTitle(title) {
       launched = await playWithGaiaflixHls(m3u8Url, item);
     }
     if (launched) {
-      const idx = continuation.findIndex((c) => c.title === item.title);
-      if (idx >= 0) {
-        continuation[idx].progress = Math.min(95, (continuation[idx].progress || 20) + 15);
-      } else {
-        continuation.unshift({ ...item, progress: 15 });
-        if (continuation.length > 6) continuation.pop();
-      }
-      try {
-        localStorage.setItem("ustream-continuation", JSON.stringify(continuation));
-      } catch {}
-      renderContinue();
+      recordPlaybackProgress(item, { positionSeconds: savedPosition, durationSeconds: getSavedDuration(item) });
       return;
     }
     // If Gaiaflix stream is unavailable or fails:
@@ -5279,24 +5839,17 @@ async function playTitle(title) {
   const server = STREAM_SERVERS[currentServerKey];
   const langLabel = currentLanguageKey !== "auto" ? ` · ${LANGUAGE_LABELS[currentLanguageKey] || currentLanguageKey.toUpperCase()}` : "";
   const seasonEpLabel = isSeries ? ` · S${state.player.selectedSeason || 1}:E${state.player.selectedEpisode || 1}` : "";
-  setPlayerState(PLAYER_STATE.PLAYING, `${item.title}${seasonEpLabel} · ${server?.name || "HD Stream"}${langLabel}`);
-  const liveLabel = $("#player-live-label");
-  if (liveLabel) liveLabel.hidden = false;
-  const liveText = $("#player-live-text");
-  if (liveText) liveText.textContent = "HD Stream Online";
+  // See reloadCurrentEmbed: PLAYING is only claimed once the embed frame
+  // actually loads (bug 24).
+  setPlayerState(PLAYER_STATE.LOADING, `Loading ${item.title}${seasonEpLabel} · ${server?.name || "HD Stream"}${langLabel}…`);
   updatePlayerEpisodeFlow();
 
-  const idx = continuation.findIndex((c) => c.title === item.title);
-  if (idx >= 0) {
-    continuation[idx].progress = Math.min(95, (continuation[idx].progress || 20) + 15);
-  } else {
-    continuation.unshift({ ...item, progress: 15 });
-    if (continuation.length > 6) continuation.pop();
-  }
-  try {
-    localStorage.setItem("ustream-continuation", JSON.stringify(continuation));
-  } catch {}
-  renderContinue();
+  recordPlaybackProgress(item, { positionSeconds: savedPosition, durationSeconds: getSavedDuration(item) });
+}
+
+function getSavedDuration(item) {
+  const entry = continuation.find((c) => c.title === item?.title);
+  return Number(entry?.durationSeconds) || 0;
 }
 
 function startPlayer() {
@@ -5327,6 +5880,9 @@ function handlePlaybackError() {
 }
 
 function closePlayer() {
+  clearLiveStatus();
+  const bufferingSpinner = $("#player-buffering-spinner");
+  if (bufferingSpinner) bufferingSpinner.hidden = true;
   const embed = $("#embed-player");
   const video = $("#video-player");
   const customWrapper = $("#custom-player-wrapper");
@@ -5438,7 +5994,8 @@ function playNativeVideo(streamUrl, title, poster = "", { videoId = null, resume
     setPlayerState(PLAYER_STATE.READY, `Ready to play: ${title}`);
   });
 
-  // Track continuation row
+  // Track continuation row with the real position (resume target or 0
+  // when playback just started), never a fabricated progress value.
   const item = {
     title,
     image: poster,
@@ -5446,17 +6003,10 @@ function playNativeVideo(streamUrl, title, poster = "", { videoId = null, resume
     streamUrl,
     videoId
   };
-  const idx = continuation.findIndex((c) => c.title === title);
-  if (idx >= 0) {
-    continuation[idx].progress = Math.min(95, (continuation[idx].progress || 20) + 15);
-  } else {
-    continuation.unshift({ ...item, progress: 15 });
-    if (continuation.length > 6) continuation.pop();
-  }
-  try {
-    localStorage.setItem("ustream-continuation", JSON.stringify(continuation));
-  } catch {}
-  renderContinue();
+  recordPlaybackProgress(item, {
+    positionSeconds: resumeTime > 0 ? resumeTime : (savedPos || 0),
+    durationSeconds: 0,
+  });
 }
 
 function initCustomVideoPlayer() {
@@ -5570,11 +6120,17 @@ function initCustomVideoPlayer() {
       } catch {}
     }
 
-    // Save playback position periodically
+    // Save playback position periodically (real progress, not fabricated)
     if (current > 5 && Math.floor(current) % 5 === 0) {
       const vidKey = video.dataset.itemTitle || state.player?.item?.title;
       if (vidKey) {
         storage.setDebounced(`ustream-pos-${vidKey}`, Math.floor(current), 800);
+        if (state.player?.item?.title) {
+          recordPlaybackProgress(state.player.item, {
+            positionSeconds: Math.floor(current),
+            durationSeconds: Math.floor(dur) || 0,
+          });
+        }
       }
     }
   });
@@ -5582,6 +6138,9 @@ function initCustomVideoPlayer() {
   video.addEventListener("loadedmetadata", () => {
     if (durationEl && video.duration) {
       durationEl.textContent = formatTime(video.duration);
+    }
+    if (state.player?.selectedSubtitle === "off") {
+      Array.from(video.textTracks || []).forEach((t) => { t.mode = "disabled"; });
     }
   });
 
@@ -6089,6 +6648,7 @@ async function loadUserUploads() {
 }
 
 function closeDetails() {
+  clearLiveStatus();
   const mb = $("#modal-backdrop");
   if (mb) {
     mb.hidden = true;
@@ -6099,12 +6659,13 @@ function closeDetails() {
 
 function toggleList(title) {
   const item = findTitle(title) || featured;
+  try { localStorage.setItem("ustream-watchlist-explicit", "1"); } catch {}
   if (state.watchlist.has(title)) {
     state.watchlist.delete(title);
     showToast(`${title} removed from My List`);
   } else {
     state.watchlist.add(title);
-    if (item && !catalog.some((c) => c.title === item.title)) {
+    if (item && !catalog.some((c) => catalogItemKey(c) === catalogItemKey(item))) {
       catalog.push(item);
     }
     showToast(`${title} added to My List`);
@@ -6151,6 +6712,8 @@ document.addEventListener("click", (event) => {
     }
     return;
   }
+  if (button.dataset.infoPage) return openInfoPage(button.dataset.infoPage);
+  if (button.id === "close-info") return closeInfoPage();
   if (button.dataset.section) return setSection(button.dataset.section, true);
   if (button.dataset.genre) {
     state.genre = button.dataset.genre;
@@ -6159,6 +6722,7 @@ document.addEventListener("click", (event) => {
     render();
     return;
   }
+  if (button.dataset.action === "resume") return void resumeTitle(button.dataset.title);
   if (button.dataset.action === "details") return openDetails(button.dataset.title);
   if (button.dataset.action === "play") { playTitle(button.dataset.title); return; }
   if (button.dataset.action === "trailer") return void playTrailer(button.dataset.title);
@@ -6224,7 +6788,8 @@ document.addEventListener("click", (event) => {
   if (button.id === "retry-button") return void retryCatalog();
   if (button.id === "load-fallback-button") return loadShowcaseCatalog();
   if (button.id === "profile-button") return setSection("profile", true);
-  if (button.id === "status-pill") return openSettings();
+  if (button.id === "status-pill") return openStatusView();
+  if (button.id === "close-status") return closeStatusView();
   if (button.id === "close-settings") return closeSettings();
   if (button.id === "refresh-catalog-btn") return void refreshCatalog();
   if (button.id === "revert-demo-btn") return void revertToDemo();
@@ -6249,14 +6814,94 @@ document.addEventListener("click", (event) => {
   }
 });
 
+let statusViewWired = false;
+
+// Real server-status view (replaces the old behaviour where the
+// "Server status" pill just opened Settings). Reads the live config +
+// health endpoints and the currently loaded catalog cache.
+async function openStatusView() {
+  const modal = $("#status-backdrop");
+  const body = $("#status-view-body");
+  if (!modal || !body) return openSettings();
+  modal.hidden = false;
+  body.innerHTML = "<p>Checking services…</p>";
+  if (!statusViewWired) {
+    statusViewWired = true;
+    modal.addEventListener("click", (e) => {
+      if (e.target.id === "status-backdrop") closeStatusView();
+    });
+  }
+  const rows = [];
+  try {
+    const res = await fetch(buildApiUrl("config"));
+    const data = await res.json().catch(() => ({}));
+    const configured = data.configured ?? data.rapidApiKeyConfigured ?? data.rapidApiConfigured;
+    rows.push(["Catalog API", configured ? "Connected" : "Not configured", configured ? "Live catalog service is configured." : "Running on the curated showcase catalog."]);
+  } catch {
+    rows.push(["Catalog API", "Unavailable", "Could not reach the catalog service — check your connection."]);
+  }
+  try {
+    const res = await fetch("/api/health.json");
+    const data = await res.json().catch(() => ({}));
+    rows.push(["Streaming service", data.ok ? (data.status || "Healthy") : "Unknown", `Service: ${data.service || "ustream"}`]);
+  } catch {
+    rows.push(["Streaming service", "Unavailable", "Health endpoint did not respond."]);
+  }
+  rows.push(["Catalog loaded", `${catalog.length} titles`, `Current section: ${state.section || "home"}`]);
+  rows.push(["Adult (18+) content", isAdultEnabled() ? "Enabled (age confirmed)" : "Off (default)", "Toggle it in Settings — an age confirmation is required to enable it."]);
+  body.innerHTML = rows.map(([label, value, note]) => `
+    <div class="setting-row">
+      <div><strong>${escapeHtml(label)}</strong><small style="display:block;color:var(--muted);font-size:12px;margin-top:4px;">${escapeHtml(note)}</small></div>
+      <span style="font-weight:700;white-space:nowrap;">${escapeHtml(String(value))}</span>
+    </div>`).join("")
+    + `<p class="field-hint">Checked ${escapeHtml(new Date().toLocaleString())} · Status is read live from the app's own endpoints; it is not a static label.</p>`;
+}
+
+function closeStatusView() {
+  const modal = $("#status-backdrop");
+  if (modal) modal.hidden = true;
+}
+
+// In-app info pages for the footer. Short, honest copy only — no external
+// links (the task explicitly forbids dead external URLs) and no invented
+// contact address: Contact points at the existing Discord community.
+const INFO_PAGES = {
+  about: ["About Ustream", "Ustream is a curated streaming showcase: movies, series, anime and cartoons in one place. Titles come from the curated catalog and live search providers; availability and streams can change, and some titles are served by third-party players."],
+  privacy: ["Privacy", "What stays on your device: your theme and accent, your My List, and your Continue Watching progress (including resume positions) are stored in this browser's localStorage. If you sign in, your profiles, watchlist and playback history sync to your Ustream account. We do not sell personal data. Clearing your browser data removes the locally stored items."],
+  terms: ["Terms of Use", "Ustream is provided for personal, non-commercial viewing. Content availability, quality and streams may change without notice and are subject to the rights holders' terms. Do not misuse the service, attempt to bypass access controls, or redistribute streams. Continued use after changes to these terms means you accept them."],
+  dmca: ["DMCA", "If you are a rights holder and believe content on Ustream infringes your copyright, send a takedown notice via the Contact page (Discord community) including: the title and URL of the allegedly infringing content, proof that you own the rights, and your contact details. Valid notices are reviewed and the content is removed or disabled where appropriate."],
+  contact: ["Contact", "Questions, title requests, or takedown notices: reach the team through the Discord community linked in the footer. Include the title or page URL you are asking about so we can help quickly."],
+};
+
+function openInfoPage(page) {
+  const entry = INFO_PAGES[page];
+  const modal = $("#info-backdrop");
+  const titleEl = $("#info-title");
+  const bodyEl = $("#info-body");
+  if (!entry || !modal || !titleEl || !bodyEl) return;
+  titleEl.textContent = entry[0];
+  bodyEl.innerHTML = `<p>${escapeHtml(entry[1])}</p>`
+    + (page === "contact"
+      ? `<p><a class="footer-community-link" href="https://discord.com/channels/1564928608877936841/1564928609309696092" target="_blank" rel="noopener noreferrer">Join Discord Community</a></p>`
+      : "");
+  modal.hidden = false;
+}
+
+function closeInfoPage() {
+  const modal = $("#info-backdrop");
+  if (modal) modal.hidden = true;
+}
+
 function openSettings() {
   const modal = $("#settings-backdrop");
   if (!modal) return;
   modal.hidden = false;
   fetch(buildApiUrl("config"))
     .then((r) => r.json())
-    .then((data) => {
-      updateStatusBadge(data.configured ?? data.rapidApiKeyConfigured ?? data.rapidApiConfigured);
+    .then(() => {
+      // /api/config only proves a key is configured — it says nothing about
+      // whether any stream plays. Re-render from the real playback flags.
+      updateStatusBadge(catalogIsLive, catalogLiveCount);
     })
     .catch(() => {});
 }
@@ -6313,6 +6958,21 @@ document.addEventListener("change", (event) => {
   }
   if (event.target.id === "player-language-bar-select") {
     const selectedVal = event.target.value;
+    if (selectedVal === "off") {
+      // Subtitles Off (bug 24): never let an embed/HLS default track —
+      // often Hindi on multi-audio sources — become the subtitle default.
+      currentLanguageKey = "en";
+      state.player.selectedSubtitle = "off";
+      try { localStorage.setItem("ustream-language", "en"); } catch {}
+      if (window._currentHlsInstance) {
+        try { window._currentHlsInstance.subtitleTrack = -1; } catch {}
+      }
+      const nativeVideo = $("#video-player");
+      if (nativeVideo) Array.from(nativeVideo.textTracks || []).forEach((t) => { t.mode = "disabled"; });
+      showToast("Subtitles off");
+      event.target.value = "en";
+      return;
+    }
     currentLanguageKey = selectedVal;
     try {
       localStorage.setItem("ustream-language", currentLanguageKey);
@@ -6414,6 +7074,18 @@ $("#video-player").addEventListener("canplay", () => {
   }
 });
 
+// Cross-origin embed frames expose no playback events, so the iframe load
+// event is the only signal the stream host responded. Until it fires the
+// player stays in LOADING (with elapsed time); the 20s timer above turns
+// a never-loading embed into an error state instead of black "PLAYING".
+$("#embed-player")?.addEventListener("load", () => {
+  const embed = $("#embed-player");
+  if (!embed || !embed.src || embed.src === "about:blank") return;
+  if (currentPlayerState === PLAYER_STATE.LOADING) {
+    setPlayerState(PLAYER_STATE.PLAYING, state.player?.item ? `Playing: ${state.player.item.title}` : "Playing stream");
+  }
+});
+
 $("#video-player").addEventListener("play", () => {
   setPlayerState(PLAYER_STATE.PLAYING);
 });
@@ -6439,21 +7111,13 @@ $("#video-player").addEventListener("ended", () => {
 $("#video-player").addEventListener("error", () => {
   const video = $("#video-player");
   if (!video.dataset.fallbackAttempted && video.dataset.itemTitle) {
+    // Do NOT silently swap in an unrelated sample/cartoon clip: the old
+    // getStreamForTitle() fallback served Google sample videos (Big Buck
+    // Bunny, Sintel, TearsOfSteel), which is how a wrong, anime-style
+    // frame could appear for a title like Avengers: Endgame. Surface the
+    // failure and switch embed server instead.
     video.dataset.fallbackAttempted = "true";
-    console.warn("[Ustream Video Player] Video source failed, switching to verified HD stream...");
-    setPlayerState(PLAYER_STATE.LOADING, "Activating resilient HD stream…");
-    const backupUrl = getStreamForTitle(video.dataset.itemTitle, 2);
-    video.src = backupUrl;
-    video.load();
-    const playAttempt = video.play();
-    if (playAttempt?.then) {
-      playAttempt.then(() => {
-        setPlayerState(PLAYER_STATE.PLAYING, `Playing: ${video.dataset.itemTitle}`);
-      }).catch(() => {
-        setPlayerState(PLAYER_STATE.READY, "Ready to watch · Click Start playback");
-      });
-    }
-    return;
+    console.warn("[Ustream Video Player] Video source failed for", video.dataset.itemTitle, "— switching server instead of a sample clip.");
   }
   handlePlaybackError();
 });
@@ -6473,7 +7137,6 @@ document.addEventListener("keydown", (event) => {
     closeProfileEditModal();
     closePinPrompt();
     closeSearchModal();
-    closeSportsPlayer();
     $("#profile-dropdown")?.setAttribute("hidden", "true");
     $("#search-box")?.classList.remove("mobile-open");
   }
@@ -7680,7 +8343,7 @@ function initAppearanceSettings() {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("ustream-theme", theme);
 
-    const labelText = isDark ? "DARK (18+ ON)" : "LIGHT (18+ OFF)";
+    const labelText = isDark ? "DARK" : "LIGHT";
     const themeToggle = $("#theme-toggle-btn");
     if (themeToggle) {
       themeToggle.textContent = labelText;
@@ -7695,7 +8358,7 @@ function initAppearanceSettings() {
       serviceToggle.classList.toggle("active", isDark);
     }
 
-    if (!isDark && isAdultContent(featured)) {
+    if (!isAdultEnabled() && isAdultContent(featured)) {
       const cleanHero = catalog.find((i) => !isAdultContent(i)) || DEMO_ITEMS.find((i) => !isAdultContent(i));
       if (cleanHero) setFeatured(cleanHero);
     }
@@ -7703,7 +8366,7 @@ function initAppearanceSettings() {
     render();
 
     if (showNotification) {
-      showToast(isDark ? "Dark Mode ON — 18+ and adult content unlocked" : "Light Mode ON — All 18+ and adult content hidden");
+      showToast(isDark ? "Dark Mode ON" : "Light Mode ON");
     }
   }
 
@@ -7721,6 +8384,31 @@ function initAppearanceSettings() {
     const next = current === "dark" ? "light" : "dark";
     updateThemeUI(next, true);
   });
+
+  const syncAdultToggles = () => {
+    const on = isAdultEnabled();
+    $$("#adult-content-toggle, #appearance-adult-toggle").forEach((btn) => {
+      btn.textContent = on ? "ON — 18+ shown" : "OFF — 18+ hidden";
+      btn.setAttribute("aria-pressed", String(on));
+      btn.classList.toggle("active", on);
+    });
+  };
+  $$("#adult-content-toggle, #appearance-adult-toggle").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (isAdultEnabled()) {
+        setAdultEnabled(false);
+        syncAdultToggles();
+        render();
+        showToast("18+ content hidden");
+      } else if (requestAdultEnable()) {
+        setAdultEnabled(true);
+        syncAdultToggles();
+        render();
+        showToast("18+ content enabled — age confirmed");
+      }
+    });
+  });
+  syncAdultToggles();
 
   $$("#accent-color-choices .color-swatch").forEach((swatch) => {
     swatch.addEventListener("click", () => {
@@ -7781,8 +8469,7 @@ function initSearchModal() {
     } else if (e.key === "Escape") {
       closeSearchModal();
       $("#appearance-backdrop")?.setAttribute("hidden", "true");
-      closeSportsPlayer();
-    }
+      }
   });
 
   $$(".search-type-pill").forEach((pill) => {
@@ -7812,7 +8499,7 @@ function initSearchModal() {
     clearTimeout(modalSearchDebounce);
     if (!q) {
       const resultsEl = $("#modal-search-results");
-      if (resultsEl) resultsEl.innerHTML = `<div class="search-empty-prompt">Start typing to search titles, genres, and live events.</div>`;
+      if (resultsEl) resultsEl.innerHTML = `<div class="search-empty-prompt">Start typing to search titles and genres.</div>`;
       return;
     }
     modalSearchDebounce = setTimeout(() => executeModalSearch(q), 280);
@@ -7845,27 +8532,8 @@ async function executeModalSearch(query) {
   searchAbortController = new AbortController();
   const signal = searchAbortController.signal;
 
-  const renderSearchResults = (cardsList, sportsList) => {
+  const renderSearchResults = (cardsList) => {
     let markup = ``;
-
-    if (sportsList.length) {
-      markup += `
-        <div style="margin-bottom: 18px;">
-          <h4 style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 10px;">⚡ Live Sports &amp; Channels</h4>
-          <div style="display: flex; flex-direction: column; gap: 8px;">
-            ${sportsList.map(m => `
-              <div class="sports-match-card" data-watch-sports-id="${escapeHtml(m.id)}" style="flex-direction: row; align-items: center; justify-content: space-between; padding: 10px 16px;">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <span class="sports-live-tag" style="margin: 0;">${m._live ? '<span class="live-dot"></span> LIVE' : escapeHtml(m.category)}</span>
-                  <strong style="font-size: 13px;">${escapeHtml(m.title)}</strong>
-                </div>
-                <button class="primary-button" type="button" style="padding: 6px 14px; font-size: 11px;">Watch</button>
-              </div>
-            `).join("")}
-          </div>
-        </div>
-      `;
-    }
 
     if (cardsList.length) {
       markup += `
@@ -7878,7 +8546,7 @@ async function executeModalSearch(query) {
                 <span class="search-result-title">${escapeHtml(item.title)}</span>
                 <div class="search-result-meta">
                   <span>${item.year || "2024"}</span>
-                  <span style="color: var(--accent); font-weight: 700;">★ ${Number(item.rating || 7).toFixed(1)}</span>
+                  <span style="color: var(--accent); font-weight: 700;">★ ${normalizeRating(item.rating).toFixed(1)}</span>
                   <span>${escapeHtml(item.badge || item.type || "")}</span>
                 </div>
               </article>
@@ -7897,27 +8565,15 @@ async function executeModalSearch(query) {
         playTitle(title);
       });
     });
-
-    resultsEl.querySelectorAll("[data-watch-sports-id]").forEach((el) => {
-      el.addEventListener("click", () => {
-        const sportId = el.dataset.watchSportsId;
-        const allEvents = [...(sportsState.cache?.live || []), ...(sportsState.cache?.upcoming || []), ...(sportsState.cache?.channels || [])];
-        const match = allEvents.find(e => e.id === sportId);
-        if (match) {
-          closeSearchModal();
-          openSportsPlayer(match);
-        }
-      });
-    });
   };
 
   try {
     const qLower = query.toLowerCase();
-    const isDark = isDarkModeActive();
+    const adultEnabled = isAdultEnabled();
 
     // 1. Local catalog matches
     const matchedCatalog = catalog.filter((item) => {
-      if (!isDark && isAdultContent(item)) return false;
+      if (!adultEnabled && isAdultContent(item)) return false;
       const matchText = `${item.title} ${item.genre?.join(" ") || ""} ${item.country || ""}`.toLowerCase();
       if (!matchText.includes(qLower)) return false;
       if (modalSearchType === "movie") return item.type === "movie";
@@ -7927,22 +8583,12 @@ async function executeModalSearch(query) {
       return true;
     });
 
-    // 2. Search sports events
-    let matchedSports = [];
-    if (sportsState.cache && (modalSearchType === "all" || modalSearchType === "sports")) {
-      const allEvents = [...(sportsState.cache.live || []), ...(sportsState.cache.upcoming || []), ...(sportsState.cache.channels || [])];
-      matchedSports = allEvents.filter((ev) => {
-        const text = `${ev.title} ${ev.category} ${ev.teams?.home?.name || ""} ${ev.teams?.away?.name || ""}`.toLowerCase();
-        return text.includes(qLower);
-      }).slice(0, 6);
-    }
-
     // Render immediate local matches without waiting on network
-    if (matchedCatalog.length || matchedSports.length) {
-      renderSearchResults(matchedCatalog, matchedSports);
+    if (matchedCatalog.length) {
+      renderSearchResults(sortBySearchRelevance(matchedCatalog, query));
     }
 
-    // 3. TMDB search via direct TMDB / proxy
+    // 2. TMDB search via direct TMDB / proxy
     let tmdbResults = [];
     try {
       const data = await fetchTmdbApi(`/search/multi?query=${encodeURIComponent(query)}&language=${localStorage.getItem("ustream-lang") || "en-US"}`);
@@ -7958,8 +8604,9 @@ async function executeModalSearch(query) {
             title: title || "Untitled",
             type: isMovie ? "movie" : "series",
             year: year || "2024",
-            rating: item.vote_average || 7.5,
-            runtime: isMovie ? "Feature film" : "TV Series",
+            rating: normalizeRating(item.vote_average),
+            releaseDate: (isMovie ? item.release_date : item.first_air_date) || "",
+            runtime: "—",
             image: item.poster_path ? `https://image.tmdb.org/t/p/w342${item.poster_path}` : "",
             badge: isAnime ? "Anime" : isCartoon ? "Cartoon" : isMovie ? "Movie" : "Series",
             genre: isAnime ? ["anime"] : isCartoon ? ["animation"] : [isMovie ? "movie" : "drama"],
@@ -7981,7 +8628,7 @@ async function executeModalSearch(query) {
 
     if (signal.aborted) return;
 
-    if (!isDark) {
+    if (!isAdultEnabled()) {
       tmdbResults = tmdbResults.filter((i) => !isAdultContent(i));
     }
     if (modalSearchType === "movie") tmdbResults = tmdbResults.filter(i => i.type === "movie" && !i.isJapaneseAnime);
@@ -7989,17 +8636,21 @@ async function executeModalSearch(query) {
     if (modalSearchType === "anime") tmdbResults = tmdbResults.filter(i => i.isJapaneseAnime);
     if (modalSearchType === "cartoon") tmdbResults = tmdbResults.filter(i => i.isCartoon);
 
-    const seenTitles = new Set();
-    const finalCards = [];
-    for (const card of [...matchedCatalog, ...tmdbResults]) {
-      const key = card.title.toLowerCase();
-      if (!seenTitles.has(key)) {
-        seenTitles.add(key);
-        finalCards.push(card);
-      }
+    // Merge local + TMDB, deduped by TMDB id (then title), then ranked
+    // by relevance: exact title, starts-with, word-boundary, substring.
+    // A genre/country-only match scores last. When an exact title match
+    // exists, pure substring matches are noise (e.g. "WWA The Inception"
+    // for "Inception") and are dropped.
+    let finalCards = sortBySearchRelevance(
+      dedupeCatalogItems([...matchedCatalog, ...tmdbResults]),
+      query
+    );
+    if (finalCards.some((card) => searchRelevanceScore(card.title, query) === 0)) {
+      finalCards = finalCards.filter((card) => searchRelevanceScore(card.title, query) < 3);
     }
+    finalCards = finalCards.slice(0, 24);
 
-    if (!finalCards.length && !matchedSports.length) {
+    if (!finalCards.length) {
       resultsEl.innerHTML = `
         <div class="search-empty-prompt">
           <p>No results found for “${escapeHtml(query)}”.</p>
@@ -8009,895 +8660,11 @@ async function executeModalSearch(query) {
       return;
     }
 
-    renderSearchResults(finalCards, matchedSports);
+    renderSearchResults(finalCards);
   } catch (err) {
     console.error("Search modal error:", err);
     resultsEl.innerHTML = `<div class="search-empty-prompt">Search error. Please try again.</div>`;
   }
-}
-
-/* ==========================================================================
-   Live Sports Match Centre Engine (BinTV Integration)
-   ========================================================================== */
-const FALLBACK_SPORTS_CHANNELS = [
-  {
-    "id": "channel-sky-sports-main-event",
-    "name": "Sky Sports Main Event",
-    "category": "24/7 Channels",
-    "poster": "https://e0.365dm.com/17/07/1600x900/skysports-all-new-rebrand-f1-premier-league-golf-cricket_4001810.jpg",
-    "streams": [
-      {
-        "name": "Sky Sports Main Event",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvbjU4YWpnZngtNDcy"
-      },
-      {
-        "name": "4K HEVC",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvaXk1MDBoenEtNzY1MQ"
-      }
-    ]
-  },
-  {
-    "id": "channel-sky-sports-premier-league",
-    "name": "Sky Sports Premier League",
-    "category": "24/7 Channels",
-    "poster": "https://e0.365dm.com/25/06/2048x1152/skysports-premier-league-fixtures_6937276.jpg",
-    "streams": [
-      {
-        "name": "Sky Sports Premier League",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYva3pkM2hycXotNDMxNA"
-      }
-    ]
-  },
-  {
-    "id": "channel-sky-sports-cricket",
-    "name": "Sky Sports Cricket",
-    "category": "24/7 Channels",
-    "poster": "https://e0.365dm.com/17/07/2048x1152/skysports-sky-sports-cricket-podcast-sky-cricket-podcast_4004801.jpg",
-    "streams": [
-      {
-        "name": "Sky Sports Cricket",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvcWZ4NDAzOHAtOTU"
-      }
-    ]
-  },
-  {
-    "id": "channel-sky-sports-f1",
-    "name": "Sky Sports F1",
-    "category": "24/7 Channels",
-    "poster": "https://e0.365dm.com/21/03/1600x900/skysports-f1-2021-graphic_5299452.png",
-    "streams": [
-      {
-        "name": "English",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvZjU5NmY5OHItNjk3Nw"
-      },
-      {
-        "name": "Italian",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvdDVtcG4xOTItNjUwNA"
-      },
-      {
-        "name": "German",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvNzhoeTY2bjYtODE5OA"
-      },
-      {
-        "name": "4K HEVC",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvYzg5dnhydmMtNTA4Nw"
-      }
-    ]
-  },
-  {
-    "id": "channel-tnt-sports-1",
-    "name": "TNT Sports 1",
-    "category": "24/7 Channels",
-    "poster": "https://cdn.mos.cms.futurecdn.net/y3oPitXYAwGJnyTHFYo5qB.jpeg",
-    "streams": [
-      {
-        "name": "TNT Sports 1",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvZTBseXJraHItMTAwMg"
-      },
-      {
-        "name": "4K HEVC (Select Events Only)",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvZDlkYjRnbnQtNDAzOQ"
-      }
-    ]
-  },
-  {
-    "id": "channel-tnt-sports-2",
-    "name": "TNT Sports 2",
-    "category": "24/7 Channels",
-    "poster": "https://cdn.mos.cms.futurecdn.net/y3oPitXYAwGJnyTHFYo5qB.jpeg",
-    "streams": [
-      {
-        "name": "TNT Sports 2",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvaXQ3YXl0cWgtMTU0MA"
-      }
-    ]
-  },
-  {
-    "id": "channel-willow-cricket",
-    "name": "Willow Cricket",
-    "category": "24/7 Channels",
-    "poster": "https://mgpindia.com/wp-content/uploads/2021/10/willow-logo.jpg",
-    "streams": [
-      {
-        "name": "Willow Cricket",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvc3BkOGdwb2gtNjU4Ng"
-      }
-    ]
-  },
-  {
-    "id": "channel-willow-cricket-2",
-    "name": "Willow Cricket 2",
-    "category": "24/7 Channels",
-    "poster": "https://d229kpbsb5jevy.cloudfront.net/tv/1920/1080/languages/WILLOW-2.jpg",
-    "streams": [
-      {
-        "name": "Willow Cricket 2",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvMTRxdWF3ZDUtODgxOQ"
-      }
-    ]
-  },
-  {
-    "id": "channel-espn",
-    "name": "ESPN",
-    "category": "24/7 Channels",
-    "poster": "https://a1.espncdn.com/combiner/i?img=%2Fi%2Fespn%2Fespn_logos%2Fespn_red.png",
-    "streams": [
-      {
-        "name": "ESPN",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvbzlibDhjYWktNzIyMw"
-      }
-    ]
-  },
-  {
-    "id": "channel-espn-deportes",
-    "name": "ESPN Deportes",
-    "category": "24/7 Channels",
-    "poster": "https://discgolf.ultiworld.com/wp-content/uploads/2020/10/ESPN2.png",
-    "streams": [
-      {
-        "name": "ESPN Deportes",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvNnRyc2FudDctMTQyMQ"
-      }
-    ]
-  },
-  {
-    "id": "channel-espn2",
-    "name": "ESPN2",
-    "category": "24/7 Channels",
-    "poster": "https://discgolf.ultiworld.com/wp-content/uploads/2020/10/ESPN2.png",
-    "streams": [
-      {
-        "name": "ESPN2",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvMzNqaHB6ZnItOTM2"
-      }
-    ]
-  },
-  {
-    "id": "channel-espnews",
-    "name": "ESPNEWS",
-    "category": "24/7 Channels",
-    "poster": "https://discgolf.ultiworld.com/wp-content/uploads/2020/10/ESPN2.png",
-    "streams": [
-      {
-        "name": "ESPNEWS",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvbWZ0c2xlejQtMzM2NA"
-      }
-    ]
-  },
-  {
-    "id": "channel-espnu",
-    "name": "ESPNU",
-    "category": "24/7 Channels",
-    "poster": "https://discgolf.ultiworld.com/wp-content/uploads/2020/10/ESPN2.png",
-    "streams": [
-      {
-        "name": "ESPNU",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvd3Fid2pqaGYtOTc3MQ"
-      }
-    ]
-  },
-  {
-    "id": "channel-dazn-1-germany",
-    "name": "DAZN 1 Germany",
-    "category": "24/7 Channels",
-    "poster": "https://image.discovery.indazn.com/ca/v2/ca/image?id=12dpnhddhmpm71228raanhyxs2_image-header_pDach_1723627450000&quality=70",
-    "streams": [
-      {
-        "name": "DAZN 1 Germany",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvM2RrOHJ4dWktNjIxMg"
-      }
-    ]
-  },
-  {
-    "id": "channel-dazn-1-italia",
-    "name": "DAZN 1 Italia",
-    "category": "24/7 Channels",
-    "poster": "https://image.discovery.indazn.com/ca/v2/ca/image?id=pterrit4f2xu1pa2r6x87y5e9_image-header_pIt_1724315365000&amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;quality=70",
-    "streams": [
-      {
-        "name": "DAZN 1 Italia",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvZ21vcW96N2ItNDk0NQ"
-      }
-    ]
-  },
-  {
-    "id": "channel-dazn-1-portugal",
-    "name": "DAZN 1 Portugal",
-    "category": "24/7 Channels",
-    "poster": "https://image.discovery.indazn.com/ca/v2/ca/image?id=1o4eamzb4env61ddc8wv4ra06l_image-header_pRow_1720521601000&amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;quality=70",
-    "streams": [
-      {
-        "name": "DAZN 1 Portugal",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvM3poY3p6YmwtOTA4Ng"
-      }
-    ]
-  },
-  {
-    "id": "channel-dazn-1-spain",
-    "name": "DAZN 1 Spain",
-    "category": "24/7 Channels",
-    "poster": "https://image.discovery.indazn.com/ca/v2/ca/image?id=hn9vkic8rbfi1ndrym8sw2qh7_image-header_pEs_1723035920000",
-    "streams": [
-      {
-        "name": "DAZN 1 Spain",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvc3EyNmlueWYtMjY2MA"
-      }
-    ]
-  },
-  {
-    "id": "channel-dazn-1-usa",
-    "name": "DAZN 1 USA",
-    "category": "24/7 Channels",
-    "poster": "https://image.discovery.indazn.com/ca/v2/ca/image?id=1owzb99m9mnzy15hjxolpukwul_image-header_pUs_1771501796000&amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;quality=70",
-    "streams": [
-      {
-        "name": "DAZN 1 USA",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvanlxemV0MGItMjkwMQ"
-      }
-    ]
-  },
-  {
-    "id": "channel-dazn-2-germany",
-    "name": "DAZN 2 Germany",
-    "category": "24/7 Channels",
-    "poster": "https://image.discovery.indazn.com/ca/v2/ca/image?id=1ni1lpwjtnxmr1xklfoptrt2mz_image-header_pDach_1723628653000",
-    "streams": [
-      {
-        "name": "DAZN 2 Germany",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvdG5pZnNwajYtODUy"
-      }
-    ]
-  },
-  {
-    "id": "channel-dazn-2-spain",
-    "name": "DAZN 2 Spain",
-    "category": "24/7 Channels",
-    "poster": "https://image.discovery.indazn.com/ca/v2/ca/image?id=2ouwtae8ad7l1fxviow9bowpk_image-header_pEs_1723118632000&amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;quality=70",
-    "streams": [
-      {
-        "name": "DAZN 2 Spain",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvMG8zdmxhYmstNDA4OA"
-      }
-    ]
-  },
-  {
-    "id": "channel-dazn-f1",
-    "name": "DAZN F1",
-    "category": "24/7 Channels",
-    "poster": "https://image.discovery.indazn.com/ca/v2/ca/image?id=14ln25pmjdv031ejxsmg8dczsu_image-header_pEs_1723117975000&amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;amp;quality=70",
-    "streams": [
-      {
-        "name": "DAZN F1",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvNXJ2YXpzenotNjk4Mw"
-      }
-    ]
-  },
-  {
-    "id": "channel-dazn-laliga",
-    "name": "DAZN LaLiga",
-    "category": "24/7 Channels",
-    "poster": "https://image.discovery.indazn.com/ca/v2/ca/image?id=1weziux6zy5mb16pev002ax1yu_image-header_pEs_1723118324000",
-    "streams": [
-      {
-        "name": "DAZN LaLiga",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvZncyanJ1bTktNDQ4"
-      }
-    ]
-  },
-  {
-    "id": "channel-bein-max-4-francais",
-    "name": "beIN Max 4 Francais",
-    "category": "24/7 Channels",
-    "poster": "https://cdn.jsdelivr.net/gh/willthequeencome/img-cdn/beinsports.png",
-    "streams": [
-      {
-        "name": "beIN Max 4 Francais",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvZzhmMHdwcWMtMjY5Ng"
-      }
-    ]
-  },
-  {
-    "id": "channel-bein-max-5-francais",
-    "name": "beIN Max 5 Francais",
-    "category": "24/7 Channels",
-    "poster": "https://cdn.jsdelivr.net/gh/willthequeencome/img-cdn/beinsports.png",
-    "streams": [
-      {
-        "name": "beIN Max 5 Francais",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYva2Nra29lZHYtMjU5NA"
-      }
-    ]
-  },
-  {
-    "id": "channel-bein-max-6",
-    "name": "beIN Max 6 Francais",
-    "category": "24/7 Channels",
-    "poster": "https://cdn.jsdelivr.net/gh/willthequeencome/img-cdn/beinsports.png",
-    "streams": [
-      {
-        "name": "beIN Max 6 Francais",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvd3FqbGJ3bGwtMjI1OA"
-      }
-    ]
-  },
-  {
-    "id": "channel-bein-max-7-francais",
-    "name": "beIN Max 7 Francais",
-    "category": "24/7 Channels",
-    "poster": "https://cdn.jsdelivr.net/gh/willthequeencome/img-cdn/beinsports.png",
-    "streams": [
-      {
-        "name": "beIN Max 7 Francais",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvbnA0Yml3ZjMtMzA5Nw"
-      }
-    ]
-  },
-  {
-    "id": "channel-bein-sports",
-    "name": "beIN Sports",
-    "category": "24/7 Channels",
-    "poster": "https://cdn.jsdelivr.net/gh/willthequeencome/img-cdn/beinsports.png",
-    "streams": [
-      {
-        "name": "beIN Sports",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvdTM2ZnRmY3ktNzEwMQ"
-      }
-    ]
-  },
-  {
-    "id": "channel-bein-sports-francais-1",
-    "name": "beIN Sports Francais 1",
-    "category": "24/7 Channels",
-    "poster": "https://cdn.jsdelivr.net/gh/willthequeencome/img-cdn/beinsports.png",
-    "streams": [
-      {
-        "name": "beIN Sports Francais 1",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvZ2J3MDlhbm4tOTgz"
-      }
-    ]
-  },
-  {
-    "id": "channel-bein-sports-francais-2",
-    "name": "beIN Sports Francais 2",
-    "category": "24/7 Channels",
-    "poster": "https://cdn.jsdelivr.net/gh/willthequeencome/img-cdn/beinsports.png",
-    "streams": [
-      {
-        "name": "beIN Sports Francais 2",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvYWhsNzdjZ28tMzU5Nw"
-      }
-    ]
-  },
-  {
-    "id": "channel-bein-sports-francais-3",
-    "name": "beIN Sports Francais 3",
-    "category": "24/7 Channels",
-    "poster": "https://cdn.jsdelivr.net/gh/willthequeencome/img-cdn/beinsports.png",
-    "streams": [
-      {
-        "name": "beIN Sports Francais 3",
-        "url": "https://bintv-sources.pages.dev/?id=aHR0cHM6Ly9laGdlbWJ4ZS5jZmQvYmludHYvZmN4cGViMmktOTI3NQ"
-      }
-    ]
-  }
-];
-
-const sportsState = {
-  tab: "live",
-  query: "",
-  category: "all",
-  channelLetter: "",
-  channelPage: 0,
-  pageSize: 24,
-  cache: null,
-  loading: false,
-  activeMatch: null,
-  activeFeedIndex: 0,
-  initialized: false,
-};
-
-function decodeSportsStreamUrl(url) {
-  try {
-    if (!url) return "";
-    if (url.includes("id=")) {
-      const parsed = new URL(url);
-      const id = parsed.searchParams.get("id");
-      if (id) {
-        const b = id.replace(/-/g, "+").replace(/_/g, "/");
-        const dec = atob(b);
-        if (/^https?:\/\//i.test(dec)) return dec;
-      }
-    }
-  } catch {}
-  return "";
-}
-
-async function fetchSportsCatalog() {
-  if (sportsState.cache && Date.now() - (sportsState.cache.timestamp || 0) < 45000) {
-    return sportsState.cache;
-  }
-
-  const normalizeEvent = (item, fallbackStatus) => {
-    if (!item?.id || !item?.name) return null;
-    const streams = (Array.isArray(item.streams) ? item.streams : []).map((st, idx) => {
-      const url = String(st?.url || "").trim();
-      if (!url) return null;
-      const name = String(st?.name || `Feed ${idx + 1}`).trim();
-      const decodedUrl = decodeSportsStreamUrl(url);
-      return {
-        embedUrl: url,
-        rawUrl: url,
-        decodedUrl: decodedUrl || url,
-        name,
-        hd: /(?:hd|4k|1080|720)/i.test(name),
-        streamNo: idx + 1
-      };
-    }).filter(Boolean);
-    if (!streams.length) return null;
-
-    const title = String(item.name).trim();
-    const versus = title.split(/\s+(?:vs\.?|v|@)\s+/i);
-    const poster = item.poster ? String(item.poster).replace(/^http:/i, "https:") : "";
-    return {
-      id: String(item.id),
-      title,
-      category: String(item.category || "Other"),
-      poster,
-      status: String(item.status || fallbackStatus),
-      _live: String(item.status || fallbackStatus).toLowerCase() === "live",
-      teams: versus.length === 2 ? { home: { name: versus[0].trim() }, away: { name: versus[1].trim() } } : null,
-      sources: streams,
-      date: Number(item.date || 0)
-    };
-  };
-
-  const buildSportsCache = (raw) => {
-    let live = [];
-    let upcoming = [];
-    let channels = [];
-
-    if (raw) {
-      const parseList = (key, fallback) => (Array.isArray(raw[key]) ? raw[key] : []).map(i => normalizeEvent(i, fallback)).filter(Boolean);
-      live = parseList("Live Events", "live");
-      upcoming = parseList("Upcoming Events", "upcoming");
-      channels = parseList("24/7 Channels", "24/7");
-    }
-
-    if (!channels.length && Array.isArray(FALLBACK_SPORTS_CHANNELS)) {
-      channels = FALLBACK_SPORTS_CHANNELS.map(i => normalizeEvent(i, "24/7")).filter(Boolean);
-    }
-
-    const categories = [...new Set([...live, ...upcoming, ...channels].map(i => i.category).filter(Boolean))].sort();
-    return { live, upcoming, channels, categories, timestamp: Date.now() };
-  };
-
-  let raw = null;
-
-  // 1. Fast local/CDN static snapshot (/api/sports.json or /api/sports) for instant render
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 1500);
-    const res = await fetch("/api/sports.json", { signal: controller.signal }).catch(() => null);
-    clearTimeout(timer);
-    if (res?.ok) {
-      const parsed = await res.json().catch(() => null);
-      if (parsed && (Array.isArray(parsed["Live Events"]) || Array.isArray(parsed["24/7 Channels"]))) {
-        raw = parsed;
-      }
-    }
-  } catch {}
-
-  if (!raw) {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 1500);
-      const res = await fetch("/api/sports", { signal: controller.signal }).catch(() => null);
-      clearTimeout(timer);
-      if (res?.ok) {
-        const parsed = await res.json().catch(() => null);
-        if (parsed && (Array.isArray(parsed["Live Events"]) || Array.isArray(parsed["24/7 Channels"]))) {
-          raw = parsed;
-        }
-      }
-    } catch {}
-  }
-
-  sportsState.cache = buildSportsCache(raw);
-
-  // 2. Non-blocking background refresh from live Lovable endpoint
-  void (async () => {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 4500);
-      const res = await fetch("https://bintvjson.lovable.app/api/public/bintvjson", {
-        signal: controller.signal
-      }).catch(() => null);
-      clearTimeout(timer);
-      if (res?.ok) {
-        const parsed = await res.json().catch(() => null);
-        if (parsed && (Array.isArray(parsed["Live Events"]) || Array.isArray(parsed["24/7 Channels"]))) {
-          sportsState.cache = buildSportsCache(parsed);
-          if (state.section === "sports") {
-            renderSportsSection();
-          }
-        }
-      }
-    } catch {}
-  })();
-
-  return sportsState.cache;
-}
-
-function initSportsSection() {
-  if (!sportsState.initialized) {
-    sportsState.initialized = true;
-
-    $$("[data-sports-tab]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        $$("[data-sports-tab]").forEach(b => b.classList.toggle("active", b === btn));
-        sportsState.tab = btn.dataset.sportsTab || "live";
-        sportsState.channelPage = 0;
-        sportsState.channelLetter = "";
-        renderSportsSection();
-      });
-    });
-
-    $("#sports-search-input")?.addEventListener("input", (e) => {
-      sportsState.query = e.target.value.trim().toLowerCase();
-      sportsState.channelPage = 0;
-      renderSportsSection();
-    });
-
-    $("#close-sports-player")?.addEventListener("click", closeSportsPlayer);
-    $("#sports-player-backdrop")?.addEventListener("click", (e) => {
-      if (e.target.id === "sports-player-backdrop") closeSportsPlayer();
-    });
-
-    // Popout button: opens the active stream directly in a new window/tab
-    $("#sports-popout-btn")?.addEventListener("click", () => {
-      const match = sportsState.activeMatch;
-      const idx = sportsState.activeFeedIndex;
-      const src = match?.sources?.[idx]?.embedUrl || match?.sources?.[0]?.embedUrl;
-      if (src && src !== "about:blank") {
-        (window._allowUserPopout ? window._allowUserPopout(src) : window.open(src, "_blank", "noopener,noreferrer"));
-      }
-    });
-
-    // Reload button: reloads the active iframe feed safely
-    $("#sports-reload-btn")?.addEventListener("click", () => {
-      const frame = $("#sports-stream-frame");
-      const match = sportsState.activeMatch;
-      const idx = sportsState.activeFeedIndex;
-      const src = match?.sources?.[idx]?.embedUrl || match?.sources?.[0]?.embedUrl;
-      if (frame && src) {
-        frame.src = "about:blank";
-        setTimeout(() => { frame.src = src; }, 80);
-      }
-    });
-  }
-
-  loadAndRenderSports();
-}
-
-async function loadAndRenderSports() {
-  const grid = $("#sports-match-grid");
-  if (!sportsState.cache && grid) {
-    grid.innerHTML = createSkeletonCardsHtml(6, true);
-  }
-  try {
-    await fetchSportsCatalog();
-    renderSportsSection();
-  } catch (err) {
-    if (grid) {
-      grid.innerHTML = `
-        <div class="sports-loading-state">
-          <p>Failed to load sports events. Please check connection.</p>
-          <button class="primary-button" id="retry-sports-btn" type="button" style="margin-top: 10px;">Retry</button>
-        </div>
-      `;
-      $("#retry-sports-btn")?.addEventListener("click", () => loadAndRenderSports());
-    }
-  }
-}
-
-function renderSportsSection() {
-  const data = sportsState.cache;
-  if (!data) return;
-
-  const liveCount = $("#sports-live-count");
-  const upCount = $("#sports-upcoming-count");
-  const chCount = $("#sports-channels-count");
-  if (liveCount) liveCount.textContent = String(data.live.length);
-  if (upCount) upCount.textContent = String(data.upcoming.length);
-  if (chCount) chCount.textContent = String(data.channels.length);
-
-  const pillsEl = $("#sports-categories-pills");
-  if (pillsEl && sportsState.tab !== "channels") {
-    pillsEl.hidden = false;
-    pillsEl.innerHTML = `
-      <button class="sports-cat-pill ${sportsState.category === "all" ? "active" : ""}" data-sports-category="all" type="button">All Sports</button>
-      ${data.categories.map(cat => `
-        <button class="sports-cat-pill ${sportsState.category === cat ? "active" : ""}" data-sports-category="${escapeHtml(cat)}" type="button">${escapeHtml(cat)}</button>
-      `).join("")}
-    `;
-    pillsEl.querySelectorAll("[data-sports-category]").forEach(p => {
-      p.addEventListener("click", () => {
-        sportsState.category = p.dataset.sportsCategory || "all";
-        renderSportsSection();
-      });
-    });
-  } else if (pillsEl) {
-    pillsEl.hidden = true;
-  }
-
-  const lettersEl = $("#sports-channel-letters");
-  if (lettersEl) {
-    if (sportsState.tab === "channels") {
-      lettersEl.hidden = false;
-      const letters = [...new Set(data.channels.map(c => {
-        const first = c.title.trim().charAt(0).toUpperCase();
-        return /^[A-Z]$/.test(first) ? first : "#";
-      }))].sort();
-      lettersEl.innerHTML = `
-        <button class="letter-pill ${!sportsState.channelLetter ? "active" : ""}" data-letter="" type="button" style="width: auto; padding: 0 10px;">All</button>
-        ${letters.map(l => `
-          <button class="letter-pill ${sportsState.channelLetter === l ? "active" : ""}" data-letter="${escapeHtml(l)}" type="button">${escapeHtml(l)}</button>
-        `).join("")}
-      `;
-      lettersEl.querySelectorAll("[data-letter]").forEach(btn => {
-        btn.addEventListener("click", () => {
-          sportsState.channelLetter = btn.dataset.letter;
-          sportsState.channelPage = 0;
-          renderSportsSection();
-        });
-      });
-    } else {
-      lettersEl.hidden = true;
-    }
-  }
-
-  let items = sportsState.tab === "live" ? data.live : sportsState.tab === "upcoming" ? data.upcoming : data.channels;
-  if (sportsState.tab !== "channels" && sportsState.category !== "all") {
-    items = items.filter(i => i.category === sportsState.category);
-  }
-  if (sportsState.tab === "channels" && sportsState.channelLetter) {
-    items = items.filter(i => {
-      const first = i.title.trim().charAt(0).toUpperCase();
-      const l = /^[A-Z]$/.test(first) ? first : "#";
-      return l === sportsState.channelLetter;
-    });
-  }
-  if (sportsState.query) {
-    const q = sportsState.query;
-    items = items.filter(i => `${i.title} ${i.category} ${i.teams?.home?.name || ""} ${i.teams?.away?.name || ""}`.toLowerCase().includes(q));
-  }
-
-  const pagerEl = $("#sports-pagination");
-  let displayItems = items;
-  if (sportsState.tab === "channels") {
-    const totalPages = Math.max(1, Math.ceil(items.length / sportsState.pageSize));
-    const page = Math.min(sportsState.channelPage, totalPages - 1);
-    sportsState.channelPage = page;
-    displayItems = items.slice(page * sportsState.pageSize, (page + 1) * sportsState.pageSize);
-    if (pagerEl && totalPages > 1) {
-      pagerEl.hidden = false;
-      pagerEl.innerHTML = `
-        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 14px 0; color: var(--muted); font-size: 13px;">
-          <span>Showing ${page * sportsState.pageSize + 1}–${Math.min((page + 1) * sportsState.pageSize, items.length)} of ${items.length} channels</span>
-          <div style="display: flex; gap: 8px;">
-            <button class="secondary-button" id="prev-channel-page" type="button" ${page === 0 ? "disabled" : ""}>← Prev</button>
-            <span style="display: flex; align-items: center; padding: 0 10px; font-weight: 700; color: var(--text);">Page ${page + 1} / ${totalPages}</span>
-            <button class="secondary-button" id="next-channel-page" type="button" ${page >= totalPages - 1 ? "disabled" : ""}>Next →</button>
-          </div>
-        </div>
-      `;
-      $("#prev-channel-page")?.addEventListener("click", () => {
-        sportsState.channelPage--;
-        renderSportsSection();
-      });
-      $("#next-channel-page")?.addEventListener("click", () => {
-        sportsState.channelPage++;
-        renderSportsSection();
-      });
-    } else if (pagerEl) {
-      pagerEl.hidden = true;
-    }
-  } else if (pagerEl) {
-    pagerEl.hidden = true;
-  }
-
-  const grid = $("#sports-match-grid");
-  if (!grid) return;
-
-  if (!displayItems.length) {
-    if (sportsState.tab === "live" && !sportsState.query && sportsState.category === "all") {
-      grid.innerHTML = `
-        <div class="sports-loading-state" style="grid-column: 1 / -1; padding: 36px 20px; text-align: center; background: var(--surface-1); border-radius: 14px; border: 1px solid var(--line);">
-          <div style="font-size: 20px; font-weight: 800; color: var(--text); margin-bottom: 8px;">No Live Matches In Play Right Now</div>
-          <p style="color: var(--muted); font-size: 14px; max-width: 540px; margin: 0 auto 18px; line-height: 1.5;">Check the upcoming match schedule for upcoming fixtures today, or stream over <strong>${data.channels.length} 24/7 Live Sports TV Channels</strong> broadcasting right now.</p>
-          <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
-            <button class="primary-button" id="switch-to-channels-tab-btn" type="button">Browse 24/7 Channels (${data.channels.length})</button>
-            <button class="secondary-button" id="switch-to-upcoming-tab-btn" type="button">View Upcoming Schedule (${data.upcoming.length})</button>
-          </div>
-        </div>
-      `;
-      $("#switch-to-channels-tab-btn")?.addEventListener("click", () => {
-        $$("[data-sports-tab]").forEach(b => b.classList.toggle("active", b.dataset.sportsTab === "channels"));
-        sportsState.tab = "channels";
-        sportsState.channelPage = 0;
-        sportsState.channelLetter = "";
-        renderSportsSection();
-      });
-      $("#switch-to-upcoming-tab-btn")?.addEventListener("click", () => {
-        $$("[data-sports-tab]").forEach(b => b.classList.toggle("active", b.dataset.sportsTab === "upcoming"));
-        sportsState.tab = "upcoming";
-        renderSportsSection();
-      });
-      return;
-    }
-
-    grid.innerHTML = `
-      <div class="sports-loading-state" style="grid-column: 1 / -1;">
-        <p>No ${sportsState.tab === "channels" ? "channels" : "matches"} match your criteria.</p>
-        <button class="text-button" id="reset-sports-filters" type="button" style="margin-top: 8px;">Clear filters</button>
-      </div>
-    `;
-    $("#reset-sports-filters")?.addEventListener("click", () => {
-      sportsState.query = "";
-      sportsState.category = "all";
-      sportsState.channelLetter = "";
-      if ($("#sports-search-input")) $("#sports-search-input").value = "";
-      renderSportsSection();
-    });
-    return;
-  }
-
-  let html = displayItems.map(match => {
-    const teams = match.teams;
-    const isChannel = match.status === "24/7";
-    const timing = match.date ? (() => {
-      const d = new Date(match.date);
-      return {
-        day: new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric" }).format(d),
-        time: new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(d)
-      };
-    })() : { day: "Scheduled", time: "TBA" };
-
-    return `
-      <article class="sports-match-card ${match.poster ? "has-poster" : ""}" data-sports-id="${escapeHtml(match.id)}">
-        <div class="sports-card-art">
-          ${match.poster ? `<img src="${escapeHtml(match.poster)}" alt="${escapeHtml(match.title || "Match")} sports poster" loading="lazy" decoding="async">` : ""}
-          <div class="sports-versus-overlay">
-            ${teams ? `
-              <div class="sports-team-col">
-                <div class="sports-team-badge">${escapeHtml(teams.home?.name?.charAt(0) || "H")}</div>
-                <span class="sports-team-name">${escapeHtml(teams.home?.name || "Home")}</span>
-              </div>
-              <span class="sports-vs-pill">VS</span>
-              <div class="sports-team-col">
-                <div class="sports-team-badge">${escapeHtml(teams.away?.name?.charAt(0) || "A")}</div>
-                <span class="sports-team-name">${escapeHtml(teams.away?.name || "Away")}</span>
-              </div>
-            ` : `
-              <div class="sports-match-simple-title">${escapeHtml(match.title.slice(0, 22))}</div>
-            `}
-          </div>
-        </div>
-        <div class="sports-card-copy">
-          <div class="sports-card-meta">
-            ${match._live ? `<span class="sports-live-tag"><span class="live-dot"></span> LIVE</span>` : isChannel ? `<span class="sports-channel-badge">24/7 TV</span>` : `<span class="sports-card-time">${timing.day} · ${timing.time}</span>`}
-            <span class="sports-stream-count">${match.sources?.length || 1} feed${(match.sources?.length || 1) === 1 ? "" : "s"}</span>
-          </div>
-          <h3 class="sports-card-title">${escapeHtml(match.title)}</h3>
-        </div>
-      </article>
-    `;
-  }).join("");
-
-  if (sportsState.tab === "live" && data.channels.length > 0 && !sportsState.query && sportsState.category === "all") {
-    html += `
-      <div class="sports-broadcast-banner">
-        <div>
-          <strong class="sports-banner-title">Looking for 24/7 Live Sports Channels?</strong>
-          <span class="sports-banner-sub">Tune into Sky Sports, ESPN, TNT Sports, Willow Cricket, DAZN, beIN Sports and ${data.channels.length} channels available 24/7.</span>
-        </div>
-        <button class="primary-button" id="live-bottom-channels-btn" type="button" style="white-space: nowrap;">Explore 24/7 TV Channels →</button>
-      </div>
-    `;
-  }
-
-  grid.innerHTML = html;
-
-  observeLazyImages(grid);
-  grid.onclick = (e) => {
-    const card = e.target.closest("[data-sports-id]");
-    if (card && grid.contains(card)) {
-      const id = card.dataset.sportsId;
-      const match = displayItems.find(m => m.id === id);
-      if (match) openSportsPlayer(match);
-      return;
-    }
-    const bottomBtn = e.target.closest("#live-bottom-channels-btn");
-    if (bottomBtn && grid.contains(bottomBtn)) {
-      $$("[data-sports-tab]").forEach(b => b.classList.toggle("active", b.dataset.sportsTab === "channels"));
-      sportsState.tab = "channels";
-      sportsState.channelPage = 0;
-      sportsState.channelLetter = "";
-      renderSportsSection();
-    }
-  };
-}
-
-function openSportsPlayer(match) {
-  sportsState.activeMatch = match;
-  sportsState.activeFeedIndex = 0;
-  const modal = $("#sports-player-backdrop");
-  const titleEl = $("#sports-player-title");
-  const frame = $("#sports-stream-frame");
-  const feedsBar = $("#sports-stream-feeds-bar");
-
-  if (!modal || !frame) return;
-  modal.removeAttribute("hidden");
-  if (titleEl) titleEl.textContent = match.title;
-
-  const sources = match.sources || [];
-  if (feedsBar) {
-    if (sources.length > 1) {
-      feedsBar.style.display = "flex";
-      feedsBar.innerHTML = sources.map((s, idx) => `
-        <button class="sports-feed-btn ${idx === 0 ? "active" : ""}" data-feed-idx="${idx}" type="button">
-          ${escapeHtml(s.name || `Feed ${idx + 1}`)} ${s.hd ? "· HD" : ""}
-        </button>
-      `).join("");
-
-      feedsBar.querySelectorAll("[data-feed-idx]").forEach(btn => {
-        btn.addEventListener("click", () => {
-          const idx = Number(btn.dataset.feedIdx);
-          sportsState.activeFeedIndex = idx;
-          feedsBar.querySelectorAll("[data-feed-idx]").forEach(b => b.classList.toggle("active", b === btn));
-          if (sources[idx]?.embedUrl) {
-            frame.src = "about:blank";
-            setTimeout(() => { frame.src = sources[idx].embedUrl; }, 60);
-          }
-        });
-      });
-    } else {
-      feedsBar.style.display = "none";
-      feedsBar.innerHTML = "";
-    }
-  }
-
-  if (sources[0]?.embedUrl) {
-    frame.src = sources[0].embedUrl;
-  }
-}
-
-function closeSportsPlayer() {
-  const modal = $("#sports-player-backdrop");
-  const frame = $("#sports-stream-frame");
-  if (frame) frame.src = "about:blank";
-  if (modal) modal.setAttribute("hidden", "true");
-  sportsState.activeMatch = null;
 }
 
 /* ==========================================================================
@@ -8978,7 +8745,7 @@ async function openProviderCatalog(provider) {
   if (kickerEl) kickerEl.textContent = `Streaming collection on ${provider.name}`;
 
   const getFallbackProviderTitles = () => {
-    const clean = catalog.filter(c => !isAdultContent(c) || isDarkModeActive());
+    const clean = catalog.filter(c => !isAdultContent(c) || isAdultEnabled());
     if (provider.id === 283) {
       const anime = clean.filter(c => c.type === "anime" || c.isJapaneseAnime);
       if (anime.length >= 6) return anime.slice(0, 18);
@@ -9018,7 +8785,7 @@ async function openProviderCatalog(provider) {
         type: "movie",
         category: "movie",
         year: Number((m.release_date || "").slice(0, 4)) || 2024,
-        rating: m.vote_average || 7.5,
+        rating: normalizeRating(m.vote_average),
         runtime: "Movie",
         image: poster,
         backdrop: m.backdrop_path ? `https://image.tmdb.org/t/p/original${m.backdrop_path}` : poster,
@@ -9041,7 +8808,7 @@ async function openProviderCatalog(provider) {
         type: "series",
         category: "series",
         year: Number((t.first_air_date || "").slice(0, 4)) || 2024,
-        rating: t.vote_average || 7.5,
+        rating: normalizeRating(t.vote_average),
         runtime: "Series",
         image: poster,
         backdrop: t.backdrop_path ? `https://image.tmdb.org/t/p/original${t.backdrop_path}` : poster,
@@ -9114,10 +8881,8 @@ async function loadCategoryTmdb(category) {
       const newCards = results.flat().map(t => normalizeTmdbItem(t, category));
 
       if (newCards.length) {
-        const seen = new Set(catalog.map(c => (c.title || "").toLowerCase().trim()));
-        const filtered = newCards.filter(c => !seen.has((c.title || "").toLowerCase().trim()));
+        const filtered = appendCatalogItems(newCards);
         if (filtered.length) {
-          catalog = [...catalog, ...filtered];
           const vis = getVisibleCards();
           const displayed = vis.slice(0, state.displayLimit);
           const grid = $("#card-grid");
@@ -9220,7 +8985,21 @@ function initRouter() {
       return;
     }
 
-    const validSections = ["home", "movies", "series", "anime", "cartoons", "sports", "explore", "my-list", "profile"];
+    // Deep-linked title: #/title/<id> or #/movies/<id> (also series/anime/cartoons)
+    const titleMatch = cleanPath.match(/^(?:title|movies|series|anime|cartoons)\/(.+)$/);
+    if (titleMatch) {
+      const found = findTitleById(titleMatch[1]);
+      if (found) {
+        if (state.activeModal?.title !== found.title) openDetails(found.title, { updateHash: false });
+        return;
+      }
+      showToast("That title is not available right now");
+      setSection("home", false);
+      return;
+    }
+    if (state.activeModal) closeDetails({ updateHash: false });
+
+    const validSections = ["home", "movies", "series", "anime", "cartoons", "explore", "my-list", "profile"];
     const section = validSections.includes(cleanPath) ? cleanPath : "home";
     setSection(section, false);
   };

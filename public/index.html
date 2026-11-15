@@ -3,9 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>UstreamPro — Watch Movies, TV Series, Anime &amp; Live Sports in HD</title>
-    <meta name="description" content="Stream full HD movies, trending TV series, anime dub &amp; sub, and live sports online for free with ultra-fast cloud playback on UstreamPro." />
-    <meta name="keywords" content="watch movies online, free streaming, stream tv shows, watch anime online, english dubbed anime, live sports stream, hd movies, ustream pro" />
+    <title>UstreamPro — Watch Movies, TV Series &amp; Anime in HD</title>
+    <meta name="description" content="Stream full HD movies, trending TV series, and anime dub &amp; sub online for free with ultra-fast cloud playback on UstreamPro." />
+    <meta name="keywords" content="watch movies online, free streaming, stream tv shows, watch anime online, english dubbed anime, hd movies, ustream pro" />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     <meta name="theme-color" content="#08090d" />
     <meta name="application-name" content="UstreamPro" />
@@ -24,23 +24,23 @@
     <meta property="og:locale" content="en_US" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://ustream-pro.vercel.app/" />
-    <meta property="og:title" content="UstreamPro — Watch Movies, TV Series, Anime &amp; Live Sports in HD" />
-    <meta property="og:description" content="Stream full HD movies, trending TV series, anime dub &amp; sub, and live sports online for free with ultra-fast cloud playback on UstreamPro." />
+    <meta property="og:title" content="UstreamPro — Watch Movies, TV Series &amp; Anime in HD" />
+    <meta property="og:description" content="Stream full HD movies, trending TV series, and anime dub &amp; sub online for free with ultra-fast cloud playback on UstreamPro." />
     <meta property="og:image" content="https://ustream-pro.vercel.app/assets/brand-banner.jpg" />
     <meta property="og:image:secure_url" content="https://ustream-pro.vercel.app/assets/brand-banner.jpg" />
     <meta property="og:image:type" content="image/jpeg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="UstreamPro — Watch Movies, TV Series, Anime &amp; Live Sports in HD" />
+    <meta property="og:image:alt" content="UstreamPro — Watch Movies, TV Series &amp; Anime in HD" />
 
     <!-- Twitter Cards -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@ustreampro" />
     <meta name="twitter:creator" content="@ustreampro" />
-    <meta name="twitter:title" content="UstreamPro — Watch Movies, TV Series, Anime &amp; Live Sports in HD" />
-    <meta name="twitter:description" content="Stream full HD movies, trending TV series, anime dub &amp; sub, and live sports online for free with ultra-fast cloud playback on UstreamPro." />
+    <meta name="twitter:title" content="UstreamPro — Watch Movies, TV Series &amp; Anime in HD" />
+    <meta name="twitter:description" content="Stream full HD movies, trending TV series, and anime dub &amp; sub online for free with ultra-fast cloud playback on UstreamPro." />
     <meta name="twitter:image" content="https://ustream-pro.vercel.app/assets/brand-banner.jpg" />
-    <meta name="twitter:image:alt" content="UstreamPro — Watch Movies, TV Series, Anime &amp; Live Sports in HD" />
+    <meta name="twitter:image:alt" content="UstreamPro — Watch Movies, TV Series &amp; Anime in HD" />
 
     <!-- Schema.org JSON-LD Structured Data -->
     <script type="application/ld+json">
@@ -103,12 +103,6 @@
         {
           "@type": "SiteNavigationElement",
           "position": 5,
-          "name": "Sports",
-          "url": "https://ustream-pro.vercel.app/?section=sports"
-        },
-        {
-          "@type": "SiteNavigationElement",
-          "position": 6,
           "name": "Explore",
           "url": "https://ustream-pro.vercel.app/?section=explore"
         }
@@ -138,7 +132,7 @@
     <div class="app-shell">
       <header class="topbar">
         <a class="brand" href="#main-content" aria-label="Ustream home">
-          <img class="brand-logo-img" src="./assets/logo.png" alt="UstreamPro — Watch Movies, TV Series, Anime &amp; Live Sports in HD" height="34" />
+          <img class="brand-logo-img" src="./assets/logo.png" alt="UstreamPro — Watch Movies, TV Series &amp; Anime in HD" height="34" />
         </a>
 
         <nav class="desktop-nav" role="navigation" aria-label="Primary navigation">
@@ -147,7 +141,6 @@
           <button class="nav-link" data-section="series">Series</button>
           <button class="nav-link" data-section="anime">Anime</button>
           <button class="nav-link" data-section="cartoons">Cartoons</button>
-          <button class="nav-link" data-section="sports">Sports</button>
           <button class="nav-link" data-section="explore">Explore</button>
           <button class="nav-link" data-section="my-list">My List</button>
           <button class="nav-link" data-section="profile">Profile</button>
@@ -203,12 +196,12 @@
         <section class="hero" aria-labelledby="hero-title">
           <div class="hero-backdrop" id="hero-backdrop" role="img" aria-label="Featured premiere banner"></div>
           <div class="hero-video-wrap" id="hero-video-wrap" aria-hidden="true" hidden>
-            <iframe id="hero-trailer-frame" class="hero-trailer-frame" src="about:blank" allow="autoplay; encrypted-media" tabindex="-1"></iframe>
+            <iframe id="hero-trailer-frame" class="hero-trailer-frame" src="about:blank" title="Featured trailer preview" allow="autoplay; encrypted-media" tabindex="-1"></iframe>
           </div>
           <div class="hero-vignette" aria-hidden="true"></div>
           <div class="hero-content">
             <div class="eyebrow" id="hero-eyebrow-row"><span class="live-dot"></span> <span id="hero-eyebrow-text">Featured Premiere</span> <span class="badge-match" id="hero-match-badge">98% Match</span></div>
-            <h1 id="hero-title">UstreamPro<br /><em>Watch Movies, Series &amp; Sports</em></h1>
+            <h1 id="hero-title">UstreamPro<br /><em>Watch Movies, Series &amp; Anime</em></h1>
             <div class="hero-meta" id="hero-meta"><span class="badge-imdb">★ 9.4</span><span class="badge-tech">4K Ultra HD</span><span class="badge-tech">Dolby Atmos</span><span class="badge-age">TV-MA</span></div>
             <div class="hero-genre-pills" id="hero-genre-pills"></div>
             <p id="hero-description">Stream the latest movies, series, and anime in high definition.</p>
@@ -390,47 +383,6 @@
               <button class="secondary-button" id="load-fallback-button" type="button" aria-label="Load showcase catalog"><span>Load showcase catalog</span></button>
             </div>
           </div>
-        </section>
-
-        <!-- Live Sports Match Centre Section (GaiaFlix replicate) -->
-        <section class="content-section sports-section" id="sports-section" hidden>
-          <div class="sports-header">
-            <div>
-              <span class="eyebrow"><span class="live-dot"></span> Match Centre</span>
-              <h2>Live &amp; Upcoming Sports</h2>
-              <p class="section-kicker">Live streams, schedules, and 24/7 channels worldwide powered by BinTV.</p>
-            </div>
-            <div class="sports-search-box">
-              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-              <input type="search" id="sports-search-input" placeholder="Search teams, channels, or events…" aria-label="Search sports">
-            </div>
-          </div>
-
-          <div class="sports-nav-tabs">
-            <button class="sports-tab active" data-sports-tab="live" type="button">
-              <span class="live-dot"></span> Live Now <b id="sports-live-count">0</b>
-            </button>
-            <button class="sports-tab" data-sports-tab="upcoming" type="button">
-              Upcoming <b id="sports-upcoming-count">0</b>
-            </button>
-            <button class="sports-tab" data-sports-tab="channels" type="button">
-              Live TV (24/7) <b id="sports-channels-count">0</b>
-            </button>
-          </div>
-
-          <div class="sports-categories-pills" id="sports-categories-pills"></div>
-          <div class="sports-channel-letters" id="sports-channel-letters" hidden></div>
-
-          <div class="sports-match-grid" id="sports-match-grid" aria-live="polite">
-            <div class="skeleton-card skeleton-card-wide" aria-hidden="true"><div class="skeleton-poster aspect-16-9"></div><div class="skeleton-info"><div class="skeleton-line medium"></div><div class="skeleton-line short"></div></div></div>
-            <div class="skeleton-card skeleton-card-wide" aria-hidden="true"><div class="skeleton-poster aspect-16-9"></div><div class="skeleton-info"><div class="skeleton-line medium"></div><div class="skeleton-line short"></div></div></div>
-            <div class="skeleton-card skeleton-card-wide" aria-hidden="true"><div class="skeleton-poster aspect-16-9"></div><div class="skeleton-info"><div class="skeleton-line medium"></div><div class="skeleton-line short"></div></div></div>
-            <div class="skeleton-card skeleton-card-wide" aria-hidden="true"><div class="skeleton-poster aspect-16-9"></div><div class="skeleton-info"><div class="skeleton-line medium"></div><div class="skeleton-line short"></div></div></div>
-            <div class="skeleton-card skeleton-card-wide" aria-hidden="true"><div class="skeleton-poster aspect-16-9"></div><div class="skeleton-info"><div class="skeleton-line medium"></div><div class="skeleton-line short"></div></div></div>
-            <div class="skeleton-card skeleton-card-wide" aria-hidden="true"><div class="skeleton-poster aspect-16-9"></div><div class="skeleton-info"><div class="skeleton-line medium"></div><div class="skeleton-line short"></div></div></div>
-          </div>
-
-          <div class="sports-pagination" id="sports-pagination" hidden></div>
         </section>
 
         <!-- Explore / Watch Providers Section (GaiaFlix replicate) -->
@@ -627,6 +579,13 @@
             <span>Join Discord Community</span>
           </a>
         </div>
+        <nav class="footer-links" aria-label="Footer">
+          <button class="footer-link" type="button" data-info-page="about">About</button>
+          <button class="footer-link" type="button" data-info-page="privacy">Privacy</button>
+          <button class="footer-link" type="button" data-info-page="terms">Terms</button>
+          <button class="footer-link" type="button" data-info-page="dmca">DMCA</button>
+          <button class="footer-link" type="button" data-info-page="contact">Contact</button>
+        </nav>
         <span class="footer-note">© 2026 Ustream. All rights reserved.</span>
       </footer>
 
@@ -654,7 +613,7 @@
     </aside>
 
     <div class="modal-backdrop" id="modal-backdrop" hidden>
-      <article class="detail-modal" id="detail-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <article class="detail-modal" id="detail-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
         <button class="close-button modal-close" id="close-modal" aria-label="Close details"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
         
         <div class="modal-hero-header">
@@ -721,7 +680,7 @@
 
     <div class="player-backdrop" id="player-backdrop" hidden>
       <div class="player-ambient-glow" id="player-ambient-glow" aria-hidden="true"></div>
-      <section class="player-modal" role="dialog" aria-modal="true" aria-labelledby="player-title">
+      <section class="player-modal" role="dialog" aria-modal="true" aria-labelledby="player-title" tabindex="-1">
         <div class="player-head">
           <div>
             <p class="section-kicker">Ustream player</p>
@@ -731,7 +690,7 @@
           <button class="close-button" id="close-player" aria-label="Close player"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
         </div>
         <div class="player-media-container" id="player-media-container">
-          <iframe id="embed-player" class="embed-player" src="about:blank" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" referrerpolicy="no-referrer-when-downgrade"></iframe>
+          <iframe id="embed-player" class="embed-player" src="about:blank" title="Video player" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" referrerpolicy="no-referrer-when-downgrade"></iframe>
           <div class="custom-player-wrapper" id="custom-player-wrapper" hidden>
             <video id="video-player" playsinline preload="metadata"></video>
             
@@ -761,8 +720,8 @@
                 <span>Resume from <strong id="resume-time-label">00:00</strong>?</span>
               </div>
               <div class="resume-actions">
-                <button class="primary-button btn-xs" id="resume-accept-btn" type="button"><span>Resume</span></button>
-                <button class="secondary-button btn-xs" id="resume-dismiss-btn" type="button"><span>Start Over</span></button>
+                <button class="primary-button btn-xs" id="resume-accept-btn" type="button" aria-label="Resume playback from saved position"><span>Resume</span></button>
+                <button class="secondary-button btn-xs" id="resume-dismiss-btn" type="button" aria-label="Start playback from the beginning"><span>Start Over</span></button>
               </div>
             </div>
 
@@ -855,6 +814,7 @@
           <div class="player-language-selector">
             <select id="player-language-bar-select" class="player-server-select" aria-label="Audio &amp; Subtitles Language" title="Audio &amp; Subtitles Language">
               <option value="auto">Original Audio</option>
+              <option value="off">Subtitles Off</option>
               <option value="en" selected>English (Original / Dub)</option>
               <option value="hi">Hindi (Subtitles / CC)</option>
               <option value="ja">Japanese (Anime Dub/Sub)</option>
@@ -906,6 +866,7 @@
             <div class="player-loading" id="player-loading" data-player-loading hidden>
               <span class="player-loading-indicator" aria-hidden="true"></span>
               <span id="player-loading-text" data-player-loading-label>Loading stream…</span>
+              <span class="player-loading-progress" id="player-loading-progress" role="progressbar" aria-label="Stream loading progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="player-loading-bar"></span></span>
             </div>
             <div class="player-error" id="player-error-indicator" hidden>
               <span class="player-error-text" id="player-error-text">Playback failed</span>
@@ -940,10 +901,17 @@
             <span class="section-kicker">Appearance &amp; Content Access</span>
             <div class="setting-row" style="margin-top: 10px; display: flex; align-items: center; justify-content: space-between; gap: 16px;">
               <div>
-                <strong>Dark Mode &amp; 18+ Content</strong>
-                <small id="service-theme-mode-desc" style="display: block; color: var(--muted); font-size: 12px; margin-top: 4px; line-height: 1.4;">When Dark Mode is ON, 18+ &amp; adult content is unlocked across all categories. When OFF, all adult content is strictly hidden.</small>
+                <strong>Dark Mode</strong>
+                <small id="service-theme-mode-desc" style="display: block; color: var(--muted); font-size: 12px; margin-top: 4px; line-height: 1.4;">Switch between the dark and light themes. Theme no longer affects content access.</small>
               </div>
-              <button class="profile-toggle-btn active" id="settings-dark-mode-toggle" type="button" aria-pressed="true" aria-describedby="service-theme-mode-desc">DARK (18+ ON)</button>
+              <button class="profile-toggle-btn active" id="settings-dark-mode-toggle" type="button" aria-pressed="true" aria-describedby="service-theme-mode-desc">DARK</button>
+            </div>
+            <div class="setting-row" style="margin-top: 10px; display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+              <div>
+                <strong>Adult content (18+)</strong>
+                <small id="adult-content-desc" style="display: block; color: var(--muted); font-size: 12px; margin-top: 4px; line-height: 1.4;">Off by default. Adult and parody titles are hidden from search and the catalog unless you enable this and confirm you are 18 or older.</small>
+              </div>
+              <button class="profile-toggle-btn" id="adult-content-toggle" type="button" aria-pressed="false" aria-describedby="adult-content-desc">OFF — 18+ hidden</button>
             </div>
           </div>
 
@@ -957,6 +925,36 @@
             </div>
           </div>
         </div>
+      </section>
+    </div>
+
+    <!-- Server Status view (opened by the "Server status" pill) -->
+    <div class="modal-backdrop" id="status-backdrop" hidden>
+      <section class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="status-view-title">
+        <div class="settings-head">
+          <div>
+            <p class="section-kicker">Service</p>
+            <h2 id="status-view-title">Server status</h2>
+          </div>
+          <button class="close-button" id="close-status" aria-label="Close server status"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        <div class="settings-content" id="status-view-body">
+          <p>Checking services…</p>
+        </div>
+      </section>
+    </div>
+
+    <!-- Footer info pages (About / Privacy / Terms / DMCA / Contact) -->
+    <div class="modal-backdrop" id="info-backdrop" hidden>
+      <section class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="info-title">
+        <div class="settings-head">
+          <div>
+            <p class="section-kicker">Ustream</p>
+            <h2 id="info-title">About</h2>
+          </div>
+          <button class="close-button" id="close-info" aria-label="Close page"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        <div class="settings-content" id="info-body"></div>
       </section>
     </div>
 
@@ -1227,7 +1225,6 @@
               <option value="movies">Movies</option>
               <option value="series">Series</option>
               <option value="anime">Anime</option>
-              <option value="sports">Sports</option>
               <option value="gaming">Gaming</option>
               <option value="music">Music</option>
               <option value="documentary">Documentary</option>
@@ -1259,7 +1256,7 @@
         <div class="search-modal-head">
           <div class="search-modal-bar">
             <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-            <input type="search" id="modal-search-input" placeholder="Search movies, TV shows, anime, sports…" autocomplete="off" aria-label="Search catalog">
+            <input type="search" id="modal-search-input" placeholder="Search movies, TV shows &amp; anime…" autocomplete="off" aria-label="Search catalog">
             <button class="close-button" id="close-search-modal" aria-label="Close search"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
           </div>
           <div class="search-type-filters">
@@ -1279,7 +1276,7 @@
           </div>
         </div>
         <div class="search-modal-body" id="modal-search-results">
-          <div class="search-empty-prompt">Start typing to search titles, genres, and live events.</div>
+          <div class="search-empty-prompt">Start typing to search titles and genres.</div>
         </div>
       </div>
     </div>
@@ -1297,10 +1294,17 @@
         <div class="appearance-settings-content">
           <div class="setting-row">
             <div>
-              <strong>Dark Mode &amp; 18+ Content</strong>
-              <small id="theme-mode-desc">When Dark Mode is ON, 18+ &amp; adult content is unlocked across all categories. When OFF, all adult content is strictly hidden.</small>
+              <strong>Dark Mode</strong>
+              <small id="theme-mode-desc">Switch between the dark and light themes.</small>
             </div>
-            <button class="profile-toggle-btn active" id="theme-toggle-btn" type="button" aria-pressed="true" aria-describedby="theme-mode-desc">DARK (18+ ON)</button>
+            <button class="profile-toggle-btn active" id="theme-toggle-btn" type="button" aria-pressed="true" aria-describedby="theme-mode-desc">DARK</button>
+          </div>
+          <div class="setting-row">
+            <div>
+              <strong>Adult content (18+)</strong>
+              <small id="appearance-adult-desc">Off by default. Enabling it requires confirming you are 18 or older.</small>
+            </div>
+            <button class="profile-toggle-btn" id="appearance-adult-toggle" type="button" aria-pressed="false" aria-describedby="appearance-adult-desc">OFF — 18+ hidden</button>
           </div>
           <div class="setting-block">
             <strong>Accent Color</strong>
@@ -1339,34 +1343,6 @@
             </a>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- Sports Live Stream Player Modal (GaiaFlix replicate) -->
-    <div class="player-backdrop" id="sports-player-backdrop" hidden>
-      <div class="player-ambient-glow" id="sports-ambient-glow" aria-hidden="true"></div>
-      <div class="player-modal sports-player-shell" role="dialog" aria-modal="true" aria-labelledby="sports-player-title">
-        <div class="player-head">
-          <div>
-            <span class="eyebrow"><span class="live-dot"></span> Live Sports Broadcast</span>
-            <h2 id="sports-player-title">Live Match</h2>
-          </div>
-          <div class="sports-player-actions">
-            <button class="action-btn sports-action-btn" id="sports-popout-btn" type="button" title="Open Stream in Popout Window" aria-label="Open Stream in Popout Window">
-              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-              <span>Popout</span>
-            </button>
-            <button class="action-btn sports-action-btn" id="sports-reload-btn" type="button" title="Reload Feed" aria-label="Reload Feed">
-              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
-              <span>Reload</span>
-            </button>
-            <button class="close-button" id="close-sports-player" aria-label="Close sports player"><svg class="icon icon-sm icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
-          </div>
-        </div>
-        <div class="player-media-container" id="sports-media-container">
-          <iframe id="sports-stream-frame" class="embed-player" src="about:blank" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="no-referrer-when-downgrade"></iframe>
-        </div>
-        <div class="sports-stream-feeds-bar" id="sports-stream-feeds-bar"></div>
       </div>
     </div>
 

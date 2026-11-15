@@ -75,8 +75,6 @@ export function getDescriptiveAlt({ title, subtitle, context = "poster", isDecor
       return `${cleanTitle}${subtitle ? ` - ${subtitle}` : ""} preview`;
     case "actor":
       return `${cleanTitle}`;
-    case "sports":
-      return `${cleanTitle} sports broadcast poster`;
     case "channel":
     case "provider":
       return `${cleanTitle} logo`;
@@ -93,13 +91,6 @@ export function getDescriptiveAlt({ title, subtitle, context = "poster", isDecor
 export function handleImageError(img, fallbackSrc = "./assets/logo-mark.png") {
   if (!img || img.dataset.hasFailed) return;
   img.dataset.hasFailed = "true";
-
-  const sportsCard = img.closest(".sports-match-card");
-  if (sportsCard) {
-    sportsCard.classList.remove("has-poster");
-    img.style.display = "none";
-    return;
-  }
 
   if (img.classList.contains("poster-image")) {
     img.style.display = "none";

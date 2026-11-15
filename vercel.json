@@ -30,14 +30,6 @@
       "destination": "/api/videos.json"
     },
     {
-      "source": "/api/sports",
-      "destination": "/api/sports.json"
-    },
-    {
-      "source": "/api/livetv",
-      "destination": "/api/sports.json"
-    },
-    {
       "source": "/api/:match*",
       "destination": "/api/health.json"
     }

@@ -52,41 +52,20 @@ await writeFile(
   "utf8"
 );
 
-await writeFile(
-  join(publicApiDir, "catalog.json"),
-  JSON.stringify({ ok: true, results: [] }, null, 2),
-  "utf8"
-);
-
-await writeFile(
-  join(publicApiDir, "search.json"),
-  JSON.stringify({ ok: true, results: [] }, null, 2),
-  "utf8"
-);
-
-await writeFile(
-  join(publicApiDir, "videos.json"),
-  JSON.stringify({ ok: true, videos: [] }, null, 2),
-  "utf8"
-);
-
-// Fetch latest Live Sports Catalog and build static sports.json for high-availability CDN delivery
-try {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 6000);
-  const sportsRes = await fetch("https://bintvjson.lovable.app/api/public/bintvjson", {
-    signal: controller.signal,
-    headers: { "Accept": "application/json" }
-  }).catch(() => null);
-  clearTimeout(timer);
-
-  if (sportsRes?.ok) {
-    const sportsData = await sportsRes.json();
-    await writeFile(join(publicApiDir, "sports.json"), JSON.stringify(sportsData), "utf8");
-    console.log("Cached sports.json successfully.");
-  }
-} catch (e) {
-  console.warn("Could not cache live sports during build:", e.message);
-}
+// Bug 6 residual: the build used to overwrite the checked-in api JSON
+// with empty stubs on every build, so /api/catalog returned nothing
+// and live totals depended entirely on direct TMDB fetches. Only write
+// a stub when the file is missing or empty; preserve real data.
+const writeApiStubIfMissing = async (name, content) => {
+  const target = join(publicApiDir, name);
+  try {
+    const existing = await import("node:fs/promises").then((m) => m.readFile(target, "utf8"));
+    if (existing.trim().length > 40) return;
+  } catch {}
+  await writeFile(target, content, "utf8");
+};
+await writeApiStubIfMissing("catalog.json", JSON.stringify({ ok: true, results: [] }, null, 2));
+await writeApiStubIfMissing("search.json", JSON.stringify({ ok: true, results: [] }, null, 2));
+await writeApiStubIfMissing("videos.json", JSON.stringify({ ok: true, videos: [] }, null, 2));
 
 console.log("Build complete.");

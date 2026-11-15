@@ -4,6 +4,14 @@
  */
 
 const memoryCache = new Map();
+
+// Bug 9 (storage side): same clamp as src/app.js -- ratings stored in the
+// catalog cache never exceed 9.9 and never fall back inconsistently.
+const clampStoredRating = (value) => {
+  const rating = Number.parseFloat(value);
+  if (!Number.isFinite(rating) || rating <= 0) return 8.0;
+  return Math.min(9.9, Math.max(0, Math.round(rating * 10) / 10));
+};
 const debouncedTimers = new Map();
 
 export const storage = {
@@ -113,7 +121,7 @@ export const storage = {
   /**
    * Compact catalog items to retain only essential card properties and cap size
    */
-  compactCatalog(items, max = 160) {
+  compactCatalog(items, max = 400) {
     if (!Array.isArray(items)) return [];
     return items.slice(0, max).map((item) => ({
       id: item.id,
@@ -123,8 +131,8 @@ export const storage = {
       type: item.type || "movie",
       category: item.category || item.type || "movie",
       year: item.year || 2024,
-      rating: item.rating || 8.0,
-      runtime: item.runtime || item.duration || (item.type === "series" ? "Series" : "Feature film"),
+      rating: clampStoredRating(item.rating),
+      runtime: item.runtime || item.duration || "—",
       image: item.image || item.cover?.url || "",
       backdrop: item.backdrop || item.image || "",
       genre: Array.isArray(item.genre) ? item.genre : [item.type || "movie"],

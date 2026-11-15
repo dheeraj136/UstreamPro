@@ -30,7 +30,7 @@ The design philosophy is **"Content-First Darkness"**:
 | `--accent` | `#e7ff51` | Electric lime primary action & active | High-visibility functional signal |
 | `--accent-hover` | `#f0ff7a` | Interactive hover state for primary CTAs | Tactile feedback |
 | `--accent-contrast` | `#08090d` | Text on electric lime buttons | 18:1 contrast ratio |
-| `--live-red` | `#ff3b30` | Live broadcast tag & pulsing indicator | Salient sports marker |
+| `--live-red` | `#ff3b30` | Live broadcast tag & pulsing indicator |
 
 ---
 
@@ -81,7 +81,6 @@ The design philosophy is **"Content-First Darkness"**:
 ### 4.5. Custom Video Player & Match Centre
 - **Scrubber Bar**: Tactile 4px track expanding to 6px on hover, electric lime progress, circular handle.
 - **Controls**: 50% circular icon buttons (`width: 36px; height: 36px; border-radius: 50%`).
-- **Sports Match Cards**: Sleek 16:9 card art, versus pill (`VS`), and HD stream feed buttons.
 
 ---
 

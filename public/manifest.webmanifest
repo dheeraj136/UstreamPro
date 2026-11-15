@@ -1,7 +1,7 @@
 {
   "name": "UstreamPro",
   "short_name": "Ustream",
-  "description": "Stream full HD movies, trending TV series, anime dub & sub, and live sports online for free with ultra-fast cloud playback on UstreamPro.",
+  "description": "Stream full HD movies, trending TV series, and anime dub & sub online for free with ultra-fast cloud playback on UstreamPro.",
   "start_url": "/",
   "display": "standalone",
   "theme_color": "#08090d",
