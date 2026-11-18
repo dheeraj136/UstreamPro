@@ -50,7 +50,7 @@
     },
     {
       "source": "/api/gaiaflix-movie-source",
-      "destination": "/api/gaiaflix-movie-source"
+      "destination": "https://gaiaflix.xyz/api/gaiaflix-movie-source"
     },
     {
       "source": "/api/:match*",
