@@ -93,7 +93,8 @@ export function handleImageError(img, fallbackSrc = "./assets/logo-mark.png") {
   img.dataset.hasFailed = "true";
 
   if (img.classList.contains("poster-image")) {
-    img.style.display = "none";
+    img.src = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 450" fill="%230f1118"><rect width="300" height="450" fill="%230f1118"/><circle cx="150" cy="210" r="40" fill="%231a1e29"/><polygon points="142,195 166,210 142,225" fill="%23e7ff51"/><text x="150" y="275" font-family="system-ui,sans-serif" font-size="14" font-weight="600" fill="%238a91a8" text-anchor="middle">USTREAM</text></svg>`;
+    img.classList.add("image-fallback");
     return;
   }
 

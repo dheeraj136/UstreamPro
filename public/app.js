@@ -4716,6 +4716,27 @@ if (typeof window !== "undefined") {
   window.resolveGaiaflixStream = resolveGaiaflixStream;
 }
 
+export function rewriteM3u8WithQueryParams(text, baseUrlStr) {
+  try {
+    const baseObj = new URL(baseUrlStr);
+    const search = baseObj.search;
+    if (!search) return text;
+    return text.replace(/((?:URI=")|(?:^))([^"\r\n]+\.m3u8)(?="|$)/gm, (match, prefix, uri) => {
+      try {
+        const abs = new URL(uri, baseUrlStr);
+        if (!abs.search && search) {
+          abs.search = search;
+        }
+        return `${prefix}${abs.href}`;
+      } catch {
+        return match;
+      }
+    });
+  } catch {
+    return text;
+  }
+}
+
 export function playWithGaiaflixHls(m3u8Url, item) {
   return new Promise((resolve) => {
     const embed = $("#embed-player");
@@ -4744,130 +4765,197 @@ export function playWithGaiaflixHls(m3u8Url, item) {
       } catch {}
       window._currentHlsInstance = null;
     }
+    if (window._currentHlsBlobUrl) {
+      try {
+        URL.revokeObjectURL(window._currentHlsBlobUrl);
+      } catch {}
+      window._currentHlsBlobUrl = null;
+    }
+
+    const preparePlayableSource = async () => {
+      try {
+        const res = await fetch(m3u8Url);
+        if (res.ok) {
+          const rawText = await res.text();
+          const rewrittenText = rewriteM3u8WithQueryParams(rawText, m3u8Url);
+          const blob = new Blob([rewrittenText], { type: "application/vnd.apple.mpegurl" });
+          const blobUrl = URL.createObjectURL(blob);
+          window._currentHlsBlobUrl = blobUrl;
+          return blobUrl;
+        }
+      } catch (err) {
+        console.warn("[Gaiaflix] Manifest rewrite fallback:", err?.message || err);
+      }
+      return m3u8Url;
+    };
 
     const HlsClass = window.Hls;
     if (HlsClass && HlsClass.isSupported()) {
-      const hls = new HlsClass({
-        capLevelToPlayerSize: true,
-        autoStartLoad: true
-      });
-      window._currentHlsInstance = hls;
-      hls.loadSource(m3u8Url);
-      hls.attachMedia(video);
+      preparePlayableSource().then((playableSource) => {
+        const hls = new HlsClass({
+          capLevelToPlayerSize: true,
+          autoStartLoad: true,
+          fetchSetup: (context, initParams) => {
+            let url = context.url;
+            if (/^http:/i.test(url)) url = url.replace(/^http:/i, "https:");
+            try {
+              const masterObj = new URL(m3u8Url);
+              if (masterObj.search) {
+                const targetObj = new URL(url);
+                masterObj.searchParams.forEach((val, key) => {
+                  if (!targetObj.searchParams.has(key)) targetObj.searchParams.set(key, val);
+                });
+                url = targetObj.href;
+              }
+            } catch {}
+            return new Request(url, initParams);
+          }
+        });
+        window._currentHlsInstance = hls;
+        hls.loadSource(playableSource);
+        hls.attachMedia(video);
 
-      let resolved = false;
+        let resolved = false;
 
-      hls.on(HlsClass.Events.MANIFEST_PARSED, (event, data) => {
-        const audioTracks = hls.audioTracks || [];
-        const langSelect = $("#player-language-bar-select");
-        if (langSelect && audioTracks.length > 0) {
-          langSelect.innerHTML = "";
-          audioTracks.forEach((track) => {
-            const opt = document.createElement("option");
-            opt.value = track.id !== undefined ? String(track.id) : (track.lang || track.name);
-            opt.textContent = `${track.name || track.lang || "Audio"} (Multi-Audio)`;
-            langSelect.appendChild(opt);
+        const populateAudioTracks = () => {
+          const audioTracks = hls.audioTracks || [];
+          const langSelect = $("#player-language-bar-select");
+          if (langSelect && audioTracks.length > 0) {
+            langSelect.innerHTML = "";
+            audioTracks.forEach((track, idx) => {
+              const opt = document.createElement("option");
+              const trackId = track.id !== undefined ? track.id : idx;
+              opt.value = String(trackId);
+              const cleanName = String(track.name || track.lang || `Track ${idx + 1}`).replace(/^\s*\d+\.\s*/, "").trim();
+              opt.textContent = `${cleanName} (Multi-Audio)`;
+              langSelect.appendChild(opt);
+            });
+
+            // Preferred language matching (e.g. Hindi, English, Tamil, Telugu, Thai)
+            const preferred = (currentLanguageKey || "en").toLowerCase();
+            const langPrefixMap = {
+              hi: ["hi", "hin", "hindi"],
+              en: ["en", "eng", "english"],
+              ta: ["ta", "tam", "tamil"],
+              te: ["te", "tel", "telugu"],
+              th: ["th", "tha", "thai"],
+              ja: ["ja", "jpn", "japanese"],
+              es: ["es", "spa", "spanish"],
+              fr: ["fr", "fra", "french"],
+              de: ["de", "ger", "german"],
+              it: ["it", "ita", "italian"],
+              pt: ["pt", "por", "portuguese"],
+              tr: ["tr", "tur", "turkish"],
+              pl: ["pl", "pol", "polish"],
+              ar: ["ar", "ara", "arabic"]
+            };
+            const targets = langPrefixMap[preferred] || [preferred];
+
+            const targetTrack = audioTracks.find((t) => {
+              if (String(t.id) === String(currentLanguageKey)) return true;
+              const tLang = (t.lang || "").toLowerCase();
+              const tName = (t.name || "").toLowerCase();
+              return targets.some((target) => tLang === target || tLang.startsWith(target) || tName.includes(target));
+            }) || audioTracks.find((t) => t.default) || audioTracks[0];
+
+            if (targetTrack) {
+              const targetId = targetTrack.id !== undefined ? targetTrack.id : 0;
+              if (hls.audioTrack !== targetId) {
+                hls.audioTrack = targetId;
+              }
+              langSelect.value = String(targetId);
+              const trackName = String(targetTrack.name || targetTrack.lang || "Audio").replace(/^\s*\d+\.\s*/, "").trim();
+              showToast(`Switched audio to ${trackName} (Multi-Audio)`);
+            }
+          }
+        };
+
+        hls.on(HlsClass.Events.MANIFEST_PARSED, (event, data) => {
+          populateAudioTracks();
+
+          // Subtitles default to Off (bug 24): HLS subtitle tracks default
+          // to the first track, which on multi-audio sources is often Hindi.
+          try { if (state.player?.selectedSubtitle === "off") hls.subtitleTrack = -1; } catch {}
+          if (state.player?.selectedSubtitle === "off") {
+            Array.from(video.textTracks || []).forEach((t) => { t.mode = "disabled"; });
+          }
+
+          // Start playback on #video-player
+          video.play().then(() => {
+            setPlayerState(PLAYER_STATE.PLAYING, `${item?.title || "Movie"} · Server 1 (Gaiaflix Pro - Multi-Audio)`);
+          }).catch(() => {
+            setPlayerState(PLAYER_STATE.READY, `Ready to play: ${item?.title || "Movie"}`);
           });
 
-          // Preferred language matching (e.g. Hindi, English, Tamil, Telugu, Thai)
-          const preferred = (currentLanguageKey || "en").toLowerCase();
-          const langPrefixMap = {
-            hi: ["hi", "hin", "hindi"],
-            en: ["en", "eng", "english"],
-            ta: ["ta", "tam", "tamil"],
-            te: ["te", "tel", "telugu"],
-            th: ["th", "tha", "thai"],
-            ja: ["ja", "jpn", "japanese"],
-            es: ["es", "spa", "spanish"],
-            fr: ["fr", "fra", "french"],
-            de: ["de", "ger", "german"]
-          };
-          const targets = langPrefixMap[preferred] || [preferred];
+          const popout = $("#player-popout-btn");
+          if (popout) popout.href = m3u8Url;
+          const liveLabel = $("#player-live-label");
+          if (liveLabel) liveLabel.hidden = false;
+          const liveText = $("#player-live-text");
+          if (liveText) liveText.textContent = "Multi-Audio HLS Active";
+          updatePlayerEpisodeFlow();
 
-          const targetTrack = audioTracks.find((t) => {
-            if (String(t.id) === String(currentLanguageKey)) return true;
-            const tLang = (t.lang || "").toLowerCase();
-            const tName = (t.name || "").toLowerCase();
-            return targets.some((target) => tLang === target || tLang.startsWith(target) || tName.includes(target));
-          }) || audioTracks.find((t) => t.default) || audioTracks[0];
-
-          if (targetTrack) {
-            hls.audioTrack = targetTrack.id;
-            langSelect.value = String(targetTrack.id);
-            const trackName = targetTrack.name || targetTrack.lang || "Audio";
-            showToast(`Switched audio to ${trackName} (Multi-Audio)`);
+          if (!resolved) {
+            resolved = true;
+            resolve(true);
           }
-        }
-
-        // Subtitles default to Off (bug 24): HLS subtitle tracks default
-        // to the first track, which on multi-audio sources is often Hindi.
-        try { if (state.player?.selectedSubtitle === "off") hls.subtitleTrack = -1; } catch {}
-        if (state.player?.selectedSubtitle === "off") {
-          Array.from(video.textTracks || []).forEach((t) => { t.mode = "disabled"; });
-        }
-
-        // Start playback on #video-player
-        video.play().then(() => {
-          setPlayerState(PLAYER_STATE.PLAYING, `${item?.title || "Movie"} · Server 1 (Gaiaflix Pro - Multi-Audio)`);
-        }).catch(() => {
-          setPlayerState(PLAYER_STATE.READY, `Ready to play: ${item?.title || "Movie"}`);
         });
 
-        const popout = $("#player-popout-btn");
-        if (popout) popout.href = m3u8Url;
-        const liveLabel = $("#player-live-label");
-        if (liveLabel) liveLabel.hidden = false;
-        const liveText = $("#player-live-text");
-        if (liveText) liveText.textContent = "Multi-Audio HLS Active";
-        updatePlayerEpisodeFlow();
+        hls.on(HlsClass.Events.AUDIO_TRACKS_UPDATED, (_event, data) => {
+          populateAudioTracks();
+        });
 
-        if (!resolved) {
-          resolved = true;
-          resolve(true);
-        }
-      });
-
-      hls.on(HlsClass.Events.ERROR, (event, data) => {
-        if (data.fatal) {
-          console.warn("[Hls] Fatal error:", data.type, data.details);
-          switch (data.type) {
-            case HlsClass.ErrorTypes.NETWORK_ERROR:
-              hls.startLoad();
-              break;
-            case HlsClass.ErrorTypes.MEDIA_ERROR:
-              hls.recoverMediaError();
-              break;
-            default:
-              hls.destroy();
-              window._currentHlsInstance = null;
-              if (!resolved) {
-                resolved = true;
-                resolve(false);
-              }
-              break;
+        hls.on(HlsClass.Events.AUDIO_TRACK_SWITCHED, (_event, data) => {
+          const langSelect = $("#player-language-bar-select");
+          if (langSelect && Number.isInteger(data?.id)) {
+            langSelect.value = String(data.id);
           }
-        }
-      });
+        });
 
-      // Safety timeout: if manifest not parsed in 6 seconds, resolve
-      setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          if (video.readyState >= 1) {
-            resolve(true);
-          } else {
-            resolve(false);
+        hls.on(HlsClass.Events.ERROR, (event, data) => {
+          if (data.fatal) {
+            console.warn("[Hls] Fatal error:", data.type, data.details);
+            switch (data.type) {
+              case HlsClass.ErrorTypes.NETWORK_ERROR:
+                hls.startLoad();
+                break;
+              case HlsClass.ErrorTypes.MEDIA_ERROR:
+                hls.recoverMediaError();
+                break;
+              default:
+                hls.destroy();
+                window._currentHlsInstance = null;
+                if (!resolved) {
+                  resolved = true;
+                  resolve(false);
+                }
+                break;
+            }
           }
-        }
-      }, 6000);
+        });
+
+        // Safety timeout: if manifest not parsed in 7 seconds, resolve
+        setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            if (video.readyState >= 1) {
+              resolve(true);
+            } else {
+              resolve(false);
+            }
+          }
+        }, 7000);
+      });
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       // Native Apple/Safari HLS
-      video.src = m3u8Url;
-      video.load();
-      video.play().then(() => {
-        setPlayerState(PLAYER_STATE.PLAYING, `${item?.title || "Movie"} · Server 1 (Gaiaflix Pro - Multi-Audio)`);
-      }).catch(() => {});
-      resolve(true);
+      preparePlayableSource().then((playableSource) => {
+        video.src = playableSource;
+        video.load();
+        video.play().then(() => {
+          setPlayerState(PLAYER_STATE.PLAYING, `${item?.title || "Movie"} · Server 1 (Gaiaflix Pro - Multi-Audio)`);
+        }).catch(() => {});
+        resolve(true);
+      });
     } else {
       resolve(false);
     }
@@ -5173,7 +5261,7 @@ function armEmbedWatchTimer() {
   }, 30000);
 }
 async function attemptGaiaflixHls(item, tmdbId) {
-  const timeoutMs = Math.min(8000, chainRemainingMs());
+  const timeoutMs = Math.min(4500, chainRemainingMs());
   if (timeoutMs <= 500) return false;
   const m3u8Url = await resolveGaiaflixStream(tmdbId, timeoutMs);
   if (!m3u8Url || !playbackChain || playbackChain.aborted) return false;
@@ -6130,6 +6218,10 @@ async function reloadCurrentEmbed() {
     try { window._currentHlsInstance.destroy(); } catch {}
     window._currentHlsInstance = null;
   }
+  if (window._currentHlsBlobUrl) {
+    try { URL.revokeObjectURL(window._currentHlsBlobUrl); } catch {}
+    window._currentHlsBlobUrl = null;
+  }
   const video = $("#video-player");
   if (video) {
     video.pause();
@@ -6362,6 +6454,10 @@ function closePlayer() {
       window._currentHlsInstance.destroy();
     } catch {}
     window._currentHlsInstance = null;
+  }
+  if (window._currentHlsBlobUrl) {
+    try { URL.revokeObjectURL(window._currentHlsBlobUrl); } catch {}
+    window._currentHlsBlobUrl = null;
   }
   resetDefaultLanguageOptions();
   const resumeBanner = $("#player-resume-banner");
@@ -7331,9 +7427,9 @@ function closeStatusView() {
 // links (the task explicitly forbids dead external URLs) and no invented
 // contact address: Contact points at the existing Discord community.
 const INFO_PAGES = {
-  about: ["About Ustream", "Ustream is a curated streaming showcase: movies, series, anime and cartoons in one place. Titles come from the curated catalog and live search providers; availability and streams can change, and some titles are served by third-party players."],
+  about: ["About Ustream", "Ustream is a curated streaming showcase: movies, series, anime and cartoons in one place. Titles come from the curated catalog and live search providers; availability and streams can change, and some titles are served by third-party players. This product uses the TMDB API but is not endorsed or certified by TMDB."],
   privacy: ["Privacy", "What stays on your device: your theme and accent, your My List, and your Continue Watching progress (including resume positions) are stored in this browser's localStorage. If you sign in, your profiles, watchlist and playback history sync to your Ustream account. We do not sell personal data. Clearing your browser data removes the locally stored items."],
-  terms: ["Terms of Use", "Ustream is provided for personal, non-commercial viewing. Content availability, quality and streams may change without notice and are subject to the rights holders' terms. Do not misuse the service, attempt to bypass access controls, or redistribute streams. Continued use after changes to these terms means you accept them."],
+  terms: ["Terms of Use", "Ustream is provided for personal, non-commercial viewing. Content availability, quality and streams may change without notice and are subject to the rights holders' terms. Do not misuse the service, attempt to bypass access controls, or redistribute streams. Continued use after changes to these terms means you accept them. This product uses the TMDB API but is not endorsed or certified by TMDB."],
   dmca: ["DMCA", "If you are a rights holder and believe content on Ustream infringes your copyright, send a takedown notice via the Contact page (Discord community) including: the title and URL of the allegedly infringing content, proof that you own the rights, and your contact details. Valid notices are reviewed and the content is removed or disabled where appropriate."],
   contact: ["Contact", "Questions, title requests, or takedown notices: reach the team through the Discord community linked in the footer. Include the title or page URL you are asking about so we can help quickly."],
 };
@@ -7456,11 +7552,14 @@ document.addEventListener("change", (event) => {
     // If playing via native HLS (window._currentHlsInstance):
     if (window._currentHlsInstance && window._currentHlsInstance.audioTracks && window._currentHlsInstance.audioTracks.length > 0) {
       const tracks = window._currentHlsInstance.audioTracks;
-      const track = tracks.find((t) => String(t.id) === String(selectedVal)) ||
+      const numVal = Number(selectedVal);
+      const track = tracks.find((t) => t.id === numVal) ||
+                    tracks.find((t) => String(t.id) === String(selectedVal)) ||
                     tracks.find((t) => (t.lang && t.lang.toLowerCase() === selectedVal.toLowerCase()) || (t.name && t.name.toLowerCase().includes(selectedVal.toLowerCase())));
       if (track) {
-        window._currentHlsInstance.audioTrack = track.id;
-        showToast(`Switched audio to ${track.name || track.lang} (Multi-Audio)`);
+        window._currentHlsInstance.audioTrack = track.id !== undefined ? track.id : numVal;
+        const trackClean = String(track.name || track.lang || "Audio").replace(/^\s*\d+\.\s*/, "").trim();
+        showToast(`Switched audio to ${trackClean} (Multi-Audio)`);
         return;
       }
     }
