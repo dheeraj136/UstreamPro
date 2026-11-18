@@ -4666,21 +4666,29 @@ function resetDefaultLanguageOptions() {
 
 export async function resolveGaiaflixStream(tmdbId, timeoutMs = 15000) {
   if (!tmdbId) return null;
-  let timeout = null;
-  try {
+  const isBrowser = typeof window !== "undefined" && typeof window.location !== "undefined";
+  const proxyEndpoint = isBrowser
+    ? `/api/gaiaflix-movie-source?id=${encodeURIComponent(tmdbId)}`
+    : `https://gaiaflix.xyz/api/gaiaflix-movie-source?id=${encodeURIComponent(tmdbId)}`;
+
+  const fetchWithTimeout = async (url, ms) => {
     const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-    timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
-    let res;
+    const timer = controller ? setTimeout(() => controller.abort(), ms) : null;
     try {
-      res = await fetch(`https://gaiaflix.xyz/api/gaiaflix-movie-source?id=${encodeURIComponent(tmdbId)}`, {
+      const res = await fetch(url, {
         signal: controller ? controller.signal : undefined,
         headers: { Accept: "application/json" }
       });
+      return res;
     } finally {
-      if (timeout) clearTimeout(timeout);
+      if (timer) clearTimeout(timer);
     }
-    if (!res || !res.ok) return null;
-    const data = await res.json();
+  };
+
+  const decodeStreamFromData = (data) => {
+    if (data?.streamUrl && (data.streamUrl.startsWith("http://") || data.streamUrl.startsWith("https://"))) {
+      return data.streamUrl;
+    }
     const sourceUrl = data?.sources?.[0]?.url;
     if (!sourceUrl) return null;
 
@@ -4705,6 +4713,31 @@ export async function resolveGaiaflixStream(tmdbId, timeoutMs = 15000) {
 
     if (decoded && (decoded.startsWith("http://") || decoded.startsWith("https://"))) {
       return decoded;
+    }
+    return null;
+  };
+
+  try {
+    // 1. Try local proxy endpoint first (avoids CORS restrictions in browser)
+    try {
+      const res = await fetchWithTimeout(proxyEndpoint, Math.min(timeoutMs, 6000));
+      if (res && res.ok) {
+        const data = await res.json();
+        const stream = decodeStreamFromData(data);
+        if (stream) return stream;
+      }
+    } catch (proxyErr) {
+      console.warn("[Gaiaflix] Proxy resolution error, trying fallback:", proxyErr?.message || proxyErr);
+    }
+
+    // 2. Fallback to direct Gaiaflix endpoint if different from proxy
+    if (proxyEndpoint !== `https://gaiaflix.xyz/api/gaiaflix-movie-source?id=${encodeURIComponent(tmdbId)}`) {
+      const directUrl = `https://gaiaflix.xyz/api/gaiaflix-movie-source?id=${encodeURIComponent(tmdbId)}`;
+      const res = await fetchWithTimeout(directUrl, Math.min(timeoutMs, 5000));
+      if (res && res.ok) {
+        const data = await res.json();
+        return decodeStreamFromData(data);
+      }
     }
     return null;
   } catch (err) {
@@ -4747,6 +4780,28 @@ export function playWithGaiaflixHls(m3u8Url, item) {
       resolve(false);
       return;
     }
+
+    let resolved = false;
+    const failGaiaflixPlayback = () => {
+      if (resolved) return;
+      resolved = true;
+      if (customWrapper) customWrapper.hidden = true;
+      if (video) {
+        try { video.pause(); } catch {}
+        video.hidden = true;
+        video.removeAttribute("src");
+      }
+      if (window._currentHlsInstance) {
+        try { window._currentHlsInstance.destroy(); } catch {}
+        window._currentHlsInstance = null;
+      }
+      if (window._currentHlsBlobUrl) {
+        try { URL.revokeObjectURL(window._currentHlsBlobUrl); } catch {}
+        window._currentHlsBlobUrl = null;
+      }
+      if (embed) embed.hidden = false;
+      resolve(false);
+    };
 
     if (embed) {
       embed.src = "about:blank";
@@ -4814,8 +4869,6 @@ export function playWithGaiaflixHls(m3u8Url, item) {
         window._currentHlsInstance = hls;
         hls.loadSource(playableSource);
         hls.attachMedia(video);
-
-        let resolved = false;
 
         const populateAudioTracks = () => {
           const audioTracks = hls.audioTracks || [];
@@ -4923,12 +4976,7 @@ export function playWithGaiaflixHls(m3u8Url, item) {
                 hls.recoverMediaError();
                 break;
               default:
-                hls.destroy();
-                window._currentHlsInstance = null;
-                if (!resolved) {
-                  resolved = true;
-                  resolve(false);
-                }
+                failGaiaflixPlayback();
                 break;
             }
           }
@@ -4937,14 +4985,17 @@ export function playWithGaiaflixHls(m3u8Url, item) {
         // Safety timeout: if manifest not parsed in 7 seconds, resolve
         setTimeout(() => {
           if (!resolved) {
-            resolved = true;
             if (video.readyState >= 1) {
+              resolved = true;
               resolve(true);
             } else {
-              resolve(false);
+              failGaiaflixPlayback();
             }
           }
         }, 7000);
+      }).catch((err) => {
+        console.warn("[Gaiaflix] preparePlayableSource failed:", err);
+        failGaiaflixPlayback();
       });
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       // Native Apple/Safari HLS
@@ -4954,10 +5005,13 @@ export function playWithGaiaflixHls(m3u8Url, item) {
         video.play().then(() => {
           setPlayerState(PLAYER_STATE.PLAYING, `${item?.title || "Movie"} · Server 1 (Gaiaflix Pro - Multi-Audio)`);
         }).catch(() => {});
+        resolved = true;
         resolve(true);
+      }).catch(() => {
+        failGaiaflixPlayback();
       });
     } else {
-      resolve(false);
+      failGaiaflixPlayback();
     }
   });
 }
@@ -5270,7 +5324,27 @@ async function attemptGaiaflixHls(item, tmdbId) {
 function attemptEmbedServer(url) {
   return new Promise((resolve) => {
     const embed = $("#embed-player");
+    const customWrapper = $("#custom-player-wrapper");
+    const video = $("#video-player");
     if (!embed) return resolve(false);
+
+    // CRITICAL: Ensure native video player and its custom-player-wrapper
+    // are hidden so they never obscure the embed iframe with a solid black screen!
+    if (customWrapper) customWrapper.hidden = true;
+    if (video) {
+      try { video.pause(); } catch {}
+      video.hidden = true;
+      video.removeAttribute("src");
+    }
+    if (window._currentHlsInstance) {
+      try { window._currentHlsInstance.destroy(); } catch {}
+      window._currentHlsInstance = null;
+    }
+    if (window._currentHlsBlobUrl) {
+      try { URL.revokeObjectURL(window._currentHlsBlobUrl); } catch {}
+      window._currentHlsBlobUrl = null;
+    }
+
     const chain = playbackChain;
     let settled = false;
     const done = (ok) => {
@@ -5300,6 +5374,7 @@ function attemptEmbedServer(url) {
     try { embed.src = "about:blank"; } catch {}
     setTimeout(() => {
       if (settled || chain !== playbackChain || !playbackChain || playbackChain.aborted) return;
+      if (customWrapper) customWrapper.hidden = true;
       embed.removeAttribute("sandbox");
       embed.src = url;
       embed.hidden = false;
@@ -6342,6 +6417,7 @@ async function playTitle(title, { resumeTime = 0 } = {}) {
   }
   const embed = $("#embed-player");
   const video = $("#video-player");
+  const customWrapper = $("#custom-player-wrapper");
   const player = $("#player-backdrop");
   ensurePlayerFlowUI();
   $("#player-title").textContent = item.title;
@@ -6353,6 +6429,8 @@ async function playTitle(title, { resumeTime = 0 } = {}) {
     video.dataset.fallbackAttempted = "";
     video.hidden = true;
   }
+  if (customWrapper) customWrapper.hidden = true;
+  if (embed) embed.hidden = true;
   setPlayerState(PLAYER_STATE.LOADING, "Connecting to HD streaming server…");
   player.hidden = false;
   player.removeAttribute("hidden");

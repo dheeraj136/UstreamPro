@@ -46,3 +46,33 @@ video_720p.m3u8`;
   const rewritten = rewriteM3u8WithQueryParams(sampleM3u8, masterUrl);
   assert.equal(rewritten, sampleM3u8);
 });
+
+test("3. gaiaflix-movie-source serverless function sets CORS headers and validates id", async () => {
+  const handlerModule = await import("../api/gaiaflix-movie-source.js");
+  const handler = handlerModule.default;
+  let statusCode = 0;
+  const headers = {};
+  let responseData = null;
+
+  const mockRes = {
+    setHeader: (key, val) => { headers[key] = val; },
+    status: (code) => {
+      statusCode = code;
+      return {
+        json: (data) => { responseData = data; },
+        end: () => {}
+      };
+    }
+  };
+
+  // Test missing id
+  await handler({ query: {} }, mockRes);
+  assert.equal(statusCode, 400);
+  assert.equal(headers["Access-Control-Allow-Origin"], "*");
+  assert.equal(headers["Access-Control-Allow-Methods"], "GET, OPTIONS");
+
+  // Test OPTIONS preflight
+  statusCode = 0;
+  await handler({ method: "OPTIONS" }, mockRes);
+  assert.equal(statusCode, 200);
+});
