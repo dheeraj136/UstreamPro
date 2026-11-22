@@ -26,6 +26,9 @@
   --shadow: 0 24px 70px rgba(0, 0, 0, .6);
   --shadow-heavy: rgba(0, 0, 0, 0.5) 0px 16px 40px;
   --shadow-soft: 0 12px 36px rgba(0, 0, 0, 0.65);
+  /* Mobile tab bar height (without safe area) - used for content/toast offsets */
+  --tabbar-h: 64px;
+  --tabbar-offset: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
 }
 
@@ -85,7 +88,7 @@ summary:focus-visible,
 }
 a { color: inherit; text-decoration: none; }
 
-.app-shell { min-height: 100vh; overflow-x: clip; }
+.app-shell { min-height: 100vh; min-height: 100dvh; overflow-x: clip; }
 .topbar {
   height: 72px;
   display: flex;
@@ -223,7 +226,7 @@ a { color: inherit; text-decoration: none; }
 .icon-lg { width: 24px; height: 24px; }
 .icon-filled { fill: currentColor; }
 
-.hero { min-height: 82vh; position: relative; isolation: isolate; display: flex; align-items: center; padding: 72px 5.5vw 80px; overflow: hidden; }
+.hero { min-height: 82vh; min-height: 82dvh; position: relative; isolation: isolate; display: flex; align-items: center; padding: 72px 5.5vw 80px; overflow: hidden; }
 .hero-backdrop { position: absolute; z-index: -3; inset: 0; background-size: cover; background-position: center top; background-repeat: no-repeat; transition: background-image .5s cubic-bezier(0.16, 1, 0.3, 1); }
 .hero-vignette {
   position: absolute;
@@ -682,7 +685,9 @@ a { color: inherit; text-decoration: none; }
   will-change: transform;
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.2s ease;
 }
-.poster-image { position: absolute; z-index: -2; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.poster-image { position: absolute; z-index: -2; inset: 0; width: 100%; height: 100%; aspect-ratio: 2 / 3; object-fit: cover; }
+/* Prompt 4: community thumbnails reserve their space before loading */
+.community-card img { aspect-ratio: 16 / 9; object-fit: cover; }
 .poster::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(255,255,255,.05), transparent 30%, rgba(8,9,13,.88) 100%); z-index: -1; }
 .poster::after { content: ""; position: absolute; width: 150%; height: 45%; left: -25%; bottom: 18%; transform: rotate(-19deg); border-top: 1px solid rgba(255,255,255,.12); border-bottom: 1px solid rgba(255,255,255,.06); opacity: .3; }
 .media-card:hover .poster {
@@ -799,6 +804,7 @@ a { color: inherit; text-decoration: none; }
   position: absolute;
   width: min(1060px, 94vw);
   height: 64vh;
+  height: 64dvh;
   border-radius: 36px;
   background: radial-gradient(circle at center, rgba(41, 151, 255, 0.32) 0%, rgba(229, 9, 20, 0.18) 42%, transparent 75%);
   filter: blur(64px);
@@ -820,6 +826,7 @@ a { color: inherit; text-decoration: none; }
   width: 100%;
   aspect-ratio: 16 / 9;
   max-height: min(68vh, 620px);
+  max-height: min(68dvh, 620px);
   background: #000;
   display: flex;
   overflow: hidden;
@@ -839,6 +846,7 @@ a { color: inherit; text-decoration: none; }
   width: 100%;
   height: 100%;
   max-height: min(68vh, 620px);
+  max-height: min(68dvh, 620px);
   aspect-ratio: 16 / 9;
   background: rgba(2,3,8,.78);
   object-fit: contain;
@@ -1082,14 +1090,14 @@ a { color: inherit; text-decoration: none; }
   .mobile-nav-item.active { color: var(--accent); }
   .mobile-nav-item.active .icon { stroke: var(--accent); }
   .modal-backdrop { padding: 10px; }
-  .detail-modal { display: block; max-height: 90vh; overflow-y: auto; }
+  .detail-modal { display: block; max-height: 90vh; max-height: 90dvh; overflow-y: auto; }
   .modal-art { min-height: 215px; }
   .modal-art::after { background: linear-gradient(180deg, transparent 35%, var(--surface)); }
   .modal-copy { margin: -35px 0 0; padding: 0 24px 28px; }
   .modal-copy h2 { font-size: 35px; }
   .drawer-panel { padding: 24px 20px; }
   .player-backdrop { padding: 10px; }
-  .player-modal { max-height: calc(100vh - 20px); border-radius: 13px; }
+  .player-modal { max-height: calc(100vh - 20px); max-height: calc(100dvh - 20px); border-radius: 13px; }
   .player-head { grid-template-columns: 1fr auto; padding: 14px 16px; gap: 10px; }
   .player-head h2 { font-size: 18px; }
   .player-live-label { display: none; }
@@ -1571,9 +1579,6 @@ a { color: inherit; text-decoration: none; }
   }
   .mobile-nav {
     display: flex !important;
-  }
-  body {
-    padding-bottom: 74px;
   }
 }
 
@@ -3401,7 +3406,9 @@ html[data-theme="light"] .pin-prompt-modal {
   width: 100vw;
   height: 56.25vw;
   min-height: 100vh;
+  min-height: 100dvh;
   min-width: 177.77vh;
+  min-width: 177.77dvh;
   transform: translate(-50%, -50%) scale(1.12);
   border: 0;
   pointer-events: none;
@@ -3836,8 +3843,8 @@ html[data-theme="light"] .pin-prompt-modal {
     display: flex !important;
     justify-content: space-around;
     align-items: center;
-    height: 64px;
-    padding: 6px 16px max(8px, env(safe-area-inset-bottom));
+    height: var(--tabbar-offset);
+    padding: 6px max(16px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
     background: rgba(8, 8, 12, 0.85);
     backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
@@ -3890,7 +3897,13 @@ html[data-theme="light"] .pin-prompt-modal {
     font-weight: 700;
   }
   body {
-    padding-bottom: 74px;
+    padding-bottom: calc(var(--tabbar-offset) + 12px);
+  }
+  html {
+    scroll-padding-bottom: calc(var(--tabbar-offset) + 12px);
+  }
+  .toast {
+    bottom: calc(var(--tabbar-offset) + 12px);
   }
 }
 
@@ -4156,3 +4169,84 @@ img.image-fallback {
   .nav-link { padding: 7px 8px; font-size: 12px; }
 }
 
+/* Mobile layout fixes (Langdock Prompt 3/5) */
+/* Fix 1: keep the top bar clear of the notch in landscape (viewport-fit=cover) */
+.topbar {
+  padding-left: max(24px, env(safe-area-inset-left, 0px));
+  padding-right: max(24px, env(safe-area-inset-right, 0px));
+}
+@media (max-width: 1440px) {
+  .topbar {
+    padding-left: max(20px, env(safe-area-inset-left, 0px));
+    padding-right: max(20px, env(safe-area-inset-right, 0px));
+  }
+}
+/* Fix 3: 44x44px minimum touch targets on touch screens and small viewports */
+@media (pointer: coarse), (max-width: 820px) {
+  .nav-link,
+  .mobile-nav-item { min-height: 44px; min-width: 44px; }
+  .nav-link { display: inline-flex; align-items: center; }
+  .genre-tab,
+  .season-pill,
+  .season-pill-btn,
+  .filter-chip,
+  .rail-view-all,
+  .footer-link,
+  .player-action,
+  .player-server-select { min-height: 44px; }
+  .genre-tab,
+  .season-pill,
+  .season-pill-btn { display: inline-flex; align-items: center; justify-content: center; }
+  .episode-pill { min-height: 44px; min-width: 44px; }
+  .filter-chip { padding-right: 4px; }
+  .filter-chip button { min-width: 44px; min-height: 44px; justify-content: center; margin: -6px 0; }
+  .icon-button,
+  .avatar,
+  .close-button,
+  .rail-arrow,
+  .view-button,
+  .hero-mute-toggle,
+  #search-modal-trigger { min-width: 44px; min-height: 44px; }
+  .filter-button { min-height: 44px; }
+  /* Poster bookmark stays 32px visually; the invisible hit area grows to 44px */
+  .list-toggle::after { content: ""; position: absolute; inset: -6px; }
+}
+/* Hover-only rail arrows are invisible (opacity 0) on touch but still catch taps
+   over the first/last posters. Swipe works, so remove them on touch screens. */
+@media (hover: none) and (pointer: coarse) {
+  .rail-arrow-float { display: none; }
+}
+/* Fix 4: genre chips = one swipeable, snapping row under 640px */
+@media (max-width: 639px) {
+  .genre-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 20px;
+    margin-inline: -20px;
+    padding-inline: 20px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .genre-tab { flex: 0 0 auto; white-space: nowrap; scroll-snap-align: start; }
+}
+/* Fix 6: reduced motion - stop the motion the global rule above doesn't cover */
+@media (prefers-reduced-motion: reduce) {
+  .hero-video-wrap,
+  .hero-video-wrap.active { display: none !important; }
+  .card:hover,
+  .movie-card:hover,
+  .continue-card:hover,
+  .media-card:hover .poster,
+  .primary-button:hover,
+  .secondary-button:hover,
+  .hero-bookmark-btn:hover,
+  .icon-button:hover,
+  .genre-tab:hover,
+  .close-button:hover { transform: none; }
+  .card-enter,
+  .section-fade,
+  .live-dot { animation: none; }
+  .skeleton-poster,
+  .skeleton-line { animation: none; background: rgba(255, 255, 255, 0.05); }
+}

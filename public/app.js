@@ -2175,6 +2175,20 @@ function renderSkeletons() {
     if (recSection) recSection.hidden = false;
     recRow.innerHTML = createSkeletonCardsHtml(8);
   }
+
+  // Prompt 4: Continue Watching is local data, but render() only replaces
+  // it after the catalog load — show placeholders meanwhile, not an
+  // empty state. Community Uploads is fetched separately below.
+  const continueRow = $("#continue-row");
+  if (continueRow) {
+    const continueSection = $(".quick-picks");
+    if (continueSection) continueSection.hidden = false;
+    continueRow.innerHTML = createSkeletonCardsHtml(4);
+  }
+  const communityRow = $("#community-row");
+  if (communityRow) {
+    communityRow.innerHTML = createSkeletonCardsHtml(6);
+  }
 }
 
 function showErrorState(title, message, errorDetails = null) {
@@ -2258,6 +2272,32 @@ function buildApiUrl(action, params = {}) {
   return `${API_BASE}/${action}${qs ? `?${qs}` : ""}`;
 }
 
+// Prompt 4: cache /api/catalog responses in sessionStorage for 10 minutes.
+// A fresh-enough cached response is returned at once; a stale/missing one
+// is fetched and then stored. Storage errors are ignored (private mode,
+// quota) and fall through to a normal fetch. The long-lived localStorage
+// catalog cache in loadLiveCatalog() is separate and unchanged.
+const API_CATALOG_CACHE_TTL_MS = 10 * 60 * 1000;
+async function fetchCatalogApi(category, page) {
+  const key = `ustream-api-catalog:${category}:${page ?? ""}`;
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (raw) {
+      const entry = JSON.parse(raw);
+      if (entry && Date.now() - entry.ts < API_CATALOG_CACHE_TTL_MS && entry.data) {
+        return entry.data;
+      }
+    }
+  } catch {}
+  const res = await fetch(`/api/catalog?category=${category}${page ? `&page=${page}` : ""}`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  try {
+    sessionStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }));
+  } catch {}
+  return data;
+}
+
 async function loadLiveCatalog(isRetry = false) {
   clearErrorState();
   // Do not stack a second full live load on top of one already in flight:
@@ -2313,15 +2353,12 @@ async function loadLiveCatalog(isRetry = false) {
         console.warn(`[TMDB Batch fetch error for ${cat}]:`, err);
       }
 
-      // Fallback: try /api/catalog endpoint
+      // Fallback: try /api/catalog endpoint (sessionStorage-cached, 10 min)
       try {
-        const catRes = await fetch(`/api/catalog?category=${cat === "trending" ? "all" : cat}`);
-        if (catRes.ok) {
-          const catData = await catRes.json();
-          const items = catData?.data?.items;
-          if (Array.isArray(items) && items.length) {
-            return { ok: true, items: items.map((i) => (i.tmdbId ? i : normalizeApiItem(i, cat))), cat };
-          }
+        const catData = await fetchCatalogApi(cat === "trending" ? "all" : cat);
+        const items = catData?.data?.items;
+        if (Array.isArray(items) && items.length) {
+          return { ok: true, items: items.map((i) => (i.tmdbId ? i : normalizeApiItem(i, cat))), cat };
         }
       } catch {}
 
@@ -2442,13 +2479,10 @@ async function fetchNextRemoteBatch(targetSection) {
       } catch {}
 
       try {
-        const catRes = await fetch(`/api/catalog?category=${cat}&page=${nextPage}`);
-        if (catRes.ok) {
-          const catData = await catRes.json();
-          const items = catData?.data?.items;
-          if (Array.isArray(items) && items.length) {
-            return items.map((i) => (i.tmdbId ? i : normalizeApiItem(i, cat)));
-          }
+        const catData = await fetchCatalogApi(cat, nextPage);
+        const items = catData?.data?.items;
+        if (Array.isArray(items) && items.length) {
+          return items.map((i) => (i.tmdbId ? i : normalizeApiItem(i, cat)));
         }
       } catch {}
 
@@ -3453,7 +3487,7 @@ function renderCard(card, { isNew = false } = {}) {
   return `
     <article class="media-card ${isNew ? "card-enter" : ""}" data-title="${cleanTitle}">
       <div class="poster" style="--poster-gradient:${card.gradient}">
-        ${card.image ? `<img class="poster-image" src="${card.image}" alt="${escapeHtml(cleanTitle)} official poster" loading="lazy" decoding="async" />` : ""}
+        ${card.image ? `<img class="poster-image" src="${card.image}" alt="${escapeHtml(cleanTitle)} official poster" loading="lazy" decoding="async" width="500" height="750" />` : ""}
         <span class="poster-kicker" title="${escapeHtml(card.kicker)}">${escapeHtml(card.kicker)}</span>
         ${badgeHtml}
         <span class="poster-title" title="${cleanTitle}">${cleanTitle}</span>
@@ -7159,6 +7193,12 @@ function initCreatorStudioAndUploads() {
 }
 
 async function loadCommunityVideos() {
+  // Prompt 4: show skeleton placeholders while the upload list loads,
+  // instead of an empty row. Empty/error still hides the section.
+  const communityRowEarly = $("#community-row");
+  if (communityRowEarly && !communityRowEarly.innerHTML.trim()) {
+    communityRowEarly.innerHTML = createSkeletonCardsHtml(6);
+  }
   try {
     const res = await fetch("/api/videos?limit=12&status=ready");
     if (!res.ok) return;

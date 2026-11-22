@@ -1,4 +1,5 @@
-import { copyFile, mkdir, readdir, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { copyFile, mkdir, readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
 
@@ -17,6 +18,46 @@ for (const file of ["index.html", "styles.css", "app.js", "robots.txt", "sitemap
   if (existsSync(src)) {
     await copyFile(src, join(publicDir, file));
   }
+}
+
+// Cache-busting: emit content-hashed copies of styles.css and app.js
+// (e.g. app.3f9a1c2b.js) and point index.html at them, so vercel.json
+// can serve them with "immutable". Plain copies are kept as a fallback.
+const HASHED_RE = /^(app|styles)\.[0-9a-f]{8}\.(js|css)$/;
+for (const file of await readdir(publicDir)) {
+  if (HASHED_RE.test(file)) await unlink(join(publicDir, file));
+}
+
+const hashedNames = {};
+for (const name of ["styles.css", "app.js"]) {
+  const plainPath = join(publicDir, name);
+  if (!existsSync(plainPath)) continue;
+  const buf = await readFile(plainPath);
+  const hash = createHash("sha256").update(buf).digest("hex").slice(0, 8);
+  const dot = name.lastIndexOf(".");
+  const hashed = `${name.slice(0, dot)}.${hash}${name.slice(dot)}`;
+  await writeFile(join(publicDir, hashed), buf);
+  hashedNames[name] = hashed;
+}
+
+const indexPath = join(publicDir, "index.html");
+if (existsSync(indexPath)) {
+  let html = await readFile(indexPath, "utf8");
+  for (const [name, hashed] of Object.entries(hashedNames)) {
+    const escaped = name.replace(/\./g, "\\.");
+    // Matches "./app.js", "/app.js", "app.js", with or without ?v=...
+    const re = new RegExp(`(["'])(\\./|/)?${escaped}(\\?[^"']*)?\\1`, "g");
+    let count = 0;
+    html = html.replace(re, (_m, quote, prefix) => {
+      count++;
+      return `${quote}${prefix || ""}${hashed}${quote}`;
+    });
+    if (count === 0) {
+      throw new Error(`build: no references to ${name} found in index.html`);
+    }
+    console.log(`  ${name} -> ${hashed} (${count} reference${count === 1 ? "" : "s"})`);
+  }
+  await writeFile(indexPath, html, "utf8");
 }
 
 const modulesSrcDir = join(root, "src", "modules");
