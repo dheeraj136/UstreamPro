@@ -1,5 +1,13 @@
 {
     "buildCommand": "node scripts/build.mjs",
+    "outputDirectory": "public",
+    "redirects": [
+        {
+            "source": "/",
+            "destination": "/index.html",
+            "permanent": false
+        }
+    ],
     "headers": [
         {
             "headers": [
