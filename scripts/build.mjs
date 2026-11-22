@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { copyFile, mkdir, readdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
 
@@ -23,10 +23,12 @@ for (const file of ["index.html", "styles.css", "app.js", "robots.txt", "sitemap
 // Cache-busting: emit content-hashed copies of styles.css and app.js
 // (e.g. app.3f9a1c2b.js) and point index.html at them, so vercel.json
 // can serve them with "immutable". Plain copies are kept as a fallback.
-const HASHED_RE = /^(app|styles)\.[0-9a-f]{8}\.(js|css)$/;
-for (const file of await readdir(publicDir)) {
-  if (HASHED_RE.test(file)) await unlink(join(publicDir, file));
-}
+// NOTE: do NOT delete old hashed files here. Vercel's build output
+// collection traces public/ and fails the whole deployment with
+// ENOENT when a file it saw is deleted mid-build (observed 2026-11-22:
+// both Prompt 5 deployments failed with ENOENT for the old hashed app
+// file after the hash changed). Old hashed files are unreferenced and
+// harmless; they are cleaned up in git, not in the build.
 
 const hashedNames = {};
 for (const name of ["styles.css", "app.js"]) {
