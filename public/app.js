@@ -6540,6 +6540,8 @@ function handlePlaybackError() {
 function closePlayer() {
   clearLiveStatus();
   clearEmbedWatchTimer();
+  nativeRetryCount = 0;
+  clearNativeStallTimer();
   if (playbackChain) playbackChain.aborted = true;
   playbackChain = null;
   const bufferingSpinner = $("#player-buffering-spinner");
@@ -6588,6 +6590,48 @@ function closePlayer() {
   setPlayerState(PLAYER_STATE.IDLE);
 }
 
+// Prompt 5: retry for the native HTML5 player (community uploads and
+// trailers). The embed-server chain in handlePlaybackError() must not run
+// for a direct video file, so errors/stalls on #video-player retry the
+// same source first: up to 3 times, backoff 1s / 3s / 8s, then ERROR.
+const NATIVE_RETRY_DELAYS_MS = [1000, 3000, 8000];
+let nativeRetryCount = 0;
+let nativeStallTimer = null;
+function isNativeVideoActive() {
+  const video = $("#video-player");
+  const wrapper = $("#custom-player-wrapper");
+  const embed = $("#embed-player");
+  return Boolean(video && wrapper && !wrapper.hidden && !video.hidden && video.src && (!embed || embed.hidden));
+}
+function clearNativeStallTimer() {
+  if (nativeStallTimer) { clearTimeout(nativeStallTimer); nativeStallTimer = null; }
+}
+function retryNativeVideo() {
+  const video = $("#video-player");
+  if (!video) return false;
+  if (nativeRetryCount >= NATIVE_RETRY_DELAYS_MS.length) {
+    clearNativeStallTimer();
+    setPlayerState(PLAYER_STATE.ERROR, "Playback failed after 3 retries. Retry to try again.");
+    return false;
+  }
+  const delay = NATIVE_RETRY_DELAYS_MS[nativeRetryCount];
+  nativeRetryCount += 1;
+  setPlayerState(PLAYER_STATE.LOADING, `Connection interrupted · Retrying (${nativeRetryCount}/3)…`);
+  setTimeout(() => {
+    try { video.load(); } catch {}
+    video.play().catch(() => {});
+  }, delay);
+  return true;
+}
+function armNativeStallTimer() {
+  clearNativeStallTimer();
+  nativeStallTimer = setTimeout(() => {
+    const video = $("#video-player");
+    if (!video || video.ended || !isNativeVideoActive()) return;
+    if (video.readyState < 3 && !video.paused) retryNativeVideo();
+  }, 8000);
+}
+
 function playNativeVideo(streamUrl, title, poster = "", { videoId = null, resumeTime = 0 } = {}) {
   const embed = $("#embed-player");
   const video = $("#video-player");
@@ -6601,6 +6645,8 @@ function playNativeVideo(streamUrl, title, poster = "", { videoId = null, resume
   }
   customWrapper.hidden = false;
   video.hidden = false;
+  nativeRetryCount = 0;
+  clearNativeStallTimer();
   video.poster = poster || "";
   $("#player-title").textContent = title || "Now Playing";
   playerBackdrop.hidden = false;
@@ -6765,6 +6811,13 @@ function initCustomVideoPlayer() {
     if (scrubberProgress) scrubberProgress.style.width = `${pct}%`;
     if (scrubberHandle) scrubberHandle.style.left = `${pct}%`;
     if (scrubberWrap) scrubberWrap.setAttribute("aria-valuenow", String(Math.round(pct)));
+
+    // Prompt 5: clear the saved position once 95% is watched, so a
+    // finished video never offers "Resume".
+    if (pct >= 95) {
+      const doneKey = video.dataset.itemTitle || state.player?.item?.title;
+      if (doneKey) storage.remove(`ustream-pos-${doneKey}`);
+    }
 
     // Update buffer progress
     if (video.buffered.length > 0 && scrubberBuffer) {
@@ -7783,17 +7836,25 @@ $("#video-player").addEventListener("pause", () => {
 
 $("#video-player").addEventListener("waiting", () => {
   setPlayerState(PLAYER_STATE.LOADING, "Loading stream…");
+  if (isNativeVideoActive()) armNativeStallTimer();
 });
 
 $("#video-player").addEventListener("playing", () => {
+  nativeRetryCount = 0;
+  clearNativeStallTimer();
   setPlayerState(PLAYER_STATE.PLAYING);
 });
 
 $("#video-player").addEventListener("ended", () => {
+  clearNativeStallTimer();
+  const video = $("#video-player");
+  const doneKey = video?.dataset.itemTitle || state.player?.item?.title;
+  if (doneKey) storage.remove(`ustream-pos-${doneKey}`);
   void handlePlayerEnded();
 });
 
 $("#video-player").addEventListener("error", () => {
+  if (isNativeVideoActive()) { retryNativeVideo(); return; }
   const video = $("#video-player");
   if (!video.dataset.fallbackAttempted && video.dataset.itemTitle) {
     // Do NOT silently swap in an unrelated sample/cartoon clip: the old
