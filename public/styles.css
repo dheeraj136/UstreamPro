@@ -1284,6 +1284,55 @@ a { color: inherit; text-decoration: none; }
   100% { background-position: -200% 0; }
 }
 
+/* Prompt 4 (full Langdock diff): row skeletons that match the finished
+   cards' dimensions — Continue Watching placeholders and Community
+   Upload thumbnails, with the same shimmer as the poster skeletons. */
+.skeleton-continue {
+  min-height: 96px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.02) 25%,
+    rgba(255, 255, 255, 0.09) 50%,
+    rgba(255, 255, 255, 0.02) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px;
+  overflow: hidden;
+}
+.community-card-skeleton {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.02) 25%,
+    rgba(255, 255, 255, 0.09) 50%,
+    rgba(255, 255, 255, 0.02) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  overflow: hidden;
+}
+.community-card-skeleton .skeleton-line {
+  position: absolute;
+  left: 12px;
+  bottom: 30px;
+  width: 60%;
+}
+.community-card-skeleton .skeleton-line.short {
+  bottom: 12px;
+  width: 40%;
+}
+
+
 /* Error state styles */
 .error-state {
   grid-column: 1 / -1;

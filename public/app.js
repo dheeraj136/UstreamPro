@@ -1673,6 +1673,13 @@ function replaceCatalogItems(items) {
   catalog = dedupeCatalogItems(items).slice(0, MAX_CATALOG_SIZE);
   return catalog;
 }
+
+// Prompt 4 (full Langdock diff): the empty state must only appear after
+// a fetch finishes, and rows must not render real content while the
+// catalog is still loading — these flags gate render(), renderContinue()
+// and renderRecommendations() while skeletons are showing.
+let catalogHasSettled = false;
+let catalogRowsLoading = false;
 // Bug 6: guards so concurrent / stale live-catalog loads cannot each
 // build and assign their own catalog (the "total" then depended on which
 // racing load finished last).
@@ -2159,7 +2166,40 @@ function createSkeletonCardsHtml(count = 12, isWide = false) {
   `).join("");
 }
 
+// Prompt 4 (full Langdock diff): row skeletons that match the finished
+// cards' dimensions, so each row reserves its space while loading.
+function createContinueSkeletonsHtml() {
+  return Array.from({ length: 4 }).map(() => `
+    <div class="continue-card skeleton-continue" aria-hidden="true">
+      <div class="skeleton-line medium"></div>
+      <div class="skeleton-line short"></div>
+      <div class="skeleton-line full"></div>
+    </div>
+  `).join("");
+}
+
+function createCommunitySkeletonsHtml() {
+  return Array.from({ length: 4 }).map(() => `
+    <div class="community-card community-card-skeleton" aria-hidden="true">
+      <div class="skeleton-line"></div>
+      <div class="skeleton-line short"></div>
+    </div>
+  `).join("");
+}
+
+function createTrendingSkeletonHtml() {
+  return `
+    <section class="rail-section" aria-hidden="true">
+      <div class="section-heading"><h2>Trending now</h2></div>
+      <div class="rail-wrapper">
+        <div class="media-rail">${createSkeletonCardsHtml(8)}</div>
+      </div>
+    </section>
+  `;
+}
+
 function renderSkeletons() {
+  catalogRowsLoading = true;
   const grid = $("#card-grid");
   if (grid) {
     grid.innerHTML = createSkeletonCardsHtml(12);
@@ -2169,25 +2209,31 @@ function renderSkeletons() {
   const errorBox = $("#error-state");
   if (errorBox) errorBox.hidden = true;
 
+  const isHomeView = state.section === "home" && !state.search.trim();
   const recRow = $("#recommendation-row");
-  if (recRow) {
+  if (recRow && isHomeView) {
     const recSection = $("#recommendations-section");
     if (recSection) recSection.hidden = false;
     recRow.innerHTML = createSkeletonCardsHtml(8);
   }
 
-  // Prompt 4: Continue Watching is local data, but render() only replaces
-  // it after the catalog load — show placeholders meanwhile, not an
+  // Continue Watching is local data, but render() only replaces it
+  // after the catalog load — show placeholders meanwhile, not an
   // empty state. Community Uploads is fetched separately below.
   const continueRow = $("#continue-row");
-  if (continueRow) {
+  if (continueRow && isHomeView) {
     const continueSection = $(".quick-picks");
     if (continueSection) continueSection.hidden = false;
-    continueRow.innerHTML = createSkeletonCardsHtml(4);
+    continueRow.innerHTML = createContinueSkeletonsHtml();
   }
   const communityRow = $("#community-row");
-  if (communityRow) {
-    communityRow.innerHTML = createSkeletonCardsHtml(6);
+  if (communityRow && isHomeView) {
+    communityRow.innerHTML = createCommunitySkeletonsHtml();
+  }
+  const railsContainer = $("#home-rails-container");
+  if (railsContainer && isHomeView) {
+    railsContainer.hidden = false;
+    railsContainer.innerHTML = createTrendingSkeletonHtml();
   }
 }
 
@@ -2223,6 +2269,8 @@ function clearErrorState() {
 
 function loadShowcaseCatalog() {
   clearErrorState();
+  catalogHasSettled = true;
+  catalogRowsLoading = false;
   catalog = dedupeCatalogItems([...DEMO_ITEMS]);
   freezeCatalogTotal(catalog);
   recommendations = DEMO_ITEMS.slice(0, 6);
@@ -2277,7 +2325,60 @@ function buildApiUrl(action, params = {}) {
 // is fetched and then stored. Storage errors are ignored (private mode,
 // quota) and fall through to a normal fetch. The long-lived localStorage
 // catalog cache in loadLiveCatalog() is separate and unchanged.
-const API_CATALOG_CACHE_TTL_MS = 10 * 60 * 1000;
+// Prompt 4 (full Langdock diff): per-category /api/catalog cache in
+// sessionStorage, 10 minutes. fetchApiCatalogCategory returns cached
+// items at once while refreshing them in the background.
+const API_CATALOG_SESSION_TTL_MS = 10 * 60 * 1000;
+const API_CATALOG_SESSION_PREFIX = "ustream-api-catalog-v1:";
+const API_CATALOG_CATEGORIES = ["all", "movie", "tv", "anime", "cartoons"];
+const apiCatalogRequests = new Map();
+const API_CATALOG_CACHE_TTL_MS = API_CATALOG_SESSION_TTL_MS;
+
+function readApiCatalogSessionCache(category) {
+  try {
+    const raw = sessionStorage.getItem(`${API_CATALOG_SESSION_PREFIX}${category}`);
+    if (!raw) return null;
+    const entry = JSON.parse(raw);
+    if (!entry || !Array.isArray(entry.items)) return null;
+    if (Date.now() - entry.ts >= API_CATALOG_SESSION_TTL_MS) return null;
+    return entry.items;
+  } catch {
+    return null;
+  }
+}
+
+function getCachedApiCatalogItems(category) {
+  return readApiCatalogSessionCache(category) || [];
+}
+
+async function refreshApiCatalogSessionCache(category) {
+  if (apiCatalogRequests.has(category)) return apiCatalogRequests.get(category);
+  const request = (async () => {
+    const res = await fetch(`/api/catalog?category=${encodeURIComponent(category)}`);
+    if (!res.ok) throw new Error(`Catalog request failed: ${res.status}`);
+    const data = await res.json();
+    const items = Array.isArray(data?.data?.items) ? data.data.items : (Array.isArray(data?.items) ? data.items : []);
+    try {
+      sessionStorage.setItem(`${API_CATALOG_SESSION_PREFIX}${category}`, JSON.stringify({ ts: Date.now(), items }));
+    } catch {}
+    return items;
+  })();
+  apiCatalogRequests.set(category, request);
+  try {
+    return await request;
+  } finally {
+    apiCatalogRequests.delete(category);
+  }
+}
+
+async function fetchApiCatalogCategory(category) {
+  const cached = readApiCatalogSessionCache(category);
+  if (cached) {
+    void refreshApiCatalogSessionCache(category).catch(() => {});
+    return cached;
+  }
+  return refreshApiCatalogSessionCache(category);
+}
 async function fetchCatalogApi(category, page) {
   const key = `ustream-api-catalog:${category}:${page ?? ""}`;
   try {
@@ -2300,6 +2401,9 @@ async function fetchCatalogApi(category, page) {
 
 async function loadLiveCatalog(isRetry = false) {
   clearErrorState();
+  // Prompt 4 (full Langdock diff): prime the "all" category in the
+  // background so the next section visit already has cached items.
+  void fetchApiCatalogCategory("all").catch(() => {});
   // Do not stack a second full live load on top of one already in flight:
   // each load built its own catalog and the total depended on which won.
   if (liveCatalogLoading && !isRetry) return;
@@ -2353,10 +2457,10 @@ async function loadLiveCatalog(isRetry = false) {
         console.warn(`[TMDB Batch fetch error for ${cat}]:`, err);
       }
 
-      // Fallback: try /api/catalog endpoint (sessionStorage-cached, 10 min)
+      // Fallback: try /api/catalog endpoint (sessionStorage-cached, 10 min;
+      // cached items are returned at once while a refresh runs behind).
       try {
-        const catData = await fetchCatalogApi(cat === "trending" ? "all" : cat);
-        const items = catData?.data?.items;
+        const items = await fetchApiCatalogCategory(cat === "trending" ? "all" : cat);
         if (Array.isArray(items) && items.length) {
           return { ok: true, items: items.map((i) => (i.tmdbId ? i : normalizeApiItem(i, cat))), cat };
         }
@@ -2384,6 +2488,8 @@ async function loadLiveCatalog(isRetry = false) {
       setFeatured(pickRandomFeatured(successfulItems));
       updateStatusBadge(true, frozenCatalogTotal);
       clearErrorState();
+      catalogHasSettled = true;
+      catalogRowsLoading = false;
       render();
       try {
         storage.set("ustream-catalog-cache-v2", storage.compactCatalog(catalog, MAX_CACHED_CATALOG_SIZE));
@@ -3399,6 +3505,9 @@ function renderContinue() {
   const section = $(".quick-picks");
   const row = $("#continue-row");
   if (!section || !row) return;
+  // Prompt 4 (full Langdock diff): leave the skeletons in place while
+  // the catalog is still loading; render() replaces them once settled.
+  if (catalogRowsLoading && state.section === "home" && !state.search.trim()) return;
 
   if (state.section !== "home" || state.search.trim()) {
     section.hidden = true;
@@ -3456,6 +3565,9 @@ function renderRecommendations() {
   const section = $("#recommendations-section");
   const row = $("#recommendation-row");
   if (!section || !row) return;
+  // Prompt 4 (full Langdock diff): leave the skeletons in place while
+  // the catalog is still loading; render() replaces them once settled.
+  if (catalogRowsLoading && state.section === "home" && !state.search.trim()) return;
   if (state.section !== "home" || state.search.trim()) {
     section.hidden = true;
     return;
@@ -3574,6 +3686,13 @@ function renderHomeRails() {
   }
   if (!isHomeView) return;
 
+  // Prompt 4 (full Langdock diff): show the trending skeleton while the
+  // catalog is still loading, instead of an empty rails container.
+  if (catalogRowsLoading) {
+    container.innerHTML = createTrendingSkeletonHtml();
+    return;
+  }
+
   const adultEnabled = isAdultEnabled();
   const cleanCatalog = catalog.filter((card) => adultEnabled || !isAdultContent(card));
 
@@ -3656,7 +3775,9 @@ function render() {
   }
   const emptyState = $("#empty-state");
   if (emptyState) {
-    emptyState.hidden = visible.length > 0;
+    // Prompt 4 (full Langdock diff): never show "No titles found"
+    // before the catalog has settled — while loading, skeletons speak.
+    emptyState.hidden = !catalogHasSettled || visible.length > 0;
     const emptyTitle = emptyState.querySelector("h3");
     const emptyDesc = emptyState.querySelector("p");
     const clearBtn = $("#clear-filters");
@@ -7246,21 +7367,24 @@ function initCreatorStudioAndUploads() {
 }
 
 async function loadCommunityVideos() {
-  // Prompt 4: show skeleton placeholders while the upload list loads,
-  // instead of an empty row. Empty/error still hides the section.
+  // Prompt 4 (full Langdock diff): show community skeletons while the
+  // upload list loads; on empty or error, clear the row and hide the
+  // section instead of leaving stale placeholders behind.
+  const isHomeView = state.section === "home" && !state.search.trim();
   const communityRowEarly = $("#community-row");
-  if (communityRowEarly && !communityRowEarly.innerHTML.trim()) {
-    communityRowEarly.innerHTML = createSkeletonCardsHtml(6);
+  if (communityRowEarly && isHomeView) {
+    communityRowEarly.innerHTML = createCommunitySkeletonsHtml();
   }
   try {
     const res = await fetch("/api/videos?limit=12&status=ready");
-    if (!res.ok) return;
+    if (!res.ok) throw new Error(`Community videos request failed: ${res.status}`);
     const data = await res.json();
     const section = $("#community-section");
     const row = $("#community-row");
     if (!section || !row) return;
 
     if (!data.videos || data.videos.length === 0) {
+      row.innerHTML = "";
       section.hidden = true;
       return;
     }
@@ -7293,6 +7417,10 @@ async function loadCommunityVideos() {
     });
   } catch (err) {
     console.warn("Failed to load community videos:", err);
+    const row = $("#community-row");
+    if (row) row.innerHTML = "";
+    const section = $("#community-section");
+    if (section) section.hidden = true;
   }
 }
 
