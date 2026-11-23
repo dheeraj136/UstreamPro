@@ -117,7 +117,7 @@
     <link rel="dns-prefetch" href="https://api.themoviedb.org" />
     <link rel="preload" href="./styles.d29f8922.css" as="style" />
     <link rel="preload" href="./assets/logo.png" as="image" type="image/png" fetchpriority="high" />
-    <link rel="modulepreload" href="./app.48118fbc.js" />
+    <link rel="modulepreload" href="./app.e585a1a1.js" />
     <link rel="modulepreload" href="./modules/storage.js" />
     <link rel="modulepreload" href="./modules/image-loader.js" />
     <link rel="modulepreload" href="./modules/events.js" />
@@ -244,6 +244,17 @@
             <button class="text-button" id="community-upload-btn">Upload your video <svg class="icon icon-sm icon-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
           </div>
           <div class="horizontal-card-row community-row" id="community-row" aria-live="polite"></div>
+        </section>
+
+        <section class="content-section archive-section" id="archive-section" hidden>
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">Public domain · Free to watch</p>
+              <h2>Free Movies — Watch Now</h2>
+            </div>
+            <span class="recommendation-update">From the Internet Archive</span>
+          </div>
+          <div class="horizontal-card-row archive-row" id="archive-row" aria-live="polite"></div>
         </section>
 
         <section class="content-section recommendations-section" id="recommendations-section" hidden>
@@ -1238,7 +1249,7 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="./app.48118fbc.js" defer></script>
+    <script type="module" src="./app.e585a1a1.js" defer></script>
     <script>
       (function() {
         function dismissStartupLoader() {

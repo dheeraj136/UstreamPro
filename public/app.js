@@ -7,6 +7,7 @@ import { createTmdbClient } from "./modules/tmdb-client.js";
 import { tmdbRatingFromVotes } from "./modules/ratings.js";
 import { loaderHtml, stateHtml, beginLoading, fetchWithRetry as resilientFetch } from "./modules/loader.js";
 import { normalizeWatchProviders, watchHubHtml } from "./modules/watch-providers.js";
+import { createArchiveClient } from "./modules/archive.js";
 
 const animeFilterResponse = {
   code: 0,
@@ -1273,6 +1274,11 @@ const tmdbClient = createTmdbClient({
 });
 const watchProviderCache = new Map();
 const WATCH_PROVIDER_TTL_MS = 12 * 60 * 60 * 1000;
+// Internet Archive public-domain films: verified at runtime against
+// the Archive metadata API, then played directly in the native player.
+// No key, no account — see src/modules/archive.js.
+const archiveClient = createArchiveClient({ cache: apiResponseCache });
+let archiveFilms = [];
 let detailLoadGeneration = 0;
 let detailsReturnFocus = null;
 let playerReturnFocus = null;
@@ -2857,15 +2863,26 @@ function renderCard(card, { isNew = false } = {}) {
     ? `<span class="score score-unavailable">No rating</span>`
     : `<span class="score">★ ${ratingVal.toFixed(1)}</span>`;
 
+  // Archive films play directly in the native player — they never open
+  // the "Where to watch" hub, and they cannot be saved to My List
+  // (they are not catalog titles, so a saved entry could not resolve).
+  const isArchive = card.source === "archive";
+  const playButtonHtml = isArchive
+    ? `<button class="card-hover" data-action="play-archive" data-archive-id="${escapeHtml(card.archiveId)}" aria-label="Play ${cleanTitle} free"><span class="play-circle">${renderIcon("play", "icon-md")}</span></button>`
+    : `<button class="card-hover" data-action="play" data-title="${cleanTitle}" aria-label="Where to watch ${cleanTitle}"><span class="play-circle">${renderIcon("play", "icon-md")}</span></button>`;
+  const listButtonHtml = isArchive
+    ? ""
+    : `<button class="list-toggle ${saved ? "saved" : ""}" data-action="toggle-list" data-title="${cleanTitle}" aria-label="${saved ? "Remove" : "Add"} ${cleanTitle} ${saved ? "from" : "to"} my list">${saved ? renderIcon("heartFilled", "icon-sm") : renderIcon("plus", "icon-sm")}</button>`;
+
   return `
-    <article class="media-card ${isNew ? "card-enter" : ""}" data-title="${cleanTitle}">
+    <article class="media-card ${isNew ? "card-enter" : ""}" data-title="${cleanTitle}"${isArchive ? ` data-archive-id="${escapeHtml(card.archiveId)}"` : ""}>
       <div class="poster" style="--poster-gradient:${card.gradient}">
         ${card.image ? `<img class="poster-image" src="${card.image}" alt="${escapeHtml(cleanTitle)} official poster" loading="lazy" decoding="async" width="500" height="750" />` : ""}
         <span class="poster-kicker" title="${escapeHtml(card.kicker)}">${escapeHtml(card.kicker)}</span>
         ${badgeHtml}
         <span class="poster-title" title="${cleanTitle}">${cleanTitle}</span>
-        <button class="list-toggle ${saved ? "saved" : ""}" data-action="toggle-list" data-title="${cleanTitle}" aria-label="${saved ? "Remove" : "Add"} ${cleanTitle} ${saved ? "from" : "to"} my list">${saved ? renderIcon("heartFilled", "icon-sm") : renderIcon("plus", "icon-sm")}</button>
-        <button class="card-hover" data-action="play" data-title="${cleanTitle}" aria-label="Where to watch ${cleanTitle}"><span class="play-circle">${renderIcon("play", "icon-md")}</span></button>
+        ${listButtonHtml}
+        ${playButtonHtml}
       </div>
       <div class="card-info"><h3 title="${cleanTitle}">${cleanTitle}</h3><div class="card-meta">${card.year ? `<span>${escapeHtml(card.year)}</span>` : ""}${card.runtime && card.runtime !== "—" ? `<span>${escapeHtml(card.runtime)}</span>` : ""}${scoreHtml}</div></div>
     </article>
@@ -2933,6 +2950,7 @@ function renderHomeRails() {
   const container = $("#home-rails-container");
   const catalogSection = $("#catalog");
   const communitySection = $("#community-section");
+  const archiveSection = $("#archive-section");
   if (!container) return;
 
   const isHomeView = state.section === "home" && !state.search.trim();
@@ -2943,6 +2961,12 @@ function renderHomeRails() {
   }
   if (communitySection && !isHomeView) {
     communitySection.hidden = true;
+  }
+  // Free Movies is a home-only row: it reappears on returning home
+  // (unlike Community, which only re-shows after a reload/upload),
+  // and stays hidden until at least one film has verified playable.
+  if (archiveSection) {
+    archiveSection.hidden = !isHomeView || archiveFilms.length === 0;
   }
   if (!isHomeView) return;
 
@@ -3709,8 +3733,9 @@ function togglePlayerSettings(force) {
 // Ustream does not stream catalog titles. "Watch" on a movie, series,
 // anime or cartoon opens its details at the "Where to watch" hub, which
 // links out to authorised providers (TMDB watch-provider data, powered
-// by JustWatch). The native player plays community uploads only, and
-// official trailers play in the YouTube-nocookie embed.
+// by JustWatch). The native player plays community uploads and
+// Internet Archive public-domain films only, and official trailers
+// play in the YouTube-nocookie embed.
 function playTitle(title) {
   const item = findTitle(title);
   if (!item) return;
@@ -3835,8 +3860,9 @@ function playNativeVideo(videoUrl, title, poster = "", { videoId = null } = {}) 
   if (titleEl) titleEl.textContent = title || "Community video";
   if (playerBackdrop) playerBackdrop.hidden = false;
 
-  // Native playback is limited to community uploads; official trailers
-  // use the YouTube privacy-enhanced embed above.
+  // Native playback is limited to community uploads and Internet
+  // Archive public-domain films; official trailers use the YouTube
+  // privacy-enhanced embed above.
   video.src = videoUrl;
   state.player.nativeSource = { url: videoUrl, title, poster, videoId };
   state.player.trailerTitle = null;
@@ -4364,6 +4390,45 @@ function initCreatorStudioAndUploads() {
   });
 }
 
+// Free Movies — public-domain films from the Internet Archive, played
+// directly in the native player. On any failure the section hides
+// itself quietly: no error banner, no toast, no empty row. (Archive
+// films are a bonus row; a failed fetch must never look broken.)
+async function loadArchiveFilms() {
+  const isHomeView = state.section === "home" && !state.search.trim();
+  const row = $("#archive-row");
+  const section = $("#archive-section");
+  if (!row || !section) return;
+  const finishLoading = isHomeView
+    ? beginLoading(row, { label: "Loading free movies…", slowLabel: "Free movies are taking a while to load…", size: "sm", slowAfterMs: 4000 })
+    : () => {};
+  try {
+    const films = await archiveClient.getFreeMovies();
+    finishLoading();
+    if (!films.length) {
+      archiveFilms = [];
+      section.hidden = true;
+      row.innerHTML = "";
+      return;
+    }
+    archiveFilms = films;
+    section.hidden = false;
+    row.innerHTML = films.map((film) => renderCard(film)).join("");
+    observeLazyImages(row);
+  } catch {
+    finishLoading();
+    archiveFilms = [];
+    section.hidden = true;
+    row.innerHTML = "";
+  }
+}
+
+function playArchiveFilm(identifier) {
+  const film = archiveFilms.find((item) => item.archiveId === identifier);
+  if (!film?.streamUrl) return;
+  playNativeVideo(film.streamUrl, film.title, film.image || "");
+}
+
 async function loadCommunityVideos() {
   // Prompt 4 (full Langdock diff): show community skeletons while the
   // upload list loads; on empty or error, clear the row and hide the
@@ -4587,6 +4652,8 @@ document.addEventListener("click", (event) => {
   if (!button) {
     const card = event.target.closest(".media-card[data-title]");
     if (card && !card.closest("#modal-related-grid")) {
+      // Archive cards play directly instead of opening details.
+      if (card.dataset.archiveId) { playArchiveFilm(card.dataset.archiveId); return; }
       openDetails(card.dataset.title);
     }
     return;
@@ -4602,6 +4669,7 @@ document.addEventListener("click", (event) => {
     return;
   }
   if (button.dataset.action === "details") return openDetails(button.dataset.title);
+  if (button.dataset.action === "play-archive") { playArchiveFilm(button.dataset.archiveId); return; }
   if (button.dataset.action === "play") { playTitle(button.dataset.title); return; }
   if (button.dataset.action === "trailer") return void playTrailer(button.dataset.title);
   if (button.dataset.action === "bookmark") {
@@ -6754,6 +6822,7 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
   initCustomVideoPlayer();
   initCreatorStudioAndUploads();
   void loadCommunityVideos();
+  void loadArchiveFilms();
   initModalTabsAndHeroInteractions();
   initRouter();
   initInfiniteScroll();
