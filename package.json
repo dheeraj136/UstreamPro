@@ -2,7 +2,7 @@
   "name": "ustream",
   "version": "1.0.0",
   "private": true,
-  "description": "Ustream live streaming web app",
+  "description": "A responsive movie and TV discovery app with authorised watch listings, official trailers, and community uploads.",
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",

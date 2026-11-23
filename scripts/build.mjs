@@ -83,9 +83,15 @@ for (const iconFile of ["favicon.svg", "favicon.png", "apple-touch-icon.png"]) {
   }
 }
 
+const tmdbKeyConfigured = Boolean(String(process.env.TMDB_API_KEY || "").trim());
 await writeFile(
   join(publicApiDir, "config.json"),
-  JSON.stringify({ ok: true, configured: true, rapidApiKeyConfigured: true, mode: "live" }, null, 2),
+  JSON.stringify({
+    ok: true,
+    configured: tmdbKeyConfigured,
+    tmdbApiKeyConfigured: tmdbKeyConfigured,
+    mode: tmdbKeyConfigured ? "live" : "browser-fallback",
+  }, null, 2),
   "utf8"
 );
 

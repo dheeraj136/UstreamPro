@@ -1,9 +1,20 @@
 import { createServer } from "node:http";
-import { stat } from "node:fs/promises";
+import { stat, readFile } from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import { extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import handler from "../lib/server.js";
+// Load local .env before importing the request handler, which reads
+// TMDB_API_KEY when it receives a request.
+try {
+  const envText = await readFile(new URL("../.env", import.meta.url), "utf8");
+  for (const line of envText.split(/\r?\n/)) {
+    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+    if (!match || Object.hasOwn(process.env, match[1])) continue;
+    const value = match[2].replace(/^(["'])(.*)\1$/, "$2");
+    process.env[match[1]] = value;
+  }
+} catch {}
+const { default: handler } = await import("../lib/server.js");
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const PORT = Number(process.env.PORT || 4174);

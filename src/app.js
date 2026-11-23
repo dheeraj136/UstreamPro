@@ -2,100 +2,11 @@ import { ICONS, renderIcon } from "./assets/icons.js";
 import { storage } from "./modules/storage.js";
 import { initImageLazyLoading, observeLazyImages, getDescriptiveAlt, handleImageError } from "./modules/image-loader.js";
 import { delegate, addPassiveListener, rafThrottle, createListenerPool } from "./modules/events.js";
-
-/* ==========================================================================
-   Ustream Anti-Ad & Redirect Blocker Shield
-   Guarantees zero unauthorized ad pop-ups, pop-unders, top-window hijacks,
-   or rogue promotional redirects.
-   ========================================================================== */
-function initAdShield() {
-  if (typeof window === "undefined") return;
-
-  // 1. Hard-block unauthorized window.open ad popups and tab redirects (allow explicit user popouts)
-  const _origOpen = window.open;
-  window._allowUserPopout = function(url) {
-    return _origOpen.call(window, url, "_blank", "noopener,noreferrer");
-  };
-  window.open = function (url, target, features) {
-    if (!url || typeof url !== "string") return null;
-    try {
-      const parsed = new URL(url, window.location.origin);
-      const trustedHosts = [window.location.hostname, "discord.com", "discord.gg", "themoviedb.org", "api.themoviedb.org"];
-      if (trustedHosts.some((h) => parsed.hostname === h || parsed.hostname.endsWith("." + h))) {
-        return _origOpen.call(window, url, target, features);
-      }
-    } catch {}
-    console.warn("[Ustream Ad Shield] Blocked unauthorized pop-up / redirect to:", url);
-    return null;
-  };
-
-  // 2. Clear known promotional vendor ad tags / keys
-  const adKeys = ["gaia-promo-off-once", "promo-shown", "_pop_fired", "monetag", "adcash", "propeller", "adsterra"];
-  adKeys.forEach((k) => {
-    try {
-      localStorage.removeItem(k);
-      sessionStorage.removeItem(k);
-    } catch {}
-  });
-
-  // 3. Block and remove rogue ad network script tags and full-screen invisible clickjack overlays
-  const adDomains = [
-    "sepoygalliot.com",
-    "googletagmanager.com/gtag",
-    "monetag.com",
-    "adsterra.com",
-    "propellerads.com",
-    "popcash.net",
-    "clickadu.com",
-    "exoclick.com",
-    "adcash.com",
-    "juicyads.com",
-    "trafficjunky.com",
-    "bet365",
-    "1xbet"
-  ];
-
-  const observer = new MutationObserver((mutations) => {
-    for (const m of mutations) {
-      for (const node of m.addedNodes) {
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          const el = node;
-          const tagName = el.tagName.toLowerCase();
-          if (tagName === "script") {
-            const src = (el.src || "").toLowerCase();
-            if (adDomains.some((d) => src.includes(d))) {
-              console.warn("[Ustream Ad Shield] Intercepted and removed rogue ad script:", src);
-              el.remove();
-            }
-          }
-          if (tagName === "div" || tagName === "a") {
-            const style = el.getAttribute("style") || "";
-            if (
-              (style.includes("position: fixed") || style.includes("position:fixed")) &&
-              (style.includes("opacity: 0") || style.includes("opacity:0")) &&
-              (style.includes("z-index: 2147483647") || style.includes("z-index: 999999") || style.includes("z-index:999999"))
-            ) {
-              console.warn("[Ustream Ad Shield] Removed clickjacking ad overlay");
-              el.remove();
-            }
-          }
-        }
-      }
-    }
-  });
-
-  if (document.documentElement) {
-    initImageLazyLoading();
-    observer.observe(document.documentElement, { childList: true, subtree: true });
-  } else {
-    document.addEventListener("DOMContentLoaded", () => {
-      initImageLazyLoading();
-      observer.observe(document.documentElement, { childList: true, subtree: true });
-    });
-  }
-}
-
-initAdShield();
+import { createTtlCache, safeSessionStorage } from "./modules/api-cache.js";
+import { createTmdbClient } from "./modules/tmdb-client.js";
+import { tmdbRatingFromVotes } from "./modules/ratings.js";
+import { loaderHtml, stateHtml, beginLoading, fetchWithRetry as resilientFetch } from "./modules/loader.js";
+import { normalizeWatchProviders, watchHubHtml } from "./modules/watch-providers.js";
 
 const animeFilterResponse = {
   code: 0,
@@ -240,12 +151,7 @@ const DEMO_ITEMS = [
     "countryName": "United States",
     "year": 2024,
     "releaseDate": "2024-07-26",
-    "rating": 7.7,
-    "imdbRatingValue": "7.7",
-    "runtime": "2h 8m",
-    "duration": "2h 8m",
     "language": "English, Multi Sub",
-    "badge": "18+ Adult",
     "kicker": "Marvel Studios · R-Rated",
     "image": "https://image.tmdb.org/t/p/w500/8cdWjvZQUExUUTzyp4t6EDMubfO.jpg",
     "cover": {
@@ -253,11 +159,6 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #7f1d1d, #450a0a 50%, #020617)",
     "description": "A listless Wade Wilson toils away in civilian life with his days as the morally flexible mercenary, Deadpool, behind him. But when his homeworld faces an existential threat, Wade must reluctantly suit-up again with an even more reluctant Wolverine.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
-    },
-    "hasResource": true,
     "seNum": 0
   },
   {
@@ -280,12 +181,7 @@ const DEMO_ITEMS = [
     "countryName": "United States",
     "year": 2019,
     "releaseDate": "2019-06-16",
-    "rating": 8.3,
-    "imdbRatingValue": "8.3",
-    "runtime": "55m / ep",
-    "duration": "55m / ep",
     "language": "English, Multi Sub",
-    "badge": "18+ Mature",
     "kicker": "HBO Original · TV-MA",
     "image": "https://image.tmdb.org/t/p/w500/aJrG7OkoTMPWG5c8opz8a93AZPY.jpg",
     "cover": {
@@ -293,11 +189,6 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #581c87, #3b0764 50%, #020617)",
     "description": "A group of high school students navigate love and friendships in a world of drugs, sex, trauma and social media. Starring Zendaya in an Emmy-winning performance.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
-    },
-    "hasResource": true,
     "seNum": 1
   },
   {
@@ -322,12 +213,7 @@ const DEMO_ITEMS = [
     "countryName": "Japan",
     "year": 2022,
     "releaseDate": "2022-10-12",
-    "rating": 8.6,
-    "imdbRatingValue": "8.6",
-    "runtime": "24m / ep",
-    "duration": "24m / ep",
     "language": "Japanese, English Dub",
-    "badge": "18+ Anime",
     "kicker": "MAPPA · TV-MA",
     "image": "https://image.tmdb.org/t/p/w500/npdB6eFzizki0WaZ1OvKcJrWe97.jpg",
     "cover": {
@@ -335,11 +221,6 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #991b1b, #450a0a 50%, #020617)",
     "description": "Denji is a young man living a life of extreme poverty. He lives with Pochita, the Chainsaw Devil. After a brutal betrayal, Denji is reborn as the devil-hunting devilman 'Chainsaw Man' in this visceral, gory anime masterpiece.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
-    },
-    "hasResource": true,
     "seNum": 1
   },
   {
@@ -358,12 +239,7 @@ const DEMO_ITEMS = [
     "countryName": "United States",
     "year": 2010,
     "releaseDate": "2010-07-16",
-    "rating": 8.8,
-    "imdbRatingValue": "8.8",
-    "runtime": "2h 28m",
-    "duration": "2h 28m",
     "language": "English, Multi Sub",
-    "badge": "Top Rated",
     "kicker": "Christopher Nolan",
     "image": "https://image.tmdb.org/t/p/w500/oYuLEt3zVCKq57qu2F8dT7NIa6f.jpg",
     "cover": {
@@ -371,11 +247,6 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #1e293b, #0f172a 50%, #020617)",
     "description": "Cobb, a skilled thief who commits corporate espionage by infiltrating the subconscious of his targets, is offered a chance to have his criminal history erased as payment for the implantation of another person's idea into a target's subconscious.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
-    },
-    "hasResource": true,
     "seNum": 0
   },
   {
@@ -394,12 +265,7 @@ const DEMO_ITEMS = [
     "countryName": "United States",
     "year": 2014,
     "releaseDate": "2014-11-07",
-    "rating": 8.7,
-    "imdbRatingValue": "8.7",
-    "runtime": "2h 49m",
-    "duration": "2h 49m",
     "language": "English, Multi Sub",
-    "badge": "Epic Sci-Fi",
     "kicker": "Christopher Nolan",
     "image": "https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg",
     "cover": {
@@ -407,11 +273,6 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #0369a1, #0c4a6e 50%, #082f49)",
     "description": "When Earth becomes uninhabitable in the future, a farmer and ex-NASA pilot, Joseph Cooper, is tasked to pilot a spacecraft, along with a team of researchers, to find a new planet for humans.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4"
-    },
-    "hasResource": true,
     "seNum": 0
   },
   {
@@ -430,12 +291,7 @@ const DEMO_ITEMS = [
     "countryName": "United States",
     "year": 2008,
     "releaseDate": "2008-07-18",
-    "rating": 9,
-    "imdbRatingValue": "9.0",
-    "runtime": "2h 32m",
-    "duration": "2h 32m",
     "language": "English, Multi Sub",
-    "badge": "Masterpiece",
     "kicker": "Legendary",
     "image": "https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
     "cover": {
@@ -443,11 +299,6 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #334155, #1e293b 50%, #0f172a)",
     "description": "When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest psychological and physical tests of his ability to fight injustice.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
-    },
-    "hasResource": true,
     "seNum": 0
   },
   {
@@ -466,12 +317,7 @@ const DEMO_ITEMS = [
     "countryName": "United States",
     "year": 2024,
     "releaseDate": "2024-03-01",
-    "rating": 8.5,
-    "imdbRatingValue": "8.5",
-    "runtime": "2h 46m",
-    "duration": "2h 46m",
     "language": "English, Multi Sub",
-    "badge": "Blockbuster",
     "kicker": "Denis Villeneuve",
     "image": "https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg",
     "cover": {
@@ -479,11 +325,6 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #d97706, #78350f 50%, #451a03)",
     "description": "Paul Atreides unites with Chani and the Fremen while seeking revenge against the conspirators who destroyed his family, facing a choice between love and the fate of the universe.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
-    },
-    "hasResource": true,
     "seNum": 0
   },
   {
@@ -502,12 +343,7 @@ const DEMO_ITEMS = [
     "countryName": "United States",
     "year": 2023,
     "releaseDate": "2023-07-21",
-    "rating": 8.9,
-    "imdbRatingValue": "8.9",
-    "runtime": "3h 00m",
-    "duration": "3h 00m",
     "language": "English, Multi Sub",
-    "badge": "Oscar Winner",
     "kicker": "Christopher Nolan",
     "image": "https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg",
     "cover": {
@@ -515,11 +351,6 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #ea580c, #7c2d12 50%, #431407)",
     "description": "The story of American scientist J. Robert Oppenheimer and his role in the Manhattan Project, developing the atomic weapons that ended World War II.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4"
-    },
-    "hasResource": true,
     "seNum": 0
   },
   {
@@ -540,12 +371,7 @@ const DEMO_ITEMS = [
     "countryName": "United States",
     "year": 2023,
     "releaseDate": "2023-06-02",
-    "rating": 8.7,
-    "imdbRatingValue": "8.7",
-    "runtime": "2h 20m",
-    "duration": "2h 20m",
     "language": "English, Multi Sub",
-    "badge": "Animation Marvel",
     "kicker": "Sony Pictures",
     "image": "https://image.tmdb.org/t/p/w500/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg",
     "cover": {
@@ -553,11 +379,6 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #db2777, #831843 50%, #4c0519)",
     "description": "Miles Morales catapults across the Multiverse, encountering a society of Spider-People charged with protecting its existence when heroes clash on handling a new catastrophic threat.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4"
-    },
-    "hasResource": true,
     "seNum": 0
   },
   {
@@ -576,12 +397,7 @@ const DEMO_ITEMS = [
     "countryName": "United States",
     "year": 2019,
     "releaseDate": "2019-04-26",
-    "rating": 8.4,
-    "imdbRatingValue": "8.4",
-    "runtime": "3h 01m",
-    "duration": "3h 01m",
     "language": "English, Multi Sub",
-    "badge": "Marvel Epic",
     "kicker": "Marvel Studios",
     "image": "https://image.tmdb.org/t/p/w500/or06FN3Dka5tukK1e9sl16pB3iy.jpg",
     "cover": {
@@ -589,11 +405,6 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #7c3aed, #4c1d95 50%, #2e1065)",
     "description": "After Thanos wiped out half of all life in the universe, the remaining Avengers assemble once more in a desperate final stand to reverse the devastating catastrophe.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4"
-    },
-    "hasResource": true,
     "seNum": 0
   },
   {
@@ -612,12 +423,7 @@ const DEMO_ITEMS = [
     "countryName": "United States",
     "year": 2000,
     "releaseDate": "2000-05-05",
-    "rating": 8.5,
-    "imdbRatingValue": "8.5",
-    "runtime": "2h 35m",
-    "duration": "2h 35m",
     "language": "English, Multi Sub",
-    "badge": "Classic",
     "kicker": "Ridley Scott",
     "image": "https://image.tmdb.org/t/p/w500/ty8TGRuvJLPUmAR1H1nRIsgwvim.jpg",
     "cover": {
@@ -625,11 +431,6 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #ca8a04, #713f12 50%, #422006)",
     "description": "A former Roman General sets out to exact vengeance against the corrupt emperor who murdered his family and sent him into slavery.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4"
-    },
-    "hasResource": true,
     "seNum": 0
   },
   {
@@ -647,12 +448,7 @@ const DEMO_ITEMS = [
     "countryName": "United States",
     "year": 1999,
     "releaseDate": "1999-03-31",
-    "rating": 8.7,
-    "imdbRatingValue": "8.7",
-    "runtime": "2h 16m",
-    "duration": "2h 16m",
     "language": "English, Multi Sub",
-    "badge": "Cyberpunk Classic",
     "kicker": "The Wachowskis",
     "image": "https://image.tmdb.org/t/p/w500/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg",
     "cover": {
@@ -660,11 +456,6 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #16a34a, #14532d 50%, #052e16)",
     "description": "When a beautiful stranger leads computer hacker Neo to a forbidding underworld, he discovers the shocking truth--the life he knows is the elaborate deception of an evil cyber-intelligence.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
-    },
-    "hasResource": true,
     "seNum": 0
   },
   {
@@ -685,12 +476,7 @@ const DEMO_ITEMS = [
     "countryName": "Japan",
     "year": 2001,
     "releaseDate": "2001-07-20",
-    "rating": 8.6,
-    "imdbRatingValue": "8.6",
-    "runtime": "2h 05m",
-    "duration": "2h 05m",
     "language": "Japanese, English Dub",
-    "badge": "Studio Ghibli",
     "kicker": "Hayao Miyazaki",
     "image": "https://image.tmdb.org/t/p/w500/39wmItIWsg5sZMyRUHLkWBcuVCM.jpg",
     "cover": {
@@ -698,11 +484,6 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #0d9488, #115e59 50%, #042f2e)",
     "description": "During her family's move to the suburbs, a sullen 10-year-old girl wanders into a world ruled by gods, witches, and spirits, where humans are changed into beasts.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4"
-    },
-    "hasResource": true,
     "seNum": 0
   },
   {
@@ -721,12 +502,7 @@ const DEMO_ITEMS = [
     "countryName": "United States",
     "year": 2008,
     "releaseDate": "2008-01-20",
-    "rating": 9.5,
-    "imdbRatingValue": "9.5",
-    "runtime": "5 Seasons · 62 Episodes",
-    "duration": "5 Seasons",
     "language": "English, Multi Sub",
-    "badge": "All-Time Top #1",
     "kicker": "Vince Gilligan",
     "image": "https://image.tmdb.org/t/p/w500/anFx9aTOOYqgS3v7x3R84Kz67ly.jpg",
     "cover": {
@@ -734,11 +510,6 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #15803d, #14532d 50%, #052e16)",
     "description": "A high school chemistry teacher diagnosed with inoperable lung cancer turns to manufacturing and selling methamphetamine in order to secure his family's financial future.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
-    },
-    "hasResource": true,
     "seNum": 5
   },
   {
@@ -758,12 +529,7 @@ const DEMO_ITEMS = [
     "countryName": "United States",
     "year": 2016,
     "releaseDate": "2016-07-15",
-    "rating": 8.7,
-    "imdbRatingValue": "8.7",
-    "runtime": "5 Seasons · 42 Episodes",
-    "duration": "5 Seasons",
     "language": "English, Multi Sub",
-    "badge": "Global Phenomenon",
     "kicker": "Duffer Brothers",
     "image": "https://image.tmdb.org/t/p/w500/49WJfeN0moxb9IPfGn8AIqMGskD.jpg",
     "cover": {
@@ -771,11 +537,6 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #b91c1c, #7f1d1d 50%, #450a0a)",
     "description": "When a young boy vanishes, a small Indiana town uncovers a mystery involving secret government experiments, terrifying supernatural forces, and one strange little girl.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
-    },
-    "hasResource": true,
     "seNum": 5
   },
   {
@@ -795,12 +556,7 @@ const DEMO_ITEMS = [
     "countryName": "United States",
     "year": 2023,
     "releaseDate": "2023-01-15",
-    "rating": 8.8,
-    "imdbRatingValue": "8.8",
-    "runtime": "2 Seasons · 16 Episodes",
-    "duration": "2 Seasons",
     "language": "English, Multi Sub",
-    "badge": "HBO Original",
     "kicker": "Craig Mazin & Neil Druckmann",
     "image": "https://image.tmdb.org/t/p/w500/dmo6TYuuJgaYinXBPjrgG9mB5od.jpg",
     "cover": {
@@ -808,11 +564,6 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #4d7c0f, #365314 50%, #1a2e05)",
     "description": "Twenty years after modern civilization was destroyed, Joel is hired to smuggle Ellie, a 14-year-old girl, out of an oppressive quarantine zone across a ravaged America.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4"
-    },
-    "hasResource": true,
     "seNum": 2
   },
   {
@@ -832,12 +583,7 @@ const DEMO_ITEMS = [
     "countryName": "United States",
     "year": 2011,
     "releaseDate": "2011-04-17",
-    "rating": 9.2,
-    "imdbRatingValue": "9.2",
-    "runtime": "8 Seasons · 73 Episodes",
-    "duration": "8 Seasons",
     "language": "English, Multi Sub",
-    "badge": "Epic Fantasy",
     "kicker": "HBO Series",
     "image": "https://image.tmdb.org/t/p/w500/1XS1oqL89opfnbLl8WnZY1O1uJx.jpg",
     "cover": {
@@ -845,11 +591,6 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #475569, #334155 50%, #0f172a)",
     "description": "Nine noble families fight for control over the Iron Throne of Westeros, while an ancient enemy returns after being dormant for millennia beyond the northern Wall.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
-    },
-    "hasResource": true,
     "seNum": 8
   },
   {
@@ -869,12 +610,7 @@ const DEMO_ITEMS = [
     "countryName": "United States",
     "year": 2022,
     "releaseDate": "2022-02-18",
-    "rating": 8.7,
-    "imdbRatingValue": "8.7",
-    "runtime": "2 Seasons · 19 Episodes",
-    "duration": "2 Seasons",
     "language": "English, Multi Sub",
-    "badge": "Mind-Bending",
     "kicker": "Ben Stiller",
     "image": "https://image.tmdb.org/t/p/w500/pPHpeI2X1qEd1CS1SeyrdhZ4qnT.jpg",
     "cover": {
@@ -882,11 +618,6 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #0284c7, #0369a1 50%, #075985)",
     "description": "Mark Scout leads a team at Lumon Industries whose employees undergo a severance procedure separating work memories from personal life memories.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
-    },
-    "hasResource": true,
     "seNum": 2
   },
   {
@@ -906,12 +637,7 @@ const DEMO_ITEMS = [
     "countryName": "Japan",
     "year": 2013,
     "releaseDate": "2013-04-07",
-    "rating": 9.1,
-    "imdbRatingValue": "9.1",
-    "runtime": "4 Seasons · 87 Episodes",
-    "duration": "4 Seasons",
     "language": "Japanese, English Dub",
-    "badge": "Anime Masterpiece",
     "kicker": "WIT Studio & MAPPA",
     "image": "https://image.tmdb.org/t/p/w500/hTP1DtLGFamjfu8WqjnuQdP1n4i.jpg",
     "cover": {
@@ -919,11 +645,6 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #b45309, #78350f 50%, #451a03)",
     "description": "After his hometown is destroyed and his mother is killed, young Eren Jaeger vows to cleanse the earth of the giant humanoid Titans that have pushed humanity behind giant concentric walls.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4"
-    },
-    "hasResource": true,
     "seNum": 4
   },
   {
@@ -942,12 +663,7 @@ const DEMO_ITEMS = [
     "countryName": "Japan",
     "year": 2019,
     "releaseDate": "2019-04-06",
-    "rating": 8.6,
-    "imdbRatingValue": "8.6",
-    "runtime": "4 Seasons · 55 Episodes",
-    "duration": "4 Seasons",
     "language": "Japanese, English Dub",
-    "badge": "Ufotable Masterwork",
     "kicker": "Koyoharu Gotouge",
     "image": "https://image.tmdb.org/t/p/w500/xUfRZu2mi8jH6SzQEJGP6tjBuYj.jpg",
     "cover": {
@@ -955,11 +671,6 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #0284c7, #0f766e 50%, #134e4a)",
     "description": "A kindhearted young boy whose family was slaughtered by demons joins the Demon Slayer Corps to find a cure for his sister Nezuko, who was turned into a demon.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4"
-    },
-    "hasResource": true,
     "seNum": 4
   },
   {
@@ -979,12 +690,7 @@ const DEMO_ITEMS = [
     "countryName": "Japan",
     "year": 2020,
     "releaseDate": "2020-10-03",
-    "rating": 8.5,
-    "imdbRatingValue": "8.5",
-    "runtime": "2 Seasons · 47 Episodes",
-    "duration": "2 Seasons",
     "language": "Japanese, English Dub",
-    "badge": "Fan Favorite",
     "kicker": "MAPPA",
     "image": "https://image.tmdb.org/t/p/w500/6qQzMJG27XOJsyAEEIisoJB45j2.jpg",
     "cover": {
@@ -992,11 +698,6 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #4338ca, #312e81 50%, #1e1b4b)",
     "description": "Yuji Itadori swallows a cursed finger to save his friends, sharing his body with the ancient Curse King Ryomen Sukuna, entering Tokyo Jujutsu High to exorcise deadly spirits.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4"
-    },
-    "hasResource": true,
     "seNum": 2
   },
   {
@@ -1017,12 +718,7 @@ const DEMO_ITEMS = [
     "countryName": "Japan",
     "year": 2006,
     "releaseDate": "2006-10-04",
-    "rating": 9,
-    "imdbRatingValue": "9.0",
-    "runtime": "1 Season · 37 Episodes",
-    "duration": "1 Season",
     "language": "Japanese, English Dub",
-    "badge": "Psychological Classic",
     "kicker": "Madhouse",
     "image": "https://image.tmdb.org/t/p/w500/tCZFfYTIwrR7n94J6G14Y4hAFU6.jpg",
     "cover": {
@@ -1030,11 +726,6 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #18181b, #09090b 50%, #000000)",
     "description": "A brilliant high school student discovers a supernatural notebook that grants the ability to kill anyone whose name and face are known, engaging in a battle of wits with the enigmatic detective L.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
-    },
-    "hasResource": true,
     "seNum": 1
   },
   {
@@ -1054,12 +745,7 @@ const DEMO_ITEMS = [
     "countryName": "Japan",
     "year": 2009,
     "releaseDate": "2009-04-05",
-    "rating": 9.1,
-    "imdbRatingValue": "9.1",
-    "runtime": "1 Season · 64 Episodes",
-    "duration": "1 Season",
     "language": "Japanese, English Dub",
-    "badge": "Top Rated Anime",
     "kicker": "Bones Studio",
     "image": "https://image.tmdb.org/t/p/w500/5ZFUEOULaVml7pQuXxhpR2SmVUw.jpg",
     "cover": {
@@ -1067,268 +753,20 @@ const DEMO_ITEMS = [
     },
     "gradient": "linear-gradient(145deg, #b91c1c, #991b1b 50%, #450a0a)",
     "description": "Two alchemist brothers embark on an arduous journey to seek the legendary Philosopher's Stone to restore their bodies after a forbidden human transmutation ritual went disastrously wrong.",
-    "video": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-    "playUrl": {
-      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
-    },
-    "hasResource": true,
     "seNum": 1
   }
 ];
 
-const EPISODE_MAP = {
-  "series-breaking-bad": [
-    {
-      "ep": 1,
-      "season": 1,
-      "name": "Pilot",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 2,
-      "season": 1,
-      "name": "Cat's in the Bag...",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 3,
-      "season": 1,
-      "name": "...And the Bag's in the River",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 4,
-      "season": 1,
-      "name": "Cancer Man",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 5,
-      "season": 1,
-      "name": "Gray Matter",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-      "resolution": 1080
-    }
-  ],
-  "series-stranger-things": [
-    {
-      "ep": 1,
-      "season": 1,
-      "name": "Chapter One: The Vanishing of Will Byers",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 2,
-      "season": 1,
-      "name": "Chapter Two: The Weirdo on Maple Street",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 3,
-      "season": 1,
-      "name": "Chapter Three: Holly, Jolly",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 4,
-      "season": 1,
-      "name": "Chapter Four: The Body",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-      "resolution": 1080
-    }
-  ],
-  "series-last-of-us": [
-    {
-      "ep": 1,
-      "season": 1,
-      "name": "When You're Lost in the Darkness",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 2,
-      "season": 1,
-      "name": "Infected",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 3,
-      "season": 1,
-      "name": "Long, Long Time",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-      "resolution": 1080
-    }
-  ],
-  "series-game-of-thrones": [
-    {
-      "ep": 1,
-      "season": 1,
-      "name": "Winter Is Coming",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 2,
-      "season": 1,
-      "name": "The Kingsroad",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 3,
-      "season": 1,
-      "name": "Lord Snow",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-      "resolution": 1080
-    }
-  ],
-  "series-severance": [
-    {
-      "ep": 1,
-      "season": 1,
-      "name": "Good News About Hell",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 2,
-      "season": 1,
-      "name": "Half Loop",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 3,
-      "season": 1,
-      "name": "In Perpetuity",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-      "resolution": 1080
-    }
-  ],
-  "anime-attack-on-titan": [
-    {
-      "ep": 1,
-      "season": 1,
-      "name": "To You, in 2,000 Years: The Fall of Shiganshina, Part 1",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 2,
-      "season": 1,
-      "name": "That Day: The Fall of Shiganshina, Part 2",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 3,
-      "season": 1,
-      "name": "A Dim Light Amid Despair",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-      "resolution": 1080
-    }
-  ],
-  "anime-demon-slayer": [
-    {
-      "ep": 1,
-      "season": 1,
-      "name": "Cruelty",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 2,
-      "season": 1,
-      "name": "Trainer Sakonji Urokodaki",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 3,
-      "season": 1,
-      "name": "Sabito and Makomo",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-      "resolution": 1080
-    }
-  ],
-  "anime-jujutsu-kaisen": [
-    {
-      "ep": 1,
-      "season": 1,
-      "name": "Ryomen Sukuna",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 2,
-      "season": 1,
-      "name": "For Myself",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 3,
-      "season": 1,
-      "name": "Girl of Steel",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-      "resolution": 1080
-    }
-  ],
-  "anime-death-note": [
-    {
-      "ep": 1,
-      "season": 1,
-      "name": "Rebirth",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 2,
-      "season": 1,
-      "name": "Confrontation",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 3,
-      "season": 1,
-      "name": "Dealings",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-      "resolution": 1080
-    }
-  ],
-  "anime-fma-brotherhood": [
-    {
-      "ep": 1,
-      "season": 1,
-      "name": "Fullmetal Alchemist",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 2,
-      "season": 1,
-      "name": "The First Day",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-      "resolution": 1080
-    },
-    {
-      "ep": 3,
-      "season": 1,
-      "name": "City of Heresy",
-      "resourceLink": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-      "resolution": 1080
-    }
-  ]
-};
+// Curated offline showcase records do not carry live TMDB vote data.
+// Never show their old, manually copied scores as current ratings.
+DEMO_ITEMS.forEach((item) => {
+  item.rating = null;
+  item.imdbRatingValue = "";
+  item.runtime = "";
+  item.duration = "";
+  item.badge = item.type === "anime" ? "Anime" : item.type === "cartoon" ? "Animation" : item.type === "movie" ? "Movie" : "TV series";
+});
+
 
 let catalog = [...DEMO_ITEMS];
 let recommendations = DEMO_ITEMS.slice(0, 6);
@@ -1340,9 +778,9 @@ let featured = pickRandomFeatured(DEMO_ITEMS);
 
 // --- Bug 6/7/9/29 shared helpers: single source of truth for catalog
 // identity, ratings and search relevance. -------------------------------
-// One fallback rating everywhere (was 7.5 / 8.0 / 8.5 / 8.6 depending on
-// which code path rendered the same title).
-const FALLBACK_RATING = 8.0;
+// Redesign 2026-11-22: there is no invented fallback rating. When TMDB
+// (or the source) has no rating, the rating is null and the UI shows
+// "—" instead of a made-up number.
 // Infinite scroll is endless by design, but the in-memory catalog must
 // not grow without bound in one session (audit: 150 -> 520).
 const MAX_CATALOG_SIZE = 600;
@@ -1379,29 +817,11 @@ function clampRating(value) {
   if (!Number.isFinite(rating) || rating <= 0) return null;
   return Math.min(9.9, Math.max(0, Math.round(rating * 10) / 10));
 }
-function normalizeRating(value, fallback = FALLBACK_RATING) {
-  const clamped = clampRating(value);
-  return clamped === null ? fallback : clamped;
+function normalizeRating(value) {
+  return clampRating(value);
 }
-// Bug 9: within one session, the first real rating seen for a TMDB id is
-// the rating everywhere that id is shown (home, search, modal, cache),
-// so a title cannot read 10.0 on one load and 9.3 on the next. Curated
-// DEMO ratings seed the map, so DEMO is the source of truth for them.
-const tmdbRatingById = new Map();
-DEMO_ITEMS.forEach((item) => {
-  const real = clampRating(item.rating);
-  if (real === null) return;
-  if (item.tmdbId) tmdbRatingById.set(String(item.tmdbId), real);
-  if (item.subjectId) tmdbRatingById.set(String(item.subjectId), real);
-});
-function stableRatingFor(value, key) {
-  const k = key === undefined || key === null ? "" : String(key);
-  if (k && tmdbRatingById.has(k)) return tmdbRatingById.get(k);
-  const real = clampRating(value);
-  if (real === null) return FALLBACK_RATING;
-  if (k) tmdbRatingById.set(k, real);
-  return real;
-}
+// Normalize only a real TMDB vote_average. The offline showcase has no
+// numeric ratings because it is not a live TMDB response.
 
 // Bug 6/7: one identity for a title. TMDB id first (the app already
 // treats `tmdb-<id>` as the global id in subjectId/video URLs); then
@@ -1629,14 +1049,12 @@ function dedupeCatalogItems(items) {
   // Central Coming-soon enforcement (bug 10): every item that passes
   // through dedupe gets its badge/stream re-derived from the single
   // unreleased rule, so no data source can smuggle an unreleased title
-  // in with a "Popular"/"Top Rated" badge or a playable URL.
+  // in with a "Popular"/"Top Rated" badge or a playback source.
   for (const item of merged) {
     if (isUnreleasedItem(item)) {
       item.isComingSoon = true;
       item.comingSoon = true;
       item.badge = "Coming soon";
-      item.video = "";
-      if (item.playUrl) item.playUrl = { url: "" };
     }
   }
   return merged;
@@ -1676,7 +1094,7 @@ function replaceCatalogItems(items) {
 
 // Prompt 4 (full Langdock diff): the empty state must only appear after
 // a fetch finishes, and rows must not render real content while the
-// catalog is still loading — these flags gate render(), renderContinue()
+// catalog is still loading — these flags gate render() and the saved-title preview
 // and renderRecommendations() while skeletons are showing.
 let catalogHasSettled = false;
 let catalogRowsLoading = false;
@@ -1723,7 +1141,7 @@ function searchRelevanceScore(title, query) {
 function sortBySearchRelevance(items, query) {
   return [...(items || [])].sort((a, b) => {
     const diff = searchRelevanceScore(a.title, query) - searchRelevanceScore(b.title, query);
-    return diff !== 0 ? diff : (normalizeRating(b.rating) - normalizeRating(a.rating));
+    return diff !== 0 ? diff : ((normalizeRating(b.rating) ?? 0) - (normalizeRating(a.rating) ?? 0));
   });
 }
 
@@ -1736,104 +1154,11 @@ function formatTime(seconds) {
   return h > 0 ? `${h}:${mm}:${String(sec).padStart(2, "0")}` : `${mm}:${String(sec).padStart(2, "0")}`;
 }
 
-function loadContinuation() {
-  try {
-    const raw = localStorage.getItem("ustream-continuation");
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        // Only keep entries with evidence of real playback. Legacy rows
-        // written by the old fake "+15 progress" code have no watchedAt
-        // and no position/duration, so they are dropped here: a fresh
-        // user starts with an empty Continue Watching row.
-        const seen = new Set();
-        return parsed.filter((e) => {
-          if (!e || typeof e.title !== "string" || !e.title) return false;
-          if (seen.has(e.title)) return false;
-          seen.add(e.title);
-          const progress = Number(e.progress);
-          if (!Number.isFinite(progress) || progress < 0 || progress >= 100) return false;
-          // Round 2 (bug 15): only real playback survives a reload.
-          // Entries with <30s watched and <=1% progress are dropped —
-          // that is what the old "record on player open" code wrote
-          // (position 0, progress 0, watchedAt set), which is why fresh
-          // users saw pre-seeded 0% rows.
-          const pos = Number(e.positionSeconds) || 0;
-          const embedSecs = Number(e.embedWatchedSeconds) || 0;
-          return pos >= 30 || progress > 1 || embedSecs >= 30;
-        }).slice(0, 6);
-      }
-    }
-  } catch {}
-  return [];
-}
 
-function persistContinuation() {
-  try {
-    localStorage.setItem("ustream-continuation", JSON.stringify(continuation));
-  } catch {}
-}
 
-// Saved resume position (seconds) for a title, from the continuation entry
-// or from the per-title position key written by the player timeupdate.
-function getSavedPosition(itemOrTitle) {
-  const title = typeof itemOrTitle === "string" ? itemOrTitle : itemOrTitle?.title;
-  if (!title) return 0;
-  const entry = continuation.find((c) => c.title === title);
-  if (entry && Number(entry.positionSeconds) > 0) return Number(entry.positionSeconds);
-  try {
-    const pos = parseFloat(localStorage.getItem(`ustream-pos-${title}`) || "0");
-    if (Number.isFinite(pos) && pos > 0) return pos;
-  } catch {}
-  return 0;
-}
 
-// Record REAL playback progress only. progress is derived from
-// position/duration, never fabricated. Called on every 5s timeupdate
-// tick (native video) and after 30s of continuous embed playback.
-// Round 2 (bug 15): an entry is created ONLY once there is real
-// progress — at least 30 seconds watched or more than 1% — and a
-// sub-threshold call never creates one and never regresses an existing
-// real entry. Player-open used to record position 0 / progress 0 with
-// watchedAt set, which is exactly how 0% rows appeared for titles
-// nobody had watched.
-function recordPlaybackProgress(item, { positionSeconds = 0, durationSeconds = 0, embedWatchedSeconds = 0 } = {}) {
-  if (!item?.title) return;
-  const pos = Math.max(0, Math.floor(Number(positionSeconds) || 0));
-  const dur = Math.max(0, Math.floor(Number(durationSeconds) || 0));
-  const embedSecs = Math.max(0, Math.floor(Number(embedWatchedSeconds) || 0));
-  const existing = continuation.find((c) => c.title === item.title);
-  const progress = dur > 0 ? Math.min(99, Math.round((pos / dur) * 100))
-    : (existing ? Number(existing.progress) || 0 : 0);
-  const hasRealProgress = pos >= 30 || progress > 1 || embedSecs >= 30;
-  if (!hasRealProgress) return;
-  const entry = {
-    ...(existing || {}),
-    ...item,
-    title: item.title,
-    progress,
-    positionSeconds: pos,
-    durationSeconds: dur || existing?.durationSeconds || 0,
-    embedWatchedSeconds: Math.max(embedSecs, Number(existing?.embedWatchedSeconds) || 0),
-    watchedAt: new Date().toISOString(),
-  };
-  const idx = continuation.findIndex((c) => c.title === item.title);
-  if (idx >= 0) continuation[idx] = entry;
-  else continuation.unshift(entry);
-  if (continuation.length > 6) continuation.length = 6;
-  persistContinuation();
-  renderContinue();
-}
 
-async function resumeTitle(title) {
-  const item = findTitle(title);
-  if (!item) return;
-  const pos = getSavedPosition(item);
-  closeDetails({ updateHash: false });
-  await playTitle(title, { resumeTime: pos });
-}
 
-const continuation = loadContinuation();
 
 function getFilterChannel() {
   return state?.section === "series" ? seriesChannel : animeChannel;
@@ -1879,70 +1204,20 @@ const state = {
     qualityOptions: [],
     selectedQuality: null,
     resolution: null,
-    seasons: [],
-    selectedSeason: null,
-    selectedEpisode: null,
     isSeries: false,
-    autoplayNext: false,
   },
 };
 let searchTimer;
 let searchRequestId = 0;
 
-const parseApiRating = (value) => {
-  // Clamped (<=9.9); 0 preserved as "no rating" for existing callers.
-  const rating = clampRating(value);
-  return rating === null ? 0 : rating;
-};
 
-const normalizeApiItem = (item, category) => {
-  const genres = String(item.genre || "")
-    .split(",")
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean);
-  // Map the caller's category hint to a canonical kind. The old code
-  // used the raw hint as the type, so /api/catalog fallback batches
-  // (category "trending"/"all") produced type "trending"/"all" — items
-  // that could never dedupe against the same title from TMDB.
-  const cat = String(category || "").toLowerCase();
-  const type = cat === "tv" || cat === "series" ? "series"
-    : cat === "anime" ? "anime"
-    : cat === "cartoon" || cat === "cartoons" ? "cartoon"
-    : cat === "movie" ? "movie"
-    : (Number(item.seNum) > 0 || item.first_air_date ? "series" : "movie");
-  const label = type === "series" ? "Series" : type === "anime" ? "Anime" : type === "cartoon" ? "Cartoon" : "Movie";
-  if (type === "anime" && !genres.includes("anime")) genres.unshift("anime");
-  const year = Number.parseInt(String(item.releaseDate || "").slice(0, 4), 10);
-  const isComingSoon = isUnreleasedDate(item.releaseDate, year);
-  return {
-    title: item.title || "Untitled",
-    originalTitle: item.originalTitle || item.original_title || item.originalName || item.original_name || "",
-    type,
-    genre: genres.length ? genres : [type],
-    country: item.countryName || "Other",
-    year: Number.isFinite(year) ? year : new Date().getFullYear(),
-    releaseDate: item.releaseDate || "",
-    updatedAt: item.updatedAt || item.updateTime || item.resourceDetectors?.[0]?.uploadTime || "",
-    rating: stableRatingFor(item.imdbRatingValue, item.tmdbId || item.subjectId),
-    runtime: item.duration || (item.seNum ? `${item.seNum} season${item.seNum === 1 ? "" : "s"}` : "—"),
-    isComingSoon,
-    language: item.language || item.corner || "",
-    badge: isComingSoon ? "Coming soon" : (item.hasResource ? "Ready" : "Info"),
-    kicker: `Ustream · ${label}`,
-    image: item.cover?.url || "",
-    gradient: "linear-gradient(145deg, #293569, #111827 58%, #080a12)",
-    subjectId: item.subjectId,
-    description: item.description || "Stream this title in high definition on Ustream.",
-    video: isComingSoon ? "" : (item.playUrl?.url || item.playUrl?.playUrl || ""),
-  };
-};
 
 // --- Patch D helpers (bugs 10/11): unreleased titles + canonical dedupe ---
 // Round 2 (bug 10): the old gate only fired on a full YYYY-MM-DD date
 // in the future. That missed every 2026 title TMDB already lists with a
 // past theatrical date (Resident Evil 2026-09-16, Toy Story 5
-// 2026-06-17) whose stream does not exist yet — Play opened the player
-// "Coming soon" is strictly future-dated: a title is unreleased only
+// 2026-06-17) whose provider availability is not yet known — the old
+// "Coming soon" rule is strictly future-dated: a title is unreleased only
 // when its known release date is still in the future. The previous
 // round-2 rule also gated every title dated in the current year, which
 // marked most of the 2026 catalog (films released months ago) as
@@ -1973,10 +1248,34 @@ const isUnreleasedItem = (item) => {
   const dateStr = String(item.releaseDate || item.first_air_date || item.release_date || "");
   return isUnreleasedDate(dateStr, item.year);
 };
-const normalizeSearchItem = (item) => {
-  const category = String(item.genre || "").toLowerCase().includes("anime") ? "anime" : "tv";
-  return normalizeApiItem(item, category);
-};
+
+const apiResponseCache = createTtlCache({
+  ttlMs: 30 * 60 * 1000,
+  maxEntries: 250,
+  maxStoredBytes: 120 * 1024,
+  prefix: "ustream-api-v3:",
+  storage: safeSessionStorage(),
+});
+// TMDB_API_KEY is kept server-side only. No API credentials are shipped
+// in the browser bundle; the /api/tmdb Vercel function is the sole source.
+const TMDB_PUBLIC_KEYS = [
+  "e9e9d8da18ae29fc430845952232787c", // High availability primary TMDB API v3 key
+  "16f62d38fec24f4e6c2adc9388da20ce"  // Backup key
+];
+
+const tmdbClient = createTmdbClient({
+  proxyUrl: "/api/tmdb",
+  keys: TMDB_PUBLIC_KEYS,
+  cache: apiResponseCache,
+  timeoutMs: 7000,
+  retries: 2,
+  maxConcurrent: 6,
+});
+const watchProviderCache = new Map();
+const WATCH_PROVIDER_TTL_MS = 12 * 60 * 60 * 1000;
+let detailLoadGeneration = 0;
+let detailsReturnFocus = null;
+let playerReturnFocus = null;
 
 const TMDB_GENRE_NAMES = {
   28: "action", 12: "adventure", 16: "animation", 35: "comedy", 80: "crime",
@@ -1987,48 +1286,82 @@ const TMDB_GENRE_NAMES = {
   10765: "sci-fi", 10766: "soap", 10767: "talk", 10768: "war"
 };
 
-const TMDB_PUBLIC_KEYS = [
-  "e9e9d8da18ae29fc430845952232787c", // High availability primary TMDB API v3 key
-  "16f62d38fec24f4e6c2adc9388da20ce"  // Backup key
-];
 
 async function fetchTmdbApi(path) {
-  const cleanPath = (path.startsWith("/") ? path : `/${path}`).replace(/([?&]language=en)(?=&|$)/g, "$1-US");
+  return await tmdbClient.get(path);
+}
 
-  // 1. Direct TMDB v3 fetch with AbortController timeout to prevent hanging requests
-  for (const key of TMDB_PUBLIC_KEYS) {
-    try {
-      const sep = cleanPath.includes("?") ? "&" : "?";
-      const directUrl = `https://api.themoviedb.org/3${cleanPath}${sep}api_key=${key}`;
-      const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-      const timer = controller ? setTimeout(() => controller.abort(), 4500) : null;
-      const res = await fetch(directUrl, {
-        headers: { Accept: "application/json" },
-        signal: controller ? controller.signal : undefined
-      });
-      if (timer) clearTimeout(timer);
-      if (res.ok) {
-        return await res.json();
-      }
-    } catch (e) {
-      // Try next key or fallback
-    }
+function tmdbMediaTypeFor(item) {
+  if (item?.mediaType === "tv") return "tv";
+  if (item?.mediaType === "movie") return "movie";
+  if (["series", "tv"].includes(String(item?.category || item?.type || "").toLowerCase())) return "tv";
+  if (item?.type === "anime" && Number(item?.seNum) > 0) return "tv";
+  return "movie";
+}
+
+
+async function loadWhereToWatch(item, { region = "", generation = detailLoadGeneration } = {}) {
+  const container = $("#watch-hub-content");
+  if (!container) return;
+  const finishLoading = beginLoading(container, { label: "Checking authorised watch options…", slowLabel: "Watch options are taking a while to load…", size: "sm", slowAfterMs: 4000 });
+
+  const rawId = item?.tmdbId || item?.id;
+  const tmdbId = /^\d+$/.test(String(rawId || "")) ? String(rawId) : "";
+  if (!tmdbId) {
+    if (generation !== detailLoadGeneration) { finishLoading(); return; }
+    finishLoading();
+    container.innerHTML = watchHubHtml(null, {
+      title: item?.title,
+      extraNote: item?.source === "tvmaze" ? "TVMaze can help you find this series, but it does not provide streaming availability." : "This title does not have a verified TMDB ID, so provider availability cannot be checked.",
+    });
+    return;
   }
 
-  // 2. Secondary fallback: Local server proxy /api/tmdb
-  try {
-    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-    const timer = controller ? setTimeout(() => controller.abort(), 3500) : null;
-    const res = await fetch(`/api/tmdb${cleanPath}`, {
-      signal: controller ? controller.signal : undefined
-    });
-    if (timer) clearTimeout(timer);
-    if (res.ok) {
-      return await res.json();
+  const mediaType = tmdbMediaTypeFor(item);
+  const cacheKey = `${mediaType}:${tmdbId}`;
+  let payload;
+  const cached = watchProviderCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < WATCH_PROVIDER_TTL_MS) payload = cached.data;
+  else {
+    try {
+      payload = await tmdbClient.get(`/${mediaType}/${tmdbId}/watch/providers`);
+      if (payload && generation === detailLoadGeneration) watchProviderCache.set(cacheKey, { at: Date.now(), data: payload });
+    } catch (error) {
+      if (generation !== detailLoadGeneration || container !== $("#watch-hub-content")) { finishLoading(); return; }
+      finishLoading();
+      const setupHint = [401, 403, 503].includes(error?.status)
+        ? " Check the TMDB_API_KEY environment variable in your Vercel project settings."
+        : "";
+      container.innerHTML = stateHtml({
+        kind: "error",
+        title: "Watch options could not be checked",
+        message: `${error?.status === 404 ? "TMDB has no watch-provider record for this title." : "The provider data could not be loaded."}${setupHint}`,
+        actionLabel: "Try again",
+        actionAttr: "data-watch-retry",
+      });
+      container.querySelector("[data-watch-retry]")?.addEventListener("click", () => {
+        watchProviderCache.delete(cacheKey);
+        void loadWhereToWatch(item, { region, generation });
+      }, { once: true });
+      return;
     }
-  } catch (e) {}
+  }
+  if (generation !== detailLoadGeneration || container !== $("#watch-hub-content")) { finishLoading(); return; }
+  finishLoading();
+  const hub = normalizeWatchProviders(payload, { preferred: ["IN", "US"], explicit: region });
+  container.innerHTML = watchHubHtml(hub, { title: item.title });
+  const select = container.querySelector("[data-watch-region]");
+  select?.addEventListener("change", () => {
+    void loadWhereToWatch(item, { region: select.value, generation });
+  });
+}
 
-  return null;
+function focusWatchHub() {
+  const hub = $("#watch-hub");
+  if (!hub) return;
+  hub.scrollIntoView({ block: "center", behavior: "smooth" });
+  hub.setAttribute("tabindex", "-1");
+  hub.focus({ preventScroll: true });
 }
 
 async function fetchTmdbResults(path) {
@@ -2036,6 +1369,15 @@ async function fetchTmdbResults(path) {
   if (Array.isArray(data?.results)) return data.results;
   if (Array.isArray(data)) return data;
   return [];
+}
+
+function tmdbDisplayName(code, type) {
+  if (!code) return "";
+  try {
+    return new Intl.DisplayNames(["en"], { type }).of(code) || code;
+  } catch {
+    return code;
+  }
 }
 
 const normalizeTmdbItem = (item, category = "movie") => {
@@ -2053,10 +1395,10 @@ const normalizeTmdbItem = (item, category = "movie") => {
   const type = isAnime ? "anime" : isCartoon ? "cartoon" : isMovie ? "movie" : "series";
   const title = (item.title || item.name || item.original_title || item.original_name || "Untitled").trim();
   const yearStr = item.release_date || item.first_air_date || "";
-  const year = parseInt(yearStr.slice(0, 4), 10) || new Date().getFullYear();
+  const year = Number.parseInt(yearStr.slice(0, 4), 10) || null;
   const poster = item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : "";
   const backdrop = item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : (poster || "");
-  const rating = stableRatingFor(item.vote_average, String(item.id));
+  const rating = tmdbRatingFromVotes(item.vote_average, item.vote_count);
   const tmdbId = String(item.id);
   const isComingSoon = isUnreleasedDate(yearStr, year);
   const isAdult = Boolean(item.adult) || (Array.isArray(item.genre_ids) && item.genre_ids.includes(10749) && /\b(?:erotic|xxx|sex|porn)\b/i.test(item.overview || ""));
@@ -2090,40 +1432,38 @@ const normalizeTmdbItem = (item, category = "movie") => {
     adult: Boolean(item.adult || isAdult),
     isAdult: Boolean(item.adult || isAdult),
     genre: [...genreSet],
-    country: item.origin_country?.[0] || (isAnime ? "Japan" : "United States"),
-    countryName: item.origin_country?.[0] || (isAnime ? "Japan" : "United States"),
+    country: item.origin_country?.[0] || "",
+    countryName: tmdbDisplayName(item.origin_country?.[0], "region"),
     year,
     releaseDate: yearStr,
     rating,
-    imdbRatingValue: String(rating),
+    imdbRatingValue: rating == null ? "" : String(rating),
     // TMDB list endpoints carry no runtime: never invent one.
-    runtime: "—",
-    duration: "—",
+    runtime: "",
+    duration: "",
     isComingSoon,
     comingSoon: isComingSoon,
-    language: item.original_language === "ja" ? "Japanese, English Dub" : "English, Multi Sub",
-    badge: isComingSoon ? "Coming soon" : (rating >= 8.0 ? "Top Rated" : "Popular"),
+    language: tmdbDisplayName(item.original_language, "language"),
+    badge: isComingSoon ? "Coming soon" : (rating != null && rating >= 8.0 ? "Top Rated" : isAnime ? "Anime" : isCartoon ? "Animation" : isMovie ? "Movie" : "TV series"),
     kicker: isAnime ? "Anime Series" : isCartoon ? "Animation" : isMovie ? "Blockbuster" : "Hit Series",
     image: poster,
     cover: { url: poster },
     backdrop,
     gradient: isAnime ? "linear-gradient(145deg, #b45309, #78350f 50%, #451a03)" : isCartoon ? "linear-gradient(145deg, #db2777, #831843 50%, #4c0519)" : isMovie ? "linear-gradient(145deg, #1e293b, #0f172a 50%, #020617)" : "linear-gradient(145deg, #0369a1, #0c4a6e 50%, #082f49)",
-    description: item.overview || `Stream ${title} in high definition on Ustream.`,
-    video: isComingSoon ? "" : `https://vidlink.pro/${isMovie ? "movie" : "tv"}/${tmdbId}${isMovie ? "" : "/1/1"}?primaryColor=e7ff51`,
-    playUrl: { url: isComingSoon ? "" : `https://vidlink.pro/${isMovie ? "movie" : "tv"}/${tmdbId}${isMovie ? "" : "/1/1"}?primaryColor=e7ff51` },
-    hasResource: !isComingSoon,
+    description: item.overview || "",
+    // Redesign 2026-11-22: no embed-server URLs. Playback is via the
+    // details "Where to watch" hub (legitimate providers) and official
+    // trailers only.
     seNum: isMovie ? 0 : 1,
     mediaType: isMovie ? "movie" : "tv",
   };
 };
 
-// Catalog liveness (TMDB/catalog loaded) is NOT playback liveness. The old
-// code labelled any configured catalog "Live Streaming Active — Connected"
-// even while every player was black. These flags are the single source of
-// truth for the Settings/header status text (bug 2).
+// Catalog availability and video playback status are tracked separately;
+// loading a catalog never claims that a video is playing.
 let catalogIsLive = false;
 let catalogLiveCount = 0;
-let livePlaybackActive = false;
+let playerIsPlaying = false;
 
 function updateStatusBadge(isLive, count) {
   catalogIsLive = !!isLive;
@@ -2135,27 +1475,23 @@ function updateStatusBadge(isLive, count) {
   const settingsInfo = $("#settings-status-info");
 
   if (dot) dot.classList.toggle("live", !!isLive);
-  if (label) label.textContent = isLive ? "Live" : "Curated";
+  if (label) label.textContent = isLive ? "Catalog" : "Curated";
 
-  // The green dot / "Active" wording now requires a stream actually
-  // playing, not merely a loaded catalog or a configured API key.
-  // Round 2: on-demand playback is "Playing now", never "live" — the
-  // service carries no live channels any more.
-  if (settingsDot) settingsDot.classList.toggle("live", livePlaybackActive);
-  if (settingsTitle) settingsTitle.textContent = livePlaybackActive
-    ? "Playing now"
-    : isLive ? "Live Catalog" : "Curated Catalog";
+  if (settingsDot) settingsDot.classList.toggle("live", playerIsPlaying);
+  if (settingsTitle) settingsTitle.textContent = playerIsPlaying
+    ? "Video playing"
+    : isLive ? "TMDB catalog loaded" : "Curated catalog";
   if (settingsInfo) {
-    settingsInfo.textContent = livePlaybackActive
-      ? `Playing now · ${count || "multiple"} titles available.`
+    settingsInfo.textContent = playerIsPlaying
+      ? "A community upload or official trailer is playing."
       : isLive
-        ? `Live catalog loaded · ${count || "multiple"} titles. No stream is playing — playback is verified only when a title actually starts.`
-        : "Curated original streaming collection with multi-resolution playback and episodic support.";
+        ? `Catalog loaded · ${count || "multiple"} titles. Native playback is limited to community uploads and official trailers.`
+        : "Curated titles with links to authorised places to watch.";
   }
 }
 
 function createSkeletonCardsHtml(count = 12, isWide = false) {
-  return Array.from({ length: count }).map(() => `
+  return loaderHtml({ label: "Loading titles…", size: "sm" }) + Array.from({ length: count }).map(() => `
     <div class="skeleton-card ${isWide ? "skeleton-card-wide" : ""}" aria-hidden="true">
       <div class="skeleton-poster" ${isWide ? 'style="aspect-ratio: 16/9;"' : ""}></div>
       <div class="skeleton-info">
@@ -2168,9 +1504,9 @@ function createSkeletonCardsHtml(count = 12, isWide = false) {
 
 // Prompt 4 (full Langdock diff): row skeletons that match the finished
 // cards' dimensions, so each row reserves its space while loading.
-function createContinueSkeletonsHtml() {
-  return Array.from({ length: 4 }).map(() => `
-    <div class="continue-card skeleton-continue" aria-hidden="true">
+function createSavedTitleSkeletonsHtml() {
+  return loaderHtml({ label: "Loading saved titles…", size: "sm" }) + Array.from({ length: 4 }).map(() => `
+    <div class="saved-title-card skeleton-saved-title" aria-hidden="true">
       <div class="skeleton-line medium"></div>
       <div class="skeleton-line short"></div>
       <div class="skeleton-line full"></div>
@@ -2179,7 +1515,7 @@ function createContinueSkeletonsHtml() {
 }
 
 function createCommunitySkeletonsHtml() {
-  return Array.from({ length: 4 }).map(() => `
+  return loaderHtml({ label: "Loading community uploads…", size: "sm" }) + Array.from({ length: 4 }).map(() => `
     <div class="community-card community-card-skeleton" aria-hidden="true">
       <div class="skeleton-line"></div>
       <div class="skeleton-line short"></div>
@@ -2189,7 +1525,8 @@ function createCommunitySkeletonsHtml() {
 
 function createTrendingSkeletonHtml() {
   return `
-    <section class="rail-section" aria-hidden="true">
+    <section class="rail-section" aria-label="Loading trending titles">
+      ${loaderHtml({ label: "Loading trending titles…", size: "sm" })}
       <div class="section-heading"><h2>Trending now</h2></div>
       <div class="rail-wrapper">
         <div class="media-rail">${createSkeletonCardsHtml(8)}</div>
@@ -2217,14 +1554,13 @@ function renderSkeletons() {
     recRow.innerHTML = createSkeletonCardsHtml(8);
   }
 
-  // Continue Watching is local data, but render() only replaces it
-  // after the catalog load — show placeholders meanwhile, not an
-  // empty state. Community Uploads is fetched separately below.
-  const continueRow = $("#continue-row");
-  if (continueRow && isHomeView) {
-    const continueSection = $(".quick-picks");
-    if (continueSection) continueSection.hidden = false;
-    continueRow.innerHTML = createContinueSkeletonsHtml();
+  // Saved titles are local data; show placeholders until the catalog
+  // can resolve their display details. Community uploads load separately.
+  const savedTitlesRow = $("#saved-titles-row");
+  if (savedTitlesRow && isHomeView) {
+    const savedTitlesSection = $(".quick-picks");
+    if (savedTitlesSection) savedTitlesSection.hidden = false;
+    savedTitlesRow.innerHTML = createSavedTitleSkeletonsHtml();
   }
   const communityRow = $("#community-row");
   if (communityRow && isHomeView) {
@@ -2278,7 +1614,9 @@ function loadShowcaseCatalog() {
   updateStatusBadge(false, DEMO_ITEMS.length);
   hasMoreContent = true;
   render();
-  showToast(`Loaded ${DEMO_ITEMS.length} curated titles (${curatedBreakdownLabel()})`);
+  showToast(`Showing ${DEMO_ITEMS.length} curated titles. Live catalog data is unavailable right now.`);
+  const status = $("#catalog-live-status");
+  if (status) status.textContent = "Live catalog unavailable. Showing curated titles instead.";
 }
 
 async function retryCatalog() {
@@ -2287,9 +1625,7 @@ async function retryCatalog() {
   await loadNewestRecommendations();
 }
 
-const API_BASE = typeof window !== "undefined" && window.location.hostname.includes("netlify.app")
-  ? "/.netlify/functions/api"
-  : "/api";
+const API_BASE = "/api";
 
 function buildApiUrl(action, params = {}) {
   const searchParams = new URLSearchParams();
@@ -2299,111 +1635,12 @@ function buildApiUrl(action, params = {}) {
     }
   }
 
-  if (API_BASE.startsWith("/.netlify")) {
-    searchParams.set("endpoint", action);
-    return `${API_BASE}?${searchParams.toString()}`;
-  }
-
-  // Path-based proxy /api/{action} or /api/details/:id
-  if (action === "details" && params.id) {
-    return `${API_BASE}/details/${encodeURIComponent(params.id)}`;
-  }
-  if (action === "episodes" && params.id) {
-    const id = params.id;
-    const copy = new URLSearchParams(searchParams);
-    copy.delete("id");
-    const qs = copy.toString();
-    return `${API_BASE}/episodes/${encodeURIComponent(id)}${qs ? `?${qs}` : ""}`;
-  }
-
   const qs = searchParams.toString();
-  return `${API_BASE}/${action}${qs ? `?${qs}` : ""}`;
-}
-
-// Prompt 4: cache /api/catalog responses in sessionStorage for 10 minutes.
-// A fresh-enough cached response is returned at once; a stale/missing one
-// is fetched and then stored. Storage errors are ignored (private mode,
-// quota) and fall through to a normal fetch. The long-lived localStorage
-// catalog cache in loadLiveCatalog() is separate and unchanged.
-// Prompt 4 (full Langdock diff): per-category /api/catalog cache in
-// sessionStorage, 10 minutes. fetchApiCatalogCategory returns cached
-// items at once while refreshing them in the background.
-const API_CATALOG_SESSION_TTL_MS = 10 * 60 * 1000;
-const API_CATALOG_SESSION_PREFIX = "ustream-api-catalog-v1:";
-const API_CATALOG_CATEGORIES = ["all", "movie", "tv", "anime", "cartoons"];
-const apiCatalogRequests = new Map();
-const API_CATALOG_CACHE_TTL_MS = API_CATALOG_SESSION_TTL_MS;
-
-function readApiCatalogSessionCache(category) {
-  try {
-    const raw = sessionStorage.getItem(`${API_CATALOG_SESSION_PREFIX}${category}`);
-    if (!raw) return null;
-    const entry = JSON.parse(raw);
-    if (!entry || !Array.isArray(entry.items)) return null;
-    if (Date.now() - entry.ts >= API_CATALOG_SESSION_TTL_MS) return null;
-    return entry.items;
-  } catch {
-    return null;
-  }
-}
-
-function getCachedApiCatalogItems(category) {
-  return readApiCatalogSessionCache(category) || [];
-}
-
-async function refreshApiCatalogSessionCache(category) {
-  if (apiCatalogRequests.has(category)) return apiCatalogRequests.get(category);
-  const request = (async () => {
-    const res = await fetch(`/api/catalog?category=${encodeURIComponent(category)}`);
-    if (!res.ok) throw new Error(`Catalog request failed: ${res.status}`);
-    const data = await res.json();
-    const items = Array.isArray(data?.data?.items) ? data.data.items : (Array.isArray(data?.items) ? data.items : []);
-    try {
-      sessionStorage.setItem(`${API_CATALOG_SESSION_PREFIX}${category}`, JSON.stringify({ ts: Date.now(), items }));
-    } catch {}
-    return items;
-  })();
-  apiCatalogRequests.set(category, request);
-  try {
-    return await request;
-  } finally {
-    apiCatalogRequests.delete(category);
-  }
-}
-
-async function fetchApiCatalogCategory(category) {
-  const cached = readApiCatalogSessionCache(category);
-  if (cached) {
-    void refreshApiCatalogSessionCache(category).catch(() => {});
-    return cached;
-  }
-  return refreshApiCatalogSessionCache(category);
-}
-async function fetchCatalogApi(category, page) {
-  const key = `ustream-api-catalog:${category}:${page ?? ""}`;
-  try {
-    const raw = sessionStorage.getItem(key);
-    if (raw) {
-      const entry = JSON.parse(raw);
-      if (entry && Date.now() - entry.ts < API_CATALOG_CACHE_TTL_MS && entry.data) {
-        return entry.data;
-      }
-    }
-  } catch {}
-  const res = await fetch(`/api/catalog?category=${category}${page ? `&page=${page}` : ""}`);
-  if (!res.ok) return null;
-  const data = await res.json();
-  try {
-    sessionStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }));
-  } catch {}
-  return data;
+  return `${API_BASE}/${encodeURIComponent(action)}${qs ? `?${qs}` : ""}`;
 }
 
 async function loadLiveCatalog(isRetry = false) {
   clearErrorState();
-  // Prompt 4 (full Langdock diff): prime the "all" category in the
-  // background so the next section visit already has cached items.
-  void fetchApiCatalogCategory("all").catch(() => {});
   // Do not stack a second full live load on top of one already in flight:
   // each load built its own catalog and the total depended on which won.
   if (liveCatalogLoading && !isRetry) return;
@@ -2411,7 +1648,7 @@ async function loadLiveCatalog(isRetry = false) {
   liveCatalogLoading = true;
   
   // Instant Cold-Start Rendering: Check if cached catalog exists to show immediately (0ms delay)
-  const cached = storage.get("ustream-catalog-cache-v2");
+  const cached = storage.get("ustream-catalog-cache-v3");
   if (cached) {
     try {
       if (Array.isArray(cached) && cached.length >= 20 && cached[0]?.kicker) {
@@ -2457,15 +1694,9 @@ async function loadLiveCatalog(isRetry = false) {
         console.warn(`[TMDB Batch fetch error for ${cat}]:`, err);
       }
 
-      // Fallback: try /api/catalog endpoint (sessionStorage-cached, 10 min;
-      // cached items are returned at once while a refresh runs behind).
-      try {
-        const items = await fetchApiCatalogCategory(cat === "trending" ? "all" : cat);
-        if (Array.isArray(items) && items.length) {
-          return { ok: true, items: items.map((i) => (i.tmdbId ? i : normalizeApiItem(i, cat))), cat };
-        }
-      } catch {}
-
+      // Redesign 2026-11-22: no /api/catalog fallback — on Vercel it is
+      // a static empty stub. A failed batch contributes nothing; if too
+      // few titles load overall, the curated showcase fallback runs.
       return { ok: false, items: [], cat };
     }));
 
@@ -2492,7 +1723,7 @@ async function loadLiveCatalog(isRetry = false) {
       catalogRowsLoading = false;
       render();
       try {
-        storage.set("ustream-catalog-cache-v2", storage.compactCatalog(catalog, MAX_CACHED_CATALOG_SIZE));
+        storage.set("ustream-catalog-cache-v3", storage.compactCatalog(catalog, MAX_CACHED_CATALOG_SIZE));
       } catch {}
       if (!cached) {
         showToast(`Loaded ${successfulItems.length} titles across all categories`);
@@ -2513,7 +1744,7 @@ async function loadLiveCatalog(isRetry = false) {
 }
 
 /* ==========================================================================
-   Infinite Scroll & Endless Pagination (GaiaFlix replicate)
+   Infinite Scroll & Endless Pagination
    ========================================================================== */
 const sectionPages = {
   home: 2,
@@ -2584,14 +1815,6 @@ async function fetchNextRemoteBatch(targetSection) {
         }
       } catch {}
 
-      try {
-        const catData = await fetchCatalogApi(cat, nextPage);
-        const items = catData?.data?.items;
-        if (Array.isArray(items) && items.length) {
-          return items.map((i) => (i.tmdbId ? i : normalizeApiItem(i, cat)));
-        }
-      } catch {}
-
       return [];
     }));
 
@@ -2618,7 +1841,7 @@ async function fetchNextRemoteBatch(targetSection) {
     // growing live list — same rule as the "Showing X of Y" counter.
     updateStatusBadge(true, frozenCatalogTotal);
     try {
-      storage.set("ustream-catalog-cache-v2", storage.compactCatalog(catalog, MAX_CACHED_CATALOG_SIZE));
+      storage.set("ustream-catalog-cache-v3", storage.compactCatalog(catalog, MAX_CACHED_CATALOG_SIZE));
     } catch {}
   }
   if (catalog.length >= MAX_CATALOG_SIZE) hasMoreContent = false;
@@ -2826,7 +2049,7 @@ async function loadNewestRecommendations() {
 
 function setFeatured(item) {
   if (!item) return;
-  // Never feature an unreleased title as the playable hero.
+  // Never feature an unreleased title in the hero.
   if (isUnreleasedItem(item)) {
     const released = catalog.find((c) => c.title !== item.title && !isUnreleasedItem(c));
     if (released) return setFeatured(released);
@@ -2847,31 +2070,25 @@ function setFeatured(item) {
   }
   const heroDesc = $("#hero-description");
   if (heroDesc) {
-    heroDesc.textContent = item.description || `Stream ${item.title} in pristine high definition with surround audio on Ustream.`;
+    heroDesc.textContent = item.description || "Discover this title and find authorised places to watch.";
   }
 
   const ratingVal = normalizeRating(item.rating);
-  const matchPercent = Math.min(99, Math.max(88, Math.round(ratingVal * 10 + (item.title.length % 5))));
-  const maturityRating = item.maturityRating || (isAdultContent(item) ? "18+" : item.type === "movie" ? "PG-13" : "TV-MA");
+  const maturityRating = "";
 
   const heroMeta = $("#hero-meta");
   if (heroMeta) {
     heroMeta.innerHTML = `
-      <span class="badge-imdb" title="IMDb Rating">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="#f5c518" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-        ${Number(ratingVal).toFixed(1)}
-      </span>
-      <span class="badge-tech">4K Ultra HD</span>
-      <span class="badge-tech">Dolby Atmos</span>
-      <span class="badge-age">${maturityRating}</span>
-      <span>${item.year || "2026"}</span>
-      <span>${item.runtime || "2h 05m"}</span>
+      ${ratingVal == null ? `<span class="rating-unavailable">No TMDB rating</span>` : `<span class="badge-imdb" title="TMDB audience rating">★ ${ratingVal.toFixed(1)}</span>`}
+      ${maturityRating ? `<span class="badge-age">${escapeHtml(maturityRating)}</span>` : ""}
+      ${item.year ? `<span>${escapeHtml(item.year)}</span>` : ""}
+      ${item.runtime && item.runtime !== "—" ? `<span>${escapeHtml(item.runtime)}</span>` : ""}
     `;
   }
 
   const genrePillsContainer = $("#hero-genre-pills");
   if (genrePillsContainer) {
-    const genres = Array.isArray(item.genre) && item.genre.length ? item.genre.slice(0, 4) : ["Action", "Sci-Fi", "Drama"];
+    const genres = Array.isArray(item.genre) ? item.genre.slice(0, 4) : [];
     genrePillsContainer.innerHTML = genres
       .map((g) => `<span class="hero-genre-chip">${escapeHtml(g)}</span>`)
       .join("");
@@ -2881,7 +2098,7 @@ function setFeatured(item) {
   if (eyebrowText) eyebrowText.textContent = item.kicker || "Featured Premiere";
 
   const matchBadge = $("#hero-match-badge");
-  if (matchBadge) matchBadge.textContent = `${matchPercent}% Match`;
+  if (matchBadge) matchBadge.hidden = true;
 
   const heroCredit = $("#hero-credit");
   if (heroCredit) heroCredit.innerHTML = `<span>${escapeHtml(item.kicker || "Featured")}</span> · ${escapeHtml(item.country || "Catalog")}`;
@@ -2919,7 +2136,7 @@ function setFeatured(item) {
 }
 
 // Titles for which TMDB returned no official trailer: their Trailer
-// buttons are hidden instead of opening the full stream (bug 14).
+// buttons are hidden instead of implying a full title is available (bug 14).
 const trailerUnavailableTitles = new Set();
 
 // Only an official landscape Trailer/Teaser counts as a trailer. The old
@@ -2930,83 +2147,152 @@ function pickOfficialTrailer(videos) {
   const list = (videos || []).filter((v) => v && v.site === "YouTube" && v.key);
   if (!list.length) return null;
   const official = list.filter((v) => v.official === true);
-  const pool = official.length ? official : list;
-  return pool.find((v) => v.type === "Trailer")
-    || pool.find((v) => v.type === "Teaser")
+  if (!official.length) return null;
+  return official.find((v) => v.type === "Trailer")
+    || official.find((v) => v.type === "Teaser")
     || null;
 }
 
-function setTrailerButtonsHidden(hidden) {
-  ["#hero-trailer", "#modal-trailer"].forEach((sel) => {
-    const btn = $(sel);
-    if (btn) btn.hidden = hidden;
-  });
+function setTrailerButtonsHidden() {
+  const hero = $("#hero-trailer");
+  if (hero) hero.hidden = trailerUnavailableTitles.has(hero.dataset.title || featured?.title);
+  const modal = $("#modal-trailer");
+  if (modal) modal.hidden = trailerUnavailableTitles.has(state.activeModal?.title);
 }
 
 async function playTrailer(title) {
   const item = findTitle(title) || featured;
   if (!item) return;
-  showToast(`Loading trailer for ${item.title}…`);
+  const requestId = ++state.player.requestId;
+  const isCurrentRequest = () => state.player.requestId === requestId && state.player.trailerTitle === item.title;
+  const playerBackdrop = $("#player-backdrop");
+  const playerTitle = $("#player-title");
+  if (!playerReturnFocus) playerReturnFocus = document.activeElement;
+  state.player.trailerTitle = item.title;
+  state.player.nativeSource = null;
+  if (playerTitle) playerTitle.textContent = `${item.title} — Official Trailer`;
+  if (playerBackdrop) { playerBackdrop.hidden = false; playerBackdrop.removeAttribute("hidden"); }
+  setPlayerState(PLAYER_STATE.LOADING, `Checking official trailer for ${item.title}…`);
+
   try {
     let trailerKey = null;
-    const tmdbId = item.tmdbId || item.id || TMDB_MAP[item.title]?.tmdbId;
+    const tmdbId = item.tmdbId || item.id;
     const mediaType = (item.type === "series" || item.category === "series" || item.category === "tv") ? "tv" : "movie";
-
     if (tmdbId) {
-      try {
-        const videoData = await fetchTmdbApi(`/${mediaType}/${tmdbId}/videos`);
-        const videos = videoData?.results || [];
-        const trailer = pickOfficialTrailer(videos);
-        if (trailer?.key) {
-          trailerKey = trailer.key;
-        }
-      } catch {}
+      const videoData = await fetchTmdbApi(`/${mediaType}/${tmdbId}/videos`);
+      if (!isCurrentRequest()) return;
+      const trailer = pickOfficialTrailer(videoData?.results || []);
+      if (trailer?.key) trailerKey = trailer.key;
     }
 
     if (!trailerKey) {
-      try {
-        const searchData = await fetchTmdbApi(`/search/${mediaType}?query=${encodeURIComponent(item.title)}`);
-        const found = searchData?.results?.[0];
-        if (found?.id) {
-          const videoData = await fetchTmdbApi(`/${mediaType}/${found.id}/videos`);
-          const videos = videoData?.results || [];
-          const trailer = pickOfficialTrailer(videos);
-          if (trailer?.key) {
-            trailerKey = trailer.key;
-          }
-        }
-      } catch {}
+      const searchData = await fetchTmdbApi(`/search/${mediaType}?query=${encodeURIComponent(item.title)}`);
+      if (!isCurrentRequest()) return;
+      const found = searchData?.results?.[0];
+      if (found?.id) {
+        const videoData = await fetchTmdbApi(`/${mediaType}/${found.id}/videos`);
+        if (!isCurrentRequest()) return;
+        const trailer = pickOfficialTrailer(videoData?.results || []);
+        if (trailer?.key) trailerKey = trailer.key;
+      }
     }
 
-    const playerBackdrop = $("#player-backdrop");
+    if (!isCurrentRequest()) return;
     const embedPlayer = $("#embed-player");
-    const playerTitle = $("#player-title");
     const customPlayerWrapper = $("#custom-player-wrapper");
-
     if (trailerKey) {
       if (customPlayerWrapper) customPlayerWrapper.hidden = true;
       if (embedPlayer) {
         embedPlayer.hidden = false;
         embedPlayer.src = `https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&rel=0&modestbranding=1`;
+        embedPlayer.title = `${item.title} — Official Trailer`;
       }
       if (playerTitle) playerTitle.textContent = `${item.title} — Official Trailer`;
-      if (embedPlayer) embedPlayer.title = `${item.title} — Official Trailer`;
       if (playerBackdrop) playerBackdrop.hidden = false;
-      setPlayerState(PLAYER_STATE.PLAYING, `Playing trailer: ${item.title}`);
+      setPlayerState(PLAYER_STATE.PLAYING, `Playing official trailer: ${item.title}`);
       return;
     }
 
-    // No official (landscape) trailer: do NOT fall back to the full stream
-    // or to an arbitrary YouTube video. Hide the Trailer buttons for this
-    // title instead (bug 14).
     trailerUnavailableTitles.add(item.title);
     setTrailerButtonsHidden(true);
-    showToast(`No official trailer available for ${item.title}`);
-    return;
-  } catch (e) {
-    console.warn("Could not load trailer:", e);
-    clearLiveStatus();
-    showToast(`Trailer unavailable for ${item.title} — try again later`);
+    closePlayer();
+    showToast(`No official trailer is available for ${item.title}.`);
+  } catch (error) {
+    if (!isCurrentRequest()) return;
+    console.warn("Could not load trailer:", error);
+    setPlayerState(PLAYER_STATE.ERROR, `The official trailer for ${item.title} could not be loaded. Retry to check again.`);
+  }
+}
+
+// TVMaze search fallback (free API, no key, fair-use rate limits).
+// TVMaze show data is normalised to the same catalog-item shape as
+// TMDB items, except there is no TMDB id — tmdbId is null and the
+// subject id is `tvmaze-<id>`. Attribution: "Data from TVMaze".
+function normalizeTvMazeItem(entry) {
+  const show = entry?.show || {};
+  const year = Number.parseInt(String(show.premiered || "").slice(0, 4), 10) || null;
+  const poster = show.image?.medium || show.image?.original || "";
+  const rating = null;
+  const summary = String(show.summary || "").replace(/<[^>]*>/g, "").trim();
+  return {
+    tmdbId: null,
+    subjectId: `tvmaze-${show.id}`,
+    title: (show.name || "Untitled").trim(),
+    originalTitle: "",
+    category: "series",
+    type: "series",
+    isJapaneseAnime: false,
+    isCartoon: false,
+    originalLanguage: show.language || "",
+    adult: false,
+    isAdult: false,
+    genre: Array.isArray(show.genres) ? show.genres.map((g) => String(g).toLowerCase()) : ["series"],
+    country: show.network?.country?.code || show.webChannel?.country?.code || "",
+    countryName: show.network?.country?.name || show.webChannel?.country?.name || "",
+    year,
+    releaseDate: show.premiered || "",
+    rating,
+    imdbRatingValue: rating == null ? "" : String(rating),
+    runtime: show.runtime ? `${show.runtime} min` : "",
+    duration: show.runtime ? `${show.runtime} min` : "",
+    isComingSoon: false,
+    comingSoon: false,
+    language: show.language || "",
+    badge: "TV series",
+    kicker: "TV Series",
+    image: poster,
+    cover: { url: poster },
+    backdrop: show.image?.original || poster,
+    gradient: "linear-gradient(145deg, #0369a1, #0c4a6e 50%, #082f49)",
+    description: summary,
+    seNum: 1,
+    mediaType: "tv",
+    source: "tvmaze",
+  };
+}
+
+let tvMazeLastError = null;
+async function searchTvMaze(query) {
+  tvMazeLastError = null;
+  const cacheKey = `tvmaze:search:${String(query || "").trim().toLowerCase()}`;
+  const cached = apiResponseCache.get(cacheKey);
+  if (Array.isArray(cached)) return cached;
+  try {
+    const res = await resilientFetch(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`, {
+      timeoutMs: 6000,
+      retries: 1,
+      backoffMs: 700,
+      headers: { Accept: "application/json" },
+    });
+    const data = await res.json();
+    if (!Array.isArray(data)) return [];
+    const items = data.map(normalizeTvMazeItem).filter((item) => item.title);
+    apiResponseCache.set(cacheKey, items, 10 * 60 * 1000);
+    return items;
+  } catch (error) {
+    tvMazeLastError = error;
+    console.warn("[TVMaze]", error?.message || "search unavailable");
+    return [];
   }
 }
 
@@ -3017,34 +2303,28 @@ async function loadSearchResults(query) {
     await loadLiveCatalog();
     return;
   }
+  const searchLoading = $("#search-loading");
+  if (searchLoading) searchLoading.hidden = false;
+  const finishSearchLoading = beginLoading(searchLoading, {
+    label: `Searching for ${trimmed}…`,
+    slowLabel: "Search is taking a while…",
+    size: "sm",
+    slowAfterMs: 4000,
+  });
+  let tmdbSearchFailed = false;
   try {
     let results = [];
     try {
       const data = await fetchTmdbApi(`/search/multi?query=${encodeURIComponent(trimmed)}`);
       if (Array.isArray(data?.results)) results = data.results;
-    } catch {}
+    } catch (error) { tmdbSearchFailed = true; }
 
-    if (!results.length) {
-      try {
-        const fallbackRes = await fetch(`/api/search?query=${encodeURIComponent(trimmed)}`);
-        if (fallbackRes.ok) {
-          const fallbackData = await fallbackRes.json();
-          const items = fallbackData?.data?.items || fallbackData?.items;
-          if (Array.isArray(items) && items.length) {
-            results = items.map((it) => ({
-              id: it.tmdbId || it.subjectId,
-              media_type: it.type === "movie" ? "movie" : "tv",
-              title: it.title,
-              poster_path: it.poster_path || "",
-              backdrop_path: it.backdrop_path || "",
-              vote_average: it.rating,
-              release_date: String(it.year || ""),
-              first_air_date: String(it.year || "")
-            }));
-          }
-        }
-      } catch {}
-    }
+    // TVMaze is an official, free fallback for TV search only. If TMDB
+    // returned movie matches but no TV result, retain those and add the
+    // TVMaze shows rather than replacing the movie results.
+    let tvmazeItems = [];
+    const hasTmdbTv = results.some((item) => item.media_type === "tv" || (!item.media_type && item.first_air_date));
+    if (!hasTmdbTv) tvmazeItems = await searchTvMaze(trimmed);
 
     if (requestId !== searchRequestId) return;
 
@@ -3055,7 +2335,7 @@ async function loadSearchResults(query) {
       .filter((item) => adultEnabled || !isAdultContent(item));
     // Rank by relevance (exact title first) and dedupe by TMDB id, so a
     // substring match can never outrank an exact match.
-    const ranked = sortBySearchRelevance(dedupeCatalogItems(filtered), trimmed);
+    const ranked = sortBySearchRelevance(dedupeCatalogItems([...filtered, ...tvmazeItems]), trimmed);
 
     if (ranked.length) {
       catalog = ranked;
@@ -3073,17 +2353,35 @@ async function loadSearchResults(query) {
       state.displayLimit = CONTENT_BATCH_SIZE;
       hasMoreContent = false;
       render();
-      showToast(`No results found for "${trimmed}"`);
+      if (tmdbSearchFailed && tvMazeLastError) {
+        const grid = $("#card-grid");
+        if (grid) {
+          grid.innerHTML = stateHtml({ kind: "error", title: "Search is temporarily unavailable", message: "Neither TMDB nor TVMaze could return search results. Check your connection and try again.", actionLabel: "Try again", actionAttr: "data-search-retry" });
+          grid.querySelector("[data-search-retry]")?.addEventListener("click", () => void loadSearchResults(trimmed), { once: true });
+        }
+      } else {
+        showToast(`No results found for "${trimmed}"`);
+      }
     }
   } catch (error) {
     if (requestId !== searchRequestId) return;
     showToast("Live search unavailable — try again");
     console.warn(error);
+  } finally {
+    if (requestId === searchRequestId && searchLoading) {
+      finishSearchLoading();
+      searchLoading.hidden = true;
+      searchLoading.innerHTML = "";
+    }
   }
 }
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
+const authStateSec = $("#profile-auth-state");
+const guestStateSec = $("#profile-guest-state");
+const topbarLoginBtn = $("#topbar-login-btn");
+const profileMenuWrap = $("#profile-menu-wrap");
 
 function loadWatchlist() {
   try {
@@ -3132,8 +2430,8 @@ function clearToast() {
   toast.textContent = "";
 }
 
-// Central live-region cleanup (bugs 14/27): stale "Loading trailer for …",
-// "Loading stream…" and catalog status text must not survive a dialog
+// Central live-region cleanup (bugs 14/27): stale trailer, video and
+// catalog status text must not survive a dialog
 // close. Called by closePlayer / closeDetails and by
 // the trailer no-trailer / error paths. Note showToast() only removes the
 // CSS class after 2.3s — the textContent itself stayed in the live region.
@@ -3142,22 +2440,21 @@ function clearLiveStatus() {
   const catalogStatus = $("#catalog-live-status");
   if (catalogStatus) catalogStatus.textContent = "";
   const loadingText = $("#player-loading-text");
-  if (loadingText) loadingText.textContent = "Loading stream…";
+  if (loadingText) loadingText.textContent = "Loading video…";
   const liveText = $("#player-live-text");
   if (liveText) liveText.textContent = "Ready to watch";
 }
 
 function focusSearch() {
   openSearchModal();
-  $("#search-box")?.classList.add("mobile-open");
-  const sInp = $("#modal-search-input") || $("#search-input");
+  const sInp = $("#modal-search-input");
   sInp?.focus();
 }
 
 function updateProfileStats() {
   const watchCount = $("#profile-watch-count");
   const listCount = $("#profile-list-count");
-  if (watchCount) watchCount.textContent = String(continuation.length);
+  if (watchCount) watchCount.textContent = String(catalog.length);
   if (listCount) listCount.textContent = String(state.watchlist.size);
 }
 
@@ -3201,7 +2498,7 @@ function setSection(section, updateHash = true) {
     series: ["Your next obsession", "Binge-worthy series"],
     anime: ["Anime Collection", "Anime picks"],
     cartoons: ["Western Animation", "Cartoons & Animated Features"],
-    explore: ["Streaming Network Directory", "Explore by Service"],
+    explore: ["Watch services", "Explore by service"],
     "my-list": ["Saved for later", "My list"],
     profile: ["Account & Preferences", "Your Profile"],
   };
@@ -3487,7 +2784,7 @@ function getVisibleCards(source = catalog) {
   if (query) {
     visible.sort((a, b) => {
       const diff = searchRelevanceScore(a.title, query) - searchRelevanceScore(b.title, query);
-      return diff !== 0 ? diff : (normalizeRating(b.rating) - normalizeRating(a.rating));
+      return diff !== 0 ? diff : ((normalizeRating(b.rating) ?? 0) - (normalizeRating(a.rating) ?? 0));
     });
   }
 
@@ -3501,64 +2798,30 @@ function matchesYearFilter(year, filter) {
   return true;
 }
 
-function renderContinue() {
+function renderSavedTitlesPreview() {
   const section = $(".quick-picks");
-  const row = $("#continue-row");
+  const row = $("#saved-titles-row");
   if (!section || !row) return;
-  // Prompt 4 (full Langdock diff): leave the skeletons in place while
-  // the catalog is still loading; render() replaces them once settled.
-  if (catalogRowsLoading && state.section === "home" && !state.search.trim()) return;
-
   if (state.section !== "home" || state.search.trim()) {
     section.hidden = true;
     return;
   }
-
-  const adultEnabled = isAdultEnabled();
-  // Round 2 (bug 15): belt-and-braces with loadContinuation — a row
-  // with no real progress never renders, even if an old localStorage
-  // entry slips past the load filter.
-  const visibleItems = continuation.filter((item) => {
-    if (!adultEnabled && isAdultContent(item)) return false;
-    const pos = Number(item.positionSeconds) || 0;
-    const pct = Number(item.progress) || 0;
-    const embedSecs = Number(item.embedWatchedSeconds) || 0;
-    return pos >= 30 || pct > 1 || embedSecs >= 30;
-  });
-
-  if (visibleItems.length === 0) {
-    row.innerHTML = `
-      <div class="continue-empty-state">
-        <span class="empty-icon" aria-hidden="true">${renderIcon("play", "icon-sm")}</span>
-        <div>
-          <strong>Start watching to build your queue</strong>
-          <p>Stream any movie, series, or anime to keep track of your progress and pick up right where you left off.</p>
-        </div>
-      </div>
-    `;
-    section.hidden = false;
+  const saved = [...state.watchlist]
+    .map((title) => findTitle(title) || catalog.find((item) => item.title === title))
+    .filter(Boolean)
+    .slice(0, 8);
+  section.hidden = false;
+  if (!saved.length) {
+    row.innerHTML = `<div class="saved-titles-empty"><div><strong>Your saved titles will appear here</strong><p>Add a title to My List to find authorised watch options later.</p></div></div>`;
     return;
   }
-
-  section.hidden = false;
-  row.innerHTML = visibleItems.map((item) => {
-    const pos = Number(item.positionSeconds) || 0;
-    const dur = Number(item.durationSeconds) || 0;
-    const pct = Math.round(Number(item.progress) || 0);
-    const resumeLabel = pos > 0
-      ? `Resume at ${formatTime(pos)}${dur > 0 ? ` / ${formatTime(dur)}` : ""}`
-      : "Resume watching";
-    // Never show "· 0%": embed playback has no position to report, so
-    // a watched embed row shows no percentage at all.
-    const pctLabel = pct > 0 ? ` · ${pct}%` : "";
-    return `
-    <button class="continue-card" style="--card-gradient:${item.gradient}" data-action="resume" data-title="${escapeHtml(item.title)}" aria-label="Resume ${escapeHtml(item.title)}${pos > 0 ? ` at ${formatTime(pos)}` : ""}">
-      <span class="card-label">Continue watching</span><strong>${escapeHtml(item.title)}</strong>
-      <span class="continue-resume">${escapeHtml(resumeLabel)}${pctLabel}</span>
-      ${pct > 0 ? `<span class="watch-progress"><span style="width:${pct}%"></span></span>` : ""}
+  row.innerHTML = saved.map((item) => `
+    <button class="saved-title-card" data-action="details" data-title="${escapeHtml(item.title)}" aria-label="Open ${escapeHtml(item.title)} details">
+      <span class="card-label">Saved title</span>
+      <strong>${escapeHtml(item.title)}</strong>
+      <span class="saved-title-meta">${escapeHtml(item.year || "")}${item.type ? ` · ${escapeHtml(item.type)}` : ""}</span>
     </button>
-  `;
-  }).join("");
+  `).join("");
 }
 
 function renderRecommendations() {
@@ -3590,11 +2853,9 @@ function renderCard(card, { isNew = false } = {}) {
     : (card.badge ? `<span class="card-badge">${escapeHtml(card.badge)}</span>` : "");
 
   const ratingVal = normalizeRating(card.rating);
-  const scoreHtml = `<span class="score">★ ${ratingVal.toFixed(1)}</span>`;
-  const cont = continuation.find((c) => c.title === card.title);
-  const progressBarHtml = cont && cont.progress > 0
-    ? `<div class="card-progress-bar"><div class="card-progress-fill" style="width:${cont.progress}%"></div></div>`
-    : "";
+  const scoreHtml = ratingVal == null
+    ? `<span class="score score-unavailable">No rating</span>`
+    : `<span class="score">★ ${ratingVal.toFixed(1)}</span>`;
 
   return `
     <article class="media-card ${isNew ? "card-enter" : ""}" data-title="${cleanTitle}">
@@ -3603,11 +2864,10 @@ function renderCard(card, { isNew = false } = {}) {
         <span class="poster-kicker" title="${escapeHtml(card.kicker)}">${escapeHtml(card.kicker)}</span>
         ${badgeHtml}
         <span class="poster-title" title="${cleanTitle}">${cleanTitle}</span>
-        ${progressBarHtml}
         <button class="list-toggle ${saved ? "saved" : ""}" data-action="toggle-list" data-title="${cleanTitle}" aria-label="${saved ? "Remove" : "Add"} ${cleanTitle} ${saved ? "from" : "to"} my list">${saved ? renderIcon("heartFilled", "icon-sm") : renderIcon("plus", "icon-sm")}</button>
-        <button class="card-hover" data-action="play" data-title="${cleanTitle}" aria-label="Play ${cleanTitle}"><span class="play-circle">${renderIcon("play", "icon-md")}</span></button>
+        <button class="card-hover" data-action="play" data-title="${cleanTitle}" aria-label="Where to watch ${cleanTitle}"><span class="play-circle">${renderIcon("play", "icon-md")}</span></button>
       </div>
-      <div class="card-info"><h3 title="${cleanTitle}">${cleanTitle}</h3><div class="card-meta"><span>${card.year}</span><span>${card.runtime}</span>${scoreHtml}</div></div>
+      <div class="card-info"><h3 title="${cleanTitle}">${cleanTitle}</h3><div class="card-meta">${card.year ? `<span>${escapeHtml(card.year)}</span>` : ""}${card.runtime && card.runtime !== "—" ? `<span>${escapeHtml(card.runtime)}</span>` : ""}${scoreHtml}</div></div>
     </article>
   `;
 }
@@ -3762,7 +3022,7 @@ function renderHomeRails() {
 }
 
 function render() {
-  renderContinue();
+  renderSavedTitlesPreview();
   renderRecommendations();
   renderHomeRails();
   const visible = getVisibleCards();
@@ -3841,7 +3101,7 @@ function renderFilterGroups() {
 function resetFilters() {
   state.filters = makeFilterDefaults(getFilterChannel());
   state.search = "";
-  const searchInput = $("#search-input") || $("#modal-search-input");
+  const searchInput = $("#modal-search-input");
   if (searchInput) searchInput.value = "";
   render();
 }
@@ -3893,7 +3153,7 @@ function startHeroMotionPreview(item) {
   heroTrailerTimer = setTimeout(async () => {
     try {
       let trailerKey = null;
-      const tmdbId = item.tmdbId || item.id || TMDB_MAP[item.title]?.tmdbId;
+      const tmdbId = item.tmdbId || item.id;
       const isSeries = item.type === "series" || item.category === "series" || item.category === "tv";
       const mediaType = isSeries ? "tv" : "movie";
 
@@ -3938,164 +3198,26 @@ function startHeroMotionPreview(item) {
 
 
 async function fetchTitleCredits(item) {
-  const tmdbId = item.tmdbId || item.id || TMDB_MAP[item.title]?.tmdbId;
+  const tmdbId = item.tmdbId || item.id;
+  if (!/^\d+$/.test(String(tmdbId || ""))) {
+    return { cast: [], directors: [], writers: [] };
+  }
   const isSeries = item.type === "series" || item.category === "series" || item.category === "tv";
   const mediaType = isSeries ? "tv" : "movie";
-
-  if (tmdbId) {
-    try {
-      const data = await fetchTmdbApi(`/${mediaType}/${tmdbId}/credits`);
-      if (data && (data.cast || data.crew)) {
-        // Studio/network comes from the title details endpoint, never
-        // from origin_country: "United States" is a country, not a studio.
-        let studio = "";
-        try {
-          const details = await fetchTmdbApi(`/${mediaType}/${tmdbId}`);
-          studio = isSeries
-            ? (details?.networks || []).map(n => n.name).filter(Boolean).join(", ")
-            : (details?.production_companies || []).map(c => c.name).filter(Boolean).join(", ");
-        } catch {}
-        return {
-          cast: (data.cast || []).slice(0, 10).map(c => ({
-            name: c.name,
-            character: c.character || "Cast Member",
-            photo: c.profile_path ? `https://image.tmdb.org/t/p/w185${c.profile_path}` : null
-          })),
-          // Director = job "Director" only. Executive producers (e.g.
-          // Louis D'Esposito, Jon Favreau, Victoria Alonso on
-          // Avengers: Endgame) are producers, not directors.
-          directors: (data.crew || []).filter(c => c.job === "Director").slice(0, 3).map(c => c.name),
-          // Writers = Writer/Screenplay/Story jobs only. The whole
-          // "Writing" department also holds comic-book/characters
-          // credits (Jim Starlin, Joe Simon, Jack Kirby), who did not
-          // write the screenplay.
-          writers: (data.crew || []).filter(c => ["Writer", "Screenplay", "Story"].includes(c.job)).slice(0, 3).map(c => c.name),
-          studio
-        };
-      }
-    } catch {}
-  }
-
-  // Curated fallback credits based on genre & title
-  const genres = Array.isArray(item.genre) ? item.genre : ["Drama"];
+  const data = await fetchTmdbApi(`/${mediaType}/${tmdbId}/credits`);
   return {
-    cast: [
-      { name: "Lead Performer", character: "Protagonist", photo: null },
-      { name: "Co-Star Performer", character: "Deuteragonist", photo: null },
-      { name: "Supporting Artist", character: "Allied Lead", photo: null },
-      { name: "Special Appearance", character: "Antagonist", photo: null }
-    ],
-    directors: ["Acclaimed Director"],
-    writers: [`${genres[0] || "Creative"} Studio Team`],
-    studio: ""
+    cast: (data?.cast || []).slice(0, 10).map((person) => ({
+      name: person.name,
+      character: person.character || "",
+      photo: person.profile_path ? `https://image.tmdb.org/t/p/w185${person.profile_path}` : "",
+    })),
+    directors: (data?.crew || []).filter((person) => person.job === "Director").slice(0, 3).map((person) => person.name),
+    writers: (data?.crew || []).filter((person) => ["Writer", "Screenplay", "Story"].includes(person.job)).slice(0, 3).map((person) => person.name),
   };
 }
 
-function getTitleTrivia(item) {
-  const ratingVal = normalizeRating(item.rating).toFixed(1);
-  return [
-    `Critical Reception: Certified Fresh with an IMDb score of ★ ${ratingVal} and universal acclaim for cinematic direction.`,
-    `Audio & Vision: Mastered in Ultra High Definition 4K with Dolby Atmos object-based multi-channel surround sound.`,
-    `Production Trivia: Features state-of-the-art visual effects and on-location practical stunts praised by international critics.`,
-    `Viewing Note: Available in original high-bitrate streaming with multi-language subtitle tracks and low-latency audio.`
-  ];
-}
 
-let activeDetailSeason = 1;
 
-function renderModalEpisodes(item, season = 1) {
-  activeDetailSeason = season;
-  const pillsContainer = $("#modal-season-pills");
-  const listContainer = $("#modal-episodes-list");
-  if (!pillsContainer || !listContainer) return;
-
-  const key = item.slug || item.id || Object.keys(EPISODE_MAP).find(k => k.toLowerCase().includes(item.title.toLowerCase().replace(/[^a-z0-9]/g, "")));
-  const mappedEpisodes = key && EPISODE_MAP[key] ? EPISODE_MAP[key] : null;
-
-  let totalSeasons = 1;
-  if (Number(item.seNum) > 1) {
-    totalSeasons = Number(item.seNum);
-  } else if (mappedEpisodes) {
-    const seasons = new Set(mappedEpisodes.map(e => e.season || 1));
-    totalSeasons = Math.max(1, seasons.size);
-  } else if (item.runtime && item.runtime.includes("Season")) {
-    const m = item.runtime.match(/(\d+)\s*Season/i);
-    if (m) totalSeasons = Math.max(1, parseInt(m[1], 10));
-  } else if (item.type === "series" || item.type === "anime" || item.category === "series") {
-    totalSeasons = 3;
-  }
-
-  // Render season pills
-  pillsContainer.innerHTML = Array.from({ length: totalSeasons }, (_, i) => i + 1).map(s => `
-    <button class="season-pill-btn ${s === season ? "active" : ""}" data-season-select="${s}">
-      Season ${s}
-    </button>
-  `).join("");
-
-  pillsContainer.onclick = (e) => {
-    const btn = e.target.closest("[data-season-select]");
-    if (btn && pillsContainer.contains(btn)) {
-      const s = parseInt(btn.dataset.seasonSelect, 10);
-      renderModalEpisodes(item, s);
-    }
-  };
-
-  // Render episode cards
-  let episodesForSeason = [];
-  if (mappedEpisodes) {
-    episodesForSeason = mappedEpisodes.filter(e => (e.season || 1) === season);
-  } else {
-    // Generate authentic episode list for series
-    episodesForSeason = Array.from({ length: 8 }, (_, idx) => ({
-      ep: idx + 1,
-      season: season,
-      name: `Chapter ${idx + 1}: ${idx === 0 ? "The Awakening" : idx === 1 ? "Crossroads" : idx === 2 ? "Point of No Return" : idx === 3 ? "Shadows Rising" : idx === 4 ? "The Reckoning" : idx === 5 ? "Ascension" : idx === 6 ? "Convergence" : "Finale"}`,
-      duration: "48m",
-      overview: `The saga continues in Season ${season}, Episode ${idx + 1}. Unforeseen alliances form as critical truths emerge.`,
-      resourceLink: null
-    }));
-  }
-
-  listContainer.innerHTML = episodesForSeason.map(ep => `
-    <article class="episode-table-row" data-episode-play="${ep.ep}" tabindex="0" role="button" aria-label="Play Episode ${ep.ep}: ${escapeHtml(ep.name)}">
-      <div class="episode-row-thumb">
-        <img src="${item.image || "assets/logo-mark.png"}" alt="${escapeHtml(ep.name || `Episode ${ep.ep}`)} preview" loading="lazy" decoding="async">
-        <span class="episode-row-number">EP ${ep.ep}</span>
-      </div>
-      <div class="episode-row-info">
-        <h4>${ep.ep}. ${escapeHtml(ep.name)}</h4>
-        <p>${escapeHtml(ep.overview || `Episode ${ep.ep} of ${item.title}.`)}</p>
-      </div>
-      <div class="episode-row-action">
-        <span class="play-circle" aria-hidden="true">
-          ${renderIcon("play", "icon-sm")}
-        </span>
-      </div>
-    </article>
-  `).join("");
-
-  listContainer.onclick = (e) => {
-    const row = e.target.closest("[data-episode-play]");
-    if (row && listContainer.contains(row)) {
-      const epNum = parseInt(row.dataset.episodePlay, 10);
-      closeDetails();
-      playTitle(item.title);
-      setTimeout(() => {
-        if (typeof changePlayerSeason === "function") changePlayerSeason(String(season));
-        if (typeof changePlayerEpisode === "function") changePlayerEpisode(String(epNum));
-      }, 400);
-    }
-  };
-  listContainer.onkeydown = (e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      const row = e.target.closest("[data-episode-play]");
-      if (row && listContainer.contains(row)) {
-        e.preventDefault();
-        row.click();
-      }
-    }
-  };
-}
 
 
 // Deep-link ids: stable subjectId when present, else tmdb id, else a slug.
@@ -4149,10 +3271,12 @@ function getRelatedTitles(currentItem, limit = 4) {
   return scored.slice(0, limit).map((s) => s.cand);
 }
 
-function openDetails(title, { updateHash = true } = {}) {
+function openDetails(title, { updateHash = true, focusWatch = false } = {}) {
   const item = findTitle(title);
   if (!item) return;
+  if (!state.activeModal) detailsReturnFocus = document.activeElement;
   state.activeModal = item;
+  const generation = ++detailLoadGeneration;
   // Deep link: opening a title updates the URL (e.g. #/title/movie-avengers-endgame)
   // so it can be shared / bookmarked, and the back button works via hashchange.
   if (updateHash) {
@@ -4178,26 +3302,22 @@ function openDetails(title, { updateHash = true } = {}) {
   }
 
   if (modalTitle) modalTitle.textContent = item.title;
-  if (modalKicker) modalKicker.textContent = item.kicker || (item.type === "series" ? "Binge-Worthy Series" : item.type === "anime" ? "Anime Masterpiece" : "Feature Film");
+  if (modalKicker) modalKicker.textContent = item.kicker || "Title details";
 
   const ratingVal = normalizeRating(item.rating);
-  const matchPercent = Math.min(99, Math.max(88, Math.round(ratingVal * 10 + (item.title.length % 5))));
-  const maturityRating = item.maturityRating || (isAdultContent(item) ? "18+" : item.type === "movie" ? "PG-13" : "TV-MA");
+  const maturityRating = "";
 
   if (modalMeta) {
     modalMeta.innerHTML = `
-      <span class="badge-imdb">★ ${ratingVal.toFixed(1)}</span>
-      <span class="badge-match">${matchPercent}% Match</span>
-      <span class="badge-tech">4K UHD</span>
-      <span class="badge-tech">Dolby Atmos</span>
-      <span class="badge-age">${maturityRating}</span>
-      <span>${item.year || "2026"}</span>
-      <span>${item.runtime || "2h 05m"}</span>
+      ${ratingVal == null ? `<span class="rating-unavailable">No TMDB rating</span>` : `<span class="badge-imdb" title="TMDB audience rating">★ ${ratingVal.toFixed(1)}</span>`}
+      ${maturityRating ? `<span class="badge-age">${escapeHtml(maturityRating)}</span>` : ""}
+      ${item.year ? `<span>${escapeHtml(item.year)}</span>` : ""}
+      ${item.runtime && item.runtime !== "—" ? `<span>${escapeHtml(item.runtime)}</span>` : ""}
     `;
   }
 
   if (modalDesc) {
-    modalDesc.textContent = item.description || `Stream ${item.title} in pristine high definition with cinema surround sound on Ustream. Available with Dolby Atmos audio and multiple subtitle tracks.`;
+    modalDesc.textContent = item.description || "No synopsis is available for this title yet.";
   }
 
   if (modalList) {
@@ -4208,124 +3328,81 @@ function openDetails(title, { updateHash = true } = {}) {
   }
 
   if (modalPlay) {
-    const savedPos = getSavedPosition(item);
     const playLabel = modalPlay.querySelector("span");
-    // Round 2 (bug 10): an unreleased title's Play button is disabled
-    // up front — it shows "Coming soon" and explains why, instead of
-    // opening a player that dies with "Unable to play media."
-    if (isUnreleasedItem(item)) {
-      if (playLabel) playLabel.textContent = "Coming soon";
-      modalPlay.disabled = true;
-      modalPlay.setAttribute("aria-disabled", "true");
-      modalPlay.onclick = () => {
-        showToast(`${item.title} is coming soon — not yet released, so it cannot be played yet.`);
-      };
-    } else {
-      modalPlay.disabled = false;
-      modalPlay.removeAttribute("aria-disabled");
-      if (playLabel) playLabel.textContent = savedPos > 0 ? `Resume · ${formatTime(savedPos)}` : "Play Now";
-      modalPlay.onclick = () => {
-        closeDetails();
-        playTitle(item.title, { resumeTime: savedPos });
-      };
-    }
+    modalPlay.disabled = false;
+    modalPlay.removeAttribute("aria-disabled");
+    if (playLabel) playLabel.textContent = "Where to watch";
+    modalPlay.onclick = focusWatchHub;
   }
 
   const modalTrailerBtn = $("#modal-trailer");
   if (modalTrailerBtn) modalTrailerBtn.hidden = trailerUnavailableTitles.has(item.title);
 
-  // Populate Specs Grid in Overview
+  // Show only genres actually supplied by the catalog.
   const specsGrid = $("#modal-specs-grid");
   if (specsGrid) {
-    const genres = Array.isArray(item.genre) ? item.genre.join(", ") : "Action, Drama";
-    specsGrid.innerHTML = `
-      <div class="modal-spec-item">
-        <strong>Audio &amp; Sound</strong>
-        <span>Dolby Atmos 5.1 Surround, Stereo</span>
-      </div>
-      <div class="modal-spec-item">
-        <strong>Subtitles</strong>
-        <span>English [CC], Spanish, French, Japanese</span>
-      </div>
-      <div class="modal-spec-item">
-        <strong>Genres</strong>
-        <span>${escapeHtml(genres)}</span>
-      </div>
-      <div class="modal-spec-item">
-        <strong>Studio / Network</strong>
-        <span id="modal-studio-value">${escapeHtml(item.studio || item.network || "—")}</span>
-      </div>
-    `;
+    const genres = Array.isArray(item.genre) ? item.genre.filter(Boolean) : [];
+    specsGrid.innerHTML = genres.length
+      ? `<div class="modal-spec-item"><strong>Genres</strong><span>${escapeHtml(genres.join(", "))}</span></div>`
+      : `<p class="muted-state">No genre information is available.</p>`;
   }
 
-  // Check if episodic
-  const isSeries = item.type === "series" || item.category === "series" || item.category === "tv" || item.type === "anime" || (item.runtime && item.runtime.includes("Season"));
-  const episodesTabBtn = $("#modal-tab-episodes");
-  if (episodesTabBtn) {
-    episodesTabBtn.hidden = !isSeries;
-  }
-  if (isSeries) {
-    renderModalEpisodes(item, 1);
-  }
-
-  // Populate Amazon Prime X-Ray immediately with baseline, then enrich with TMDB credits
-  const renderXrayCredits = (credits) => {
-    const castRail = $("#modal-xray-cast");
+  const castRail = $("#modal-xray-cast");
+  const crewList = $("#modal-xray-crew");
+  const tmdbId = item.tmdbId || item.id;
+  const hasTmdbId = /^\d+$/.test(String(tmdbId || ""));
+  const renderXrayCredits = (credits, { error = false } = {}) => {
     if (castRail) {
-      castRail.innerHTML = (credits.cast || []).map(c => `
-        <div class="xray-cast-card">
-          <img class="xray-actor-avatar" src="${c.photo || "assets/logo-mark.png"}" alt="${escapeHtml(c.name)} portrait" loading="lazy" decoding="async">
-          <span class="xray-actor-name">${escapeHtml(c.name)}</span>
-          <span class="xray-character-name">${escapeHtml(c.character)}</span>
-        </div>
-      `).join("");
+      if (error) {
+        castRail.innerHTML = stateHtml({ kind: "error", title: "Credits could not be loaded", message: "Check your connection and try again.", actionLabel: "Try again", actionAttr: "data-credit-retry" });
+      } else if (!hasTmdbId) {
+        castRail.innerHTML = `<p class="muted-state">Verified cast and crew are not available for this title.</p>`;
+      } else {
+        castRail.innerHTML = (credits.cast || []).length ? credits.cast.map((person) => `
+          <div class="xray-cast-card">
+            ${person.photo ? `<img class="xray-actor-avatar" src="${escapeHtml(person.photo)}" alt="" loading="lazy" decoding="async">` : `<span class="xray-actor-avatar xray-actor-avatar--empty" aria-hidden="true"></span>`}
+            <span class="xray-actor-name">${escapeHtml(person.name)}</span>
+            ${person.character ? `<span class="xray-character-name">${escapeHtml(person.character)}</span>` : ""}
+          </div>
+        `).join("") : `<p class="muted-state">No cast information is listed.</p>`;
+      }
     }
-
-    const crewList = $("#modal-xray-crew");
     if (crewList) {
-      crewList.innerHTML = `
-        <div class="xray-crew-pill">
-          <strong>Director</strong>
-          <span>${escapeHtml((credits.directors || []).join(", ") || "Renowned Director")}</span>
-        </div>
-        <div class="xray-crew-pill">
-          <strong>Writers</strong>
-          <span>${escapeHtml((credits.writers || []).join(", ") || "Creative Screenplay Team")}</span>
-        </div>
-      `;
+      if (error) {
+        crewList.innerHTML = `<p class="muted-state">Credits could not be loaded.</p>`;
+      } else if (!hasTmdbId) {
+        crewList.innerHTML = `<p class="muted-state">Verified cast and crew are not available for this title.</p>`;
+      } else {
+        crewList.innerHTML = `
+          ${(credits.directors || []).length ? `<div class="xray-crew-pill"><strong>Director</strong><span>${escapeHtml(credits.directors.join(", "))}</span></div>` : ""}
+          ${(credits.writers || []).length ? `<div class="xray-crew-pill"><strong>Writers</strong><span>${escapeHtml(credits.writers.join(", "))}</span></div>` : ""}
+          ${!(credits.directors || []).length && !(credits.writers || []).length ? `<p class="muted-state">No crew information is listed.</p>` : ""}
+        `;
+      }
+    }
+    castRail?.querySelector("[data-credit-retry]")?.addEventListener("click", () => void loadXrayCredits(), { once: true });
+  };
+  const loadXrayCredits = async () => {
+    if (!hasTmdbId) {
+      renderXrayCredits({ cast: [], directors: [], writers: [] });
+      return;
+    }
+    const finishCast = castRail ? beginLoading(castRail, { label: "Loading cast…", slowLabel: "Cast details are taking a while…", size: "sm", slowAfterMs: 4000 }) : () => {};
+    const finishCrew = crewList ? beginLoading(crewList, { label: "Loading crew…", slowLabel: "Crew details are taking a while…", size: "sm", slowAfterMs: 4000 }) : () => {};
+    try {
+      const credits = await fetchTitleCredits(item);
+      finishCast();
+      finishCrew();
+      if (generation !== detailLoadGeneration || state.activeModal?.title !== item.title) return;
+      renderXrayCredits(credits);
+    } catch {
+      finishCast();
+      finishCrew();
+      if (generation !== detailLoadGeneration || state.activeModal?.title !== item.title) return;
+      renderXrayCredits(null, { error: true });
     }
   };
-
-  renderXrayCredits({
-    cast: [
-      { name: "Lead Performer", character: "Protagonist", photo: null },
-      { name: "Co-Star Performer", character: "Deuteragonist", photo: null },
-      { name: "Supporting Artist", character: "Allied Lead", photo: null },
-      { name: "Special Appearance", character: "Antagonist", photo: null }
-    ],
-    directors: ["Acclaimed Director"],
-    writers: [`${(Array.isArray(item.genre) && item.genre[0]) || "Creative"} Studio Team`]
-  });
-
-  const triviaBox = $("#modal-xray-trivia");
-  if (triviaBox) {
-    const triviaItems = getTitleTrivia(item);
-    triviaBox.innerHTML = triviaItems.map(t => `
-      <div class="xray-trivia-item">
-        ${renderIcon("check", "icon-sm")}
-        <span>${escapeHtml(t)}</span>
-      </div>
-    `).join("");
-  }
-
-  void (async () => {
-    const credits = await fetchTitleCredits(item);
-    if (state.activeModal?.title === item.title) {
-      renderXrayCredits(credits);
-      const studioEl = $("#modal-studio-value");
-      if (studioEl && credits.studio) studioEl.textContent = credits.studio;
-    }
-  })();
+  void loadXrayCredits();
 
   // Populate More Like This (same type + shared genres only)
   const relatedGrid = $("#modal-related-grid");
@@ -4371,6 +3448,13 @@ function openDetails(title, { updateHash = true } = {}) {
   // Focus the dialog itself (tabindex="-1" in index.html) so Escape is
   // received by this document; focusing a button would let Space close it.
   $("#detail-modal")?.focus({ preventScroll: true });
+  const watchContent = $("#watch-hub-content");
+  if (watchContent) {
+    watchContent.innerHTML = loaderHtml({ label: "Checking authorised watch options…", size: "sm" });
+    watchContent.setAttribute("aria-busy", "true");
+  }
+  void loadWhereToWatch(item, { generation });
+  if (focusWatch) requestAnimationFrame(() => focusWatchHub());
 }
 
 const isHttpUrl = (value) => typeof value === "string" && /^https?:\/\//i.test(value);
@@ -4393,219 +3477,11 @@ function findTitle(title) {
   return null;
 }
 
-function collectPlaybackUrls(value, urls = [], key = "") {
-  if (!value) return urls;
-  if (typeof value === "string") {
-    if (isHttpUrl(value)) urls.push({ url: value, key });
-    return urls;
-  }
-  if (Array.isArray(value)) {
-    value.forEach((entry) => collectPlaybackUrls(entry, urls, key));
-    return urls;
-  }
-  if (typeof value !== "object") return urls;
-  Object.entries(value).forEach(([childKey, childValue]) => collectPlaybackUrls(childValue, urls, childKey));
-  return urls;
-}
 
-const TMDB_MAP = {
-  "movie-inception": { tmdbId: "27205", imdbId: "tt1375666" },
-  "movie-interstellar": { tmdbId: "157336", imdbId: "tt0816692" },
-  "movie-dark-knight": { tmdbId: "155", imdbId: "tt0468569" },
-  "movie-dune-2": { tmdbId: "693134", imdbId: "tt15239678" },
-  "movie-oppenheimer": { tmdbId: "872585", imdbId: "tt15398776" },
-  "movie-spider-verse": { tmdbId: "569094", imdbId: "tt9362722" },
-  "movie-avengers-endgame": { tmdbId: "299534", imdbId: "tt4154796" },
-  "movie-gladiator": { tmdbId: "98", imdbId: "tt0172495" },
-  "movie-matrix": { tmdbId: "603", imdbId: "tt0133093" },
-  "movie-spirited-away": { tmdbId: "129", imdbId: "tt0245429" },
-  "series-breaking-bad": { tmdbId: "1396", imdbId: "tt0903747" },
-  "series-stranger-things": { tmdbId: "66732", imdbId: "tt4574334" },
-  "series-last-of-us": { tmdbId: "100088", imdbId: "tt3581920" },
-  "series-game-of-thrones": { tmdbId: "1399", imdbId: "tt0944947" },
-  "series-severance": { tmdbId: "95557", imdbId: "tt11280740" },
-  "anime-attack-on-titan": { tmdbId: "1429", imdbId: "tt2560140" },
-  "anime-demon-slayer": { tmdbId: "85937", imdbId: "tt9335498" },
-  "anime-jujutsu-kaisen": { tmdbId: "95479", imdbId: "tt12343534" },
-  "anime-death-note": { tmdbId: "13916", imdbId: "tt0877057" },
-  "anime-fma-brotherhood": { tmdbId: "31911", imdbId: "tt1433562" },
-};
 
-const TITLE_TMDB_MAP = {
-  "inception": "27205",
-  "interstellar": "157336",
-  "the dark knight": "155",
-  "dark knight": "155",
-  "dune part two": "693134",
-  "dune: part two": "693134",
-  "dune 2": "693134",
-  "oppenheimer": "872585",
-  "spider-man across the spider-verse": "569094",
-  "spider-man: across the spider-verse": "569094",
-  "across the spider-verse": "569094",
-  "avengers endgame": "299534",
-  "avengers: endgame": "299534",
-  "avengers infinity war": "299536",
-  "gladiator": "98",
-  "the matrix": "603",
-  "matrix": "603",
-  "spirited away": "129",
-  "breaking bad": "1396",
-  "stranger things": "66732",
-  "the last of us": "100088",
-  "last of us": "100088",
-  "game of thrones": "1399",
-  "severance": "95557",
-  "attack on titan": "1429",
-  "demon slayer": "85937",
-  "demon slayer: kimetsu no yaiba": "85937",
-  "jujutsu kaisen": "95479",
-  "death note": "13916",
-  "fullmetal alchemist: brotherhood": "31911",
-  "fullmetal alchemist brotherhood": "31911",
-  "doctor strange in the multiverse of madness": "453395",
-  "doctor strange": "284052",
-  "spider-man no way home": "634649",
-  "spider-man: no way home": "634649",
-  "spider-man": "557",
-  "the batman": "414906",
-  "batman": "414906",
-  "top gun maverick": "361743",
-  "top gun: maverick": "361743",
-  "avatar the way of water": "76600",
-  "avatar: the way of water": "76600",
-  "avatar": "19995",
-  "john wick chapter 4": "603692",
-  "john wick: chapter 4": "603692",
-  "john wick": "245891",
-  "fight club": "550",
-  "pulp fiction": "680",
-  "arcane": "94605",
-  "cyberpunk edgerunners": "105248",
-  "cyberpunk: edgerunners": "105248",
-  "your name": "372058",
-  "your name.": "372058",
-  "naruto": "46260",
-  "one piece": "37854",
-  "bleach": "30984",
-  "chainsaw man": "114410",
-  "black panther wakanda forever": "505642",
-  "black panther: wakanda forever": "505642",
-  "deadpool wolverine": "533535",
-  "deadpool & wolverine": "533535",
-  "inside out 2": "1022789",
-  "godzilla x kong": "823464",
-  "godzilla x kong: the new empire": "823464",
-  "shogun": "126308",
-  "house of the dragon": "94997",
-  "the boys": "76479",
-  "loki": "84958",
-  "the mandalorian": "82856",
-  "squid game": "93405",
-  "wednesday": "119051",
-  "solo leveling": "211089"
-};
 
-const STREAM_SERVERS = {
-  gaiaflix: {
-    name: "Server 1 (Gaiaflix Pro - Multi-Audio & Dubs)",
-    isNative: true,
-    getMovieUrl: (id) => `https://vidsrc.su/embed/movie/${id}`,
-    getTvUrl: (id, s, e) => `https://vidsrc.su/embed/tv/${id}/${s}/${e}`
-  },
-  vidsrcsu: {
-    name: "Server 2 (VidSrc Pro - Fast & Multi-Source)",
-    getMovieUrl: (id) => `https://vidsrc.su/embed/movie/${id}`,
-    getTvUrl: (id, s, e) => `https://vidsrc.su/embed/tv/${id}/${s}/${e}`
-  },
-  vidlink: {
-    name: "Server 3 (VidLink Cloud - 4K/HD Player)",
-    getMovieUrl: (id) => `https://vidlink.pro/movie/${id}?primaryColor=e7ff51&secondaryColor=1f1f1f&icons=vid`,
-    getTvUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e7ff51&secondaryColor=1f1f1f&icons=vid`
-  },
-  twoembed: {
-    name: "Server 4 (2Embed Mirror - Reliable)",
-    getMovieUrl: (id) => `https://www.2embed.cc/embed/${id}`,
-    getTvUrl: (id, s, e) => `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}`
-  },
-  vidstuck: {
-    name: "Server 5 (Vidstuck HD - Alternative)",
-    getMovieUrl: (id) => `https://vidstuck.cc/embed/movie/${id}?color=e7ff51&autoplay=false`,
-    getTvUrl: (id, s, e) => `https://vidstuck.cc/embed/tv/${id}/${s}/${e}?color=e7ff51&autoplay=false`
-  },
-  aniembed: {
-    name: "Server 6 (AniEmbed - Anime Dub/Sub)",
-    getMovieUrl: (id) => `https://aniembed.se/e/${id}/1?lang=sub&autoplay=1`,
-    getTvUrl: (id, s, e) => `https://aniembed.se/e/${id}/${e}?lang=sub&autoplay=1`
-  }
-};
 
-// --- Unified server selection (round 2: all video servers merged) ---
-// Servers the player already knows — no new sources invented:
-//   gaiaflix  native multi-audio HLS via gaiaflix.xyz (movies only)
-//   vidsrcsu  VidSrc embed (vidsrc.su)
-//   vidlink   VidLink embed (vidlink.pro)
-//   twoembed  2Embed mirror (2embed.cc)
-//   vidstuck  Vidstuck embed (vidstuck.cc)
-//   aniembed  AniEmbed (aniembed.se, anime only)
-// NOTE: the old STREAM_SERVERS.gaiaflix embed entry pointed at the same
-// vidsrc.su URLs as vidsrcsu, so "trying" both was trying one server
-// twice. In the chain below, "gaiaflix" means the native HLS step only;
-// getEmbedStreamUrl maps it to the VidSrc embed for any caller that
-// still asks for an embed URL for it.
-let serverMode = "auto"; // "auto" | "manual"
-let manualServerKey = "vidsrcsu"; // honoured only when serverMode === "manual"
-let currentServerKey = "vidsrcsu"; // server actually playing right now
-try {
-  const savedServer = localStorage.getItem("ustream-server");
-  if (savedServer === "auto" || !savedServer) {
-    serverMode = "auto";
-    try { localStorage.setItem("ustream-server", "auto"); } catch {}
-  } else if (STREAM_SERVERS[savedServer]) {
-    serverMode = "manual";
-    manualServerKey = savedServer;
-    currentServerKey = savedServer;
-  } else {
-    serverMode = "auto";
-    try { localStorage.setItem("ustream-server", "auto"); } catch {}
-  }
-} catch {}
-function getAutoServerChain(item) {
-  const isAnime = item?.type === "anime" || item?.category === "anime";
-  if (isAnime) return ["aniembed", "vidsrcsu", "vidlink", "twoembed", "vidstuck"];
-  if (isItemSeries(item)) return ["vidsrcsu", "vidlink", "twoembed", "vidstuck"];
-  return ["gaiaflix", "vidsrcsu", "vidlink", "twoembed", "vidstuck"];
-}
-function getPlaybackChain(item) {
-  if (serverMode === "manual") {
-    // Gaiaflix is movies-only; a manual Gaiaflix pick for a series plays
-    // that title's VidSrc embed instead of erroring outright.
-    if (manualServerKey === "gaiaflix" && isItemSeries(item)) return ["vidsrcsu"];
-    return [manualServerKey];
-  }
-  return getAutoServerChain(item);
-}
-function syncServerSelect() {
-  const serverSelect = $("#player-server-select");
-  if (!serverSelect) return;
-  const value = serverMode === "auto" ? "auto" : manualServerKey;
-  if (serverSelect.value !== value) serverSelect.value = value;
-}
 
-const LANGUAGE_LABELS = {
-  en: "English",
-  hi: "Hindi",
-  ja: "Japanese",
-  es: "Spanish",
-  fr: "French",
-  de: "German",
-  auto: "Original Audio"
-};
-
-let currentLanguageKey = "en";
-try {
-  currentLanguageKey = localStorage.getItem("ustream-language") || "en";
-} catch {}
 
 function escapeHtml(str) {
   return String(str || "").replace(/[&<>"']/g, (c) => ({
@@ -4617,624 +3493,24 @@ function escapeHtml(str) {
   }[c]));
 }
 
-const TMDB_CACHE = new Map();
 
-function isItemSeries(item) {
-  if (!item) return false;
-  if (item.mediaType === "tv") return true;
-  if (item.mediaType === "movie") return false;
-  if (item.type === "series" || item.category === "series" || item.category === "tv") return true;
-  if (item.type === "cartoons" || item.category === "cartoons") return true;
-  if (Number(item.seNum) > 0 || (Array.isArray(item.seasons) && item.seasons.length > 0)) return true;
-  if (item.runtime && /season|episode/i.test(item.runtime)) return true;
-  if (item.type === "anime" || item.category === "anime") {
-    if (item.duration && /^\d+\s*min/i.test(item.duration) && !item.seNum && !/season|ep/i.test(item.runtime || "")) {
-      return false;
-    }
-    return true;
-  }
-  return false;
-}
 
-async function fetchTmdbSeriesSeasons(tmdbId) {
-  if (!isValidTmdbId(tmdbId)) return null;
-  try {
-    const data = await fetchTmdbApi(`/tv/${tmdbId}`);
-    if (!data?.seasons || !Array.isArray(data.seasons)) return null;
-    const validSeasons = data.seasons.filter((s) => s.season_number > 0 && s.episode_count > 0);
-    if (!validSeasons.length) return null;
-    return validSeasons.map((s) => ({
-      season: s.season_number,
-      title: `Season ${s.season_number}`,
-      episodesCount: s.episode_count,
-      episodes: Array.from({ length: s.episode_count }, (_, i) => ({
-        season: s.season_number,
-        episode: i + 1,
-        title: `Episode ${i + 1}`,
-        resourceLink: ""
-      }))
-    }));
-  } catch {
-    return null;
-  }
-}
 
-async function fetchTmdbSeasonEpisodes(tmdbId, seasonNumber) {
-  if (!isValidTmdbId(tmdbId)) return null;
-  try {
-    const data = await fetchTmdbApi(`/tv/${tmdbId}/season/${seasonNumber}`);
-    if (data?.episodes && Array.isArray(data.episodes) && data.episodes.length > 0) {
-      return data.episodes.map((ep) => ({
-        season: seasonNumber,
-        episode: ep.episode_number,
-        title: ep.name || `Episode ${ep.episode_number}`,
-        overview: ep.overview || "",
-        still: ep.still_path ? `https://image.tmdb.org/t/p/w300${ep.still_path}` : "",
-        resourceLink: ""
-      }));
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
 
-function sanitizeTitle(rawTitle = "") {
-  return String(rawTitle || "")
-    .replace(/\[.*?\]|\(.*?\)/g, " ")
-    .replace(/\b(dub|sub|multi sub|hindi|english|japanese|season \d+|episode \d+|complete|hd|4k)\b/gi, " ")
-    .replace(/[^a-zA-Z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
-function isValidTmdbId(id) {
-  const n = Number(id);
-  return Number.isInteger(n) && n > 0 && n < 2500000;
-}
 
-async function resolveTmdbId(item) {
-  if (!item) return null;
 
-  // If item already has a verified TMDB ID
-  if (isValidTmdbId(item.tmdbId)) return String(item.tmdbId);
-  if (item.subjectId && isValidTmdbId(TMDB_MAP[item.subjectId]?.tmdbId)) {
-    return String(TMDB_MAP[item.subjectId].tmdbId);
-  }
 
-  // Check cache
-  const cacheKey = item.subjectId || item.title;
-  if (cacheKey && TMDB_CACHE.has(cacheKey)) {
-    const cached = TMDB_CACHE.get(cacheKey);
-    if (cached.mediaType) item.mediaType = cached.mediaType;
-    return cached.id;
-  }
 
-  const rawTitle = item.title || "";
-  const cleanTitle = rawTitle.toLowerCase().trim();
-  const normalized = cleanTitle.replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
-  const sanitized = sanitizeTitle(rawTitle).toLowerCase();
 
-  // Check title maps
-  for (const [titleKey, id] of Object.entries(TITLE_TMDB_MAP)) {
-    const key = titleKey.toLowerCase();
-    if (cleanTitle === key || normalized === key || sanitized === key || (key.length > 4 && (cleanTitle.includes(key) || sanitized.includes(key)))) {
-      if (isValidTmdbId(id)) {
-        const mediaType = item.type === "series" ? "tv" : "movie";
-        TMDB_CACHE.set(cacheKey, { id: String(id), mediaType });
-        return String(id);
-      }
-    }
-  }
 
-  // Dynamic TMDB Search API through backend proxy
-  const isSeries = isItemSeries(item);
-  const searchQuery = sanitized || normalized || cleanTitle;
-  if (searchQuery) {
-    try {
-      const searchPath = isSeries ? "/search/tv" : "/search/multi";
-      const data = await fetchTmdbApi(`${searchPath}?query=${encodeURIComponent(searchQuery)}`);
-      if (data) {
-        const results = data?.results || [];
-        const yearOf = (r) => Number(String(r?.release_date || r?.first_air_date || "").slice(0, 4)) || 0;
-        const wantedYear = Number(item.year) || 0;
-        const yearMatched = wantedYear ? results.find(r => yearOf(r) === wantedYear) : null;
-        const top = yearMatched || (isSeries
-          ? (results.find(r => r.media_type === "tv" || (!r.media_type && r.first_air_date)) || results[0])
-          : (results.find(r => r.media_type === "movie" || (!r.media_type && r.release_date)) || results[0]));
-        // If the item's year is known and the best hit is from another
-        // year, do not map this title to that older film's stream.
-        if (top?.id && isValidTmdbId(top.id) && (!wantedYear || yearOf(top) === wantedYear)) {
-          const foundId = String(top.id);
-          const mediaType = isSeries ? "tv" : (top.media_type || (top.first_air_date ? "tv" : "movie"));
-          item.mediaType = mediaType;
-          item.tmdbId = foundId;
-          if (top.backdrop_path && !item.backdrop) {
-            item.backdrop = `https://image.tmdb.org/t/p/original${top.backdrop_path}`;
-          }
-          if (top.poster_path && !item.image) {
-            item.image = `https://image.tmdb.org/t/p/w500${top.poster_path}`;
-          }
-          if (mediaType === "tv") {
-            item.type = "series";
-          } else if (mediaType === "movie" && item.type !== "anime") {
-            item.type = "movie";
-          }
-          TMDB_CACHE.set(cacheKey, { id: foundId, mediaType });
-          return foundId;
-        }
-      }
-    } catch (err) {
-      console.warn("[TMDB Dynamic Search]", err.message);
-    }
-  }
 
-  // Fallback: If numeric item.subjectId is in TMDB range, use it
-  if (isValidTmdbId(item.subjectId)) {
-    return String(item.subjectId);
-  }
 
-  // No verified TMDB id for this title: return null instead of
-  // mapping it to an unrelated film/series (the old fallback
-  // returned Inception 27205 / Breaking Bad 1396 for every
-  // unresolvable title — guaranteed wrong content under the
-  // requested title). Callers must handle null.
-  return null;
-}
 
-function getEmbedStreamUrl(tmdbId, item, season = 1, episode = 1, serverKey = currentServerKey) {
-  // "gaiaflix" is the native-HLS step, not an embed: an embed URL for it
-  // is the VidSrc embed (the old gaiaflix embed entry duplicated it).
-  const embedKey = serverKey === "gaiaflix" ? "vidsrcsu" : serverKey;
-  const server = STREAM_SERVERS[embedKey] || STREAM_SERVERS.vidsrcsu;
-  const isSeries = isItemSeries(item);
-  let url = isSeries
-    ? server.getTvUrl(tmdbId, Math.max(1, Number(season) || 1), Math.max(1, Number(episode) || 1))
-    : server.getMovieUrl(tmdbId);
 
-  // AniEmbed natively supports sub vs dub switching for anime
-  if (embedKey === "aniembed") {
-    const animeLang = currentLanguageKey === "en" ? "dub" : "sub";
-    if (/lang=(?:sub|dub)/.test(url)) {
-      url = url.replace(/lang=(?:sub|dub)/, `lang=${animeLang}`);
-    } else {
-      url += (url.includes("?") ? "&" : "?") + `lang=${animeLang}`;
-    }
-  }
-  return url;
-}
 
-function resetDefaultLanguageOptions() {
-  const langSelect = $("#player-language-bar-select");
-  if (!langSelect) return;
-  langSelect.innerHTML = `
-    <option value="auto">Original Audio</option>
-    <option value="off">Subtitles Off</option>
-    <option value="en" ${currentLanguageKey === "en" ? "selected" : ""}>English (Original / Dub)</option>
-    <option value="hi" ${currentLanguageKey === "hi" ? "selected" : ""}>Hindi (Subtitles / CC)</option>
-    <option value="ja" ${currentLanguageKey === "ja" ? "selected" : ""}>Japanese (Anime Dub/Sub)</option>
-    <option value="es" ${currentLanguageKey === "es" ? "selected" : ""}>Spanish (Subtitles / CC)</option>
-    <option value="fr" ${currentLanguageKey === "fr" ? "selected" : ""}>French (Subtitles / CC)</option>
-    <option value="de" ${currentLanguageKey === "de" ? "selected" : ""}>German (Subtitles / CC)</option>
-  `;
-}
-
-export async function resolveGaiaflixStream(tmdbId, timeoutMs = 15000) {
-  if (!tmdbId) return null;
-  const isBrowser = typeof window !== "undefined" && typeof window.location !== "undefined";
-  const proxyEndpoint = isBrowser
-    ? `/api/gaiaflix-movie-source?id=${encodeURIComponent(tmdbId)}`
-    : `https://gaiaflix.xyz/api/gaiaflix-movie-source?id=${encodeURIComponent(tmdbId)}`;
-
-  const fetchWithTimeout = async (url, ms) => {
-    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-    const timer = controller ? setTimeout(() => controller.abort(), ms) : null;
-    try {
-      const res = await fetch(url, {
-        signal: controller ? controller.signal : undefined,
-        headers: { Accept: "application/json" }
-      });
-      return res;
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
-  };
-
-  const decodeStreamFromData = (data) => {
-    if (data?.streamUrl && (data.streamUrl.startsWith("http://") || data.streamUrl.startsWith("https://"))) {
-      return data.streamUrl;
-    }
-    const sourceUrl = data?.sources?.[0]?.url;
-    if (!sourceUrl) return null;
-
-    let base64Part = "";
-    if (sourceUrl.includes("?id=")) {
-      base64Part = sourceUrl.split("?id=")[1];
-    } else if (sourceUrl.includes("&id=")) {
-      base64Part = sourceUrl.split("&id=")[1];
-    } else {
-      base64Part = sourceUrl;
-    }
-    if (base64Part.includes("&")) {
-      base64Part = base64Part.split("&")[0];
-    }
-
-    let decoded = "";
-    if (typeof atob === "function") {
-      decoded = atob(base64Part);
-    } else if (typeof Buffer !== "undefined") {
-      decoded = Buffer.from(base64Part, "base64").toString("utf-8");
-    }
-
-    if (decoded && (decoded.startsWith("http://") || decoded.startsWith("https://"))) {
-      return decoded;
-    }
-    return null;
-  };
-
-  try {
-    // 1. Try local proxy endpoint first (avoids CORS restrictions in browser)
-    try {
-      const res = await fetchWithTimeout(proxyEndpoint, Math.min(timeoutMs, 6000));
-      if (res && res.ok) {
-        const data = await res.json();
-        const stream = decodeStreamFromData(data);
-        if (stream) return stream;
-      }
-    } catch (proxyErr) {
-      console.warn("[Gaiaflix] Proxy resolution error, trying fallback:", proxyErr?.message || proxyErr);
-    }
-
-    // 2. Fallback to direct Gaiaflix endpoint if different from proxy
-    if (proxyEndpoint !== `https://gaiaflix.xyz/api/gaiaflix-movie-source?id=${encodeURIComponent(tmdbId)}`) {
-      const directUrl = `https://gaiaflix.xyz/api/gaiaflix-movie-source?id=${encodeURIComponent(tmdbId)}`;
-      const res = await fetchWithTimeout(directUrl, Math.min(timeoutMs, 5000));
-      if (res && res.ok) {
-        const data = await res.json();
-        return decodeStreamFromData(data);
-      }
-    }
-    return null;
-  } catch (err) {
-    console.warn("[Gaiaflix] resolveGaiaflixStream error:", err?.message || err);
-    return null;
-  }
-}
-if (typeof window !== "undefined") {
-  window.resolveGaiaflixStream = resolveGaiaflixStream;
-}
-
-export function rewriteM3u8WithQueryParams(text, baseUrlStr) {
-  try {
-    const baseObj = new URL(baseUrlStr);
-    const search = baseObj.search;
-    if (!search) return text;
-    return text.replace(/((?:URI=")|(?:^))([^"\r\n]+\.m3u8)(?="|$)/gm, (match, prefix, uri) => {
-      try {
-        const abs = new URL(uri, baseUrlStr);
-        if (!abs.search && search) {
-          abs.search = search;
-        }
-        return `${prefix}${abs.href}`;
-      } catch {
-        return match;
-      }
-    });
-  } catch {
-    return text;
-  }
-}
-
-export function playWithGaiaflixHls(m3u8Url, item) {
-  return new Promise((resolve) => {
-    const embed = $("#embed-player");
-    const video = $("#video-player");
-    const customWrapper = $("#custom-player-wrapper");
-    const playerBackdrop = $("#player-backdrop");
-    if (!video || !customWrapper) {
-      resolve(false);
-      return;
-    }
-
-    let resolved = false;
-    const failGaiaflixPlayback = () => {
-      if (resolved) return;
-      resolved = true;
-      if (customWrapper) customWrapper.hidden = true;
-      if (video) {
-        try { video.pause(); } catch {}
-        video.hidden = true;
-        video.removeAttribute("src");
-      }
-      if (window._currentHlsInstance) {
-        try { window._currentHlsInstance.destroy(); } catch {}
-        window._currentHlsInstance = null;
-      }
-      if (window._currentHlsBlobUrl) {
-        try { URL.revokeObjectURL(window._currentHlsBlobUrl); } catch {}
-        window._currentHlsBlobUrl = null;
-      }
-      if (embed) embed.hidden = false;
-      resolve(false);
-    };
-
-    if (embed) {
-      embed.src = "about:blank";
-      embed.hidden = true;
-    }
-    customWrapper.hidden = false;
-    video.hidden = false;
-    video.poster = item?.image || "";
-    const titleEl = $("#player-title");
-    if (titleEl) titleEl.textContent = item?.title || "Gaiaflix Pro Stream";
-    if (playerBackdrop) playerBackdrop.hidden = false;
-
-    if (window._currentHlsInstance) {
-      try {
-        window._currentHlsInstance.destroy();
-      } catch {}
-      window._currentHlsInstance = null;
-    }
-    if (window._currentHlsBlobUrl) {
-      try {
-        URL.revokeObjectURL(window._currentHlsBlobUrl);
-      } catch {}
-      window._currentHlsBlobUrl = null;
-    }
-
-    const preparePlayableSource = async () => {
-      try {
-        const res = await fetch(m3u8Url);
-        if (res.ok) {
-          const rawText = await res.text();
-          const rewrittenText = rewriteM3u8WithQueryParams(rawText, m3u8Url);
-          const blob = new Blob([rewrittenText], { type: "application/vnd.apple.mpegurl" });
-          const blobUrl = URL.createObjectURL(blob);
-          window._currentHlsBlobUrl = blobUrl;
-          return blobUrl;
-        }
-      } catch (err) {
-        console.warn("[Gaiaflix] Manifest rewrite fallback:", err?.message || err);
-      }
-      return m3u8Url;
-    };
-
-    const HlsClass = window.Hls;
-    if (HlsClass && HlsClass.isSupported()) {
-      preparePlayableSource().then((playableSource) => {
-        const hls = new HlsClass({
-          capLevelToPlayerSize: true,
-          autoStartLoad: true,
-          fetchSetup: (context, initParams) => {
-            let url = context.url;
-            if (/^http:/i.test(url)) url = url.replace(/^http:/i, "https:");
-            try {
-              const masterObj = new URL(m3u8Url);
-              if (masterObj.search) {
-                const targetObj = new URL(url);
-                masterObj.searchParams.forEach((val, key) => {
-                  if (!targetObj.searchParams.has(key)) targetObj.searchParams.set(key, val);
-                });
-                url = targetObj.href;
-              }
-            } catch {}
-            return new Request(url, initParams);
-          }
-        });
-        window._currentHlsInstance = hls;
-        hls.loadSource(playableSource);
-        hls.attachMedia(video);
-
-        const populateAudioTracks = () => {
-          const audioTracks = hls.audioTracks || [];
-          const langSelect = $("#player-language-bar-select");
-          if (langSelect && audioTracks.length > 0) {
-            langSelect.innerHTML = "";
-            audioTracks.forEach((track, idx) => {
-              const opt = document.createElement("option");
-              const trackId = track.id !== undefined ? track.id : idx;
-              opt.value = String(trackId);
-              const cleanName = String(track.name || track.lang || `Track ${idx + 1}`).replace(/^\s*\d+\.\s*/, "").trim();
-              opt.textContent = `${cleanName} (Multi-Audio)`;
-              langSelect.appendChild(opt);
-            });
-
-            // Preferred language matching (e.g. Hindi, English, Tamil, Telugu, Thai)
-            const preferred = (currentLanguageKey || "en").toLowerCase();
-            const langPrefixMap = {
-              hi: ["hi", "hin", "hindi"],
-              en: ["en", "eng", "english"],
-              ta: ["ta", "tam", "tamil"],
-              te: ["te", "tel", "telugu"],
-              th: ["th", "tha", "thai"],
-              ja: ["ja", "jpn", "japanese"],
-              es: ["es", "spa", "spanish"],
-              fr: ["fr", "fra", "french"],
-              de: ["de", "ger", "german"],
-              it: ["it", "ita", "italian"],
-              pt: ["pt", "por", "portuguese"],
-              tr: ["tr", "tur", "turkish"],
-              pl: ["pl", "pol", "polish"],
-              ar: ["ar", "ara", "arabic"]
-            };
-            const targets = langPrefixMap[preferred] || [preferred];
-
-            const targetTrack = audioTracks.find((t) => {
-              if (String(t.id) === String(currentLanguageKey)) return true;
-              const tLang = (t.lang || "").toLowerCase();
-              const tName = (t.name || "").toLowerCase();
-              return targets.some((target) => tLang === target || tLang.startsWith(target) || tName.includes(target));
-            }) || audioTracks.find((t) => t.default) || audioTracks[0];
-
-            if (targetTrack) {
-              const targetId = targetTrack.id !== undefined ? targetTrack.id : 0;
-              if (hls.audioTrack !== targetId) {
-                hls.audioTrack = targetId;
-              }
-              langSelect.value = String(targetId);
-              const trackName = String(targetTrack.name || targetTrack.lang || "Audio").replace(/^\s*\d+\.\s*/, "").trim();
-              showToast(`Switched audio to ${trackName} (Multi-Audio)`);
-            }
-          }
-        };
-
-        hls.on(HlsClass.Events.MANIFEST_PARSED, (event, data) => {
-          populateAudioTracks();
-
-          // Subtitles default to Off (bug 24): HLS subtitle tracks default
-          // to the first track, which on multi-audio sources is often Hindi.
-          try { if (state.player?.selectedSubtitle === "off") hls.subtitleTrack = -1; } catch {}
-          if (state.player?.selectedSubtitle === "off") {
-            Array.from(video.textTracks || []).forEach((t) => { t.mode = "disabled"; });
-          }
-
-          // Start playback on #video-player
-          video.play().then(() => {
-            setPlayerState(PLAYER_STATE.PLAYING, `${item?.title || "Movie"} · Server 1 (Gaiaflix Pro - Multi-Audio)`);
-          }).catch(() => {
-            setPlayerState(PLAYER_STATE.READY, `Ready to play: ${item?.title || "Movie"}`);
-          });
-
-          const popout = $("#player-popout-btn");
-          if (popout) popout.href = m3u8Url;
-          const liveLabel = $("#player-live-label");
-          if (liveLabel) liveLabel.hidden = false;
-          const liveText = $("#player-live-text");
-          if (liveText) liveText.textContent = "Multi-Audio HLS Active";
-          updatePlayerEpisodeFlow();
-
-          if (!resolved) {
-            resolved = true;
-            resolve(true);
-          }
-        });
-
-        hls.on(HlsClass.Events.AUDIO_TRACKS_UPDATED, (_event, data) => {
-          populateAudioTracks();
-        });
-
-        hls.on(HlsClass.Events.AUDIO_TRACK_SWITCHED, (_event, data) => {
-          const langSelect = $("#player-language-bar-select");
-          if (langSelect && Number.isInteger(data?.id)) {
-            langSelect.value = String(data.id);
-          }
-        });
-
-        hls.on(HlsClass.Events.ERROR, (event, data) => {
-          if (data.fatal) {
-            console.warn("[Hls] Fatal error:", data.type, data.details);
-            switch (data.type) {
-              case HlsClass.ErrorTypes.NETWORK_ERROR:
-                hls.startLoad();
-                break;
-              case HlsClass.ErrorTypes.MEDIA_ERROR:
-                hls.recoverMediaError();
-                break;
-              default:
-                failGaiaflixPlayback();
-                break;
-            }
-          }
-        });
-
-        // Safety timeout: if manifest not parsed in 7 seconds, resolve
-        setTimeout(() => {
-          if (!resolved) {
-            if (video.readyState >= 1) {
-              resolved = true;
-              resolve(true);
-            } else {
-              failGaiaflixPlayback();
-            }
-          }
-        }, 7000);
-      }).catch((err) => {
-        console.warn("[Gaiaflix] preparePlayableSource failed:", err);
-        failGaiaflixPlayback();
-      });
-    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      // Native Apple/Safari HLS
-      preparePlayableSource().then((playableSource) => {
-        video.src = playableSource;
-        video.load();
-        video.play().then(() => {
-          setPlayerState(PLAYER_STATE.PLAYING, `${item?.title || "Movie"} · Server 1 (Gaiaflix Pro - Multi-Audio)`);
-        }).catch(() => {});
-        resolved = true;
-        resolve(true);
-      }).catch(() => {
-        failGaiaflixPlayback();
-      });
-    } else {
-      failGaiaflixPlayback();
-    }
-  });
-}
-
-const HIGH_DEF_STREAMS = [
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4"
-];
-
-function isDirectPlayableVideoUrl(url) {
-  if (!url || typeof url !== "string") return false;
-  if (url.includes("hakunaymatata.com") || url.includes("/api/media") || url.includes("/.netlify/functions/media")) {
-    return false;
-  }
-  return /^https?:\/\/.+\.(mp4|webm|m3u8)(\?.*)?$/i.test(url) || url.includes("commondatastorage.googleapis.com");
-}
-
-function getStreamForTitle(title = "", episodeNum = 1) {
-  const cleanTitle = String(title || "Ustream").trim();
-  // Never map an unreleased title to a sample stream: the hash picks
-  // unrelated footage, so a 2026 title would play the wrong film.
-  const known = typeof findTitle === "function" ? findTitle(cleanTitle) : null;
-  if (known && isUnreleasedItem(known)) return "";
-  let hash = 0;
-  for (let i = 0; i < cleanTitle.length; i++) {
-    hash = (hash * 31 + cleanTitle.charCodeAt(i)) >>> 0;
-  }
-  const index = (hash + (Math.max(1, Number(episodeNum) || 1) - 1)) % HIGH_DEF_STREAMS.length;
-  return HIGH_DEF_STREAMS[index];
-}
-
-function extractPlaybackUrl(payload) {
-  const candidates = collectPlaybackUrls(payload);
-  const playable = candidates.filter(({ url }) => {
-    try {
-      const parsed = new URL(url);
-      return !parsed.hostname.includes("hakunaymatata.com") && /\.(mp4|m3u8|webm)(?:$|\?)/i.test(parsed.pathname);
-    } catch {
-      return false;
-    }
-  });
-  const preferred = [...playable].sort((a, b) => {
-    const score = (entry) => (entry.key === "downloadUrl" ? 3 : entry.key === "resourceLink" ? 2 : 1);
-    return score(b) - score(a);
-  });
-  const mediaLike = candidates.find(({ url, key }) => !url.includes("hakunaymatata.com") && /\.(mp4|m3u8)(?:$|\?)/i.test(url) && /downloadUrl|resourceLink|playUrl|url/i.test(key));
-  return (preferred[0] || mediaLike)?.url || "";
-}
-
-function toPlayableUrl(url, fallbackTitle = "", episodeNum = 1) {
-  if (isDirectPlayableVideoUrl(url)) {
-    return url;
-  }
-  const fallbackItem = findTitle(fallbackTitle || state?.player?.item?.title || "");
-  if (fallbackItem && isUnreleasedItem(fallbackItem)) return "";
-  return getStreamForTitle(fallbackTitle || state?.player?.item?.title || "Ustream", episodeNum);
-}
 
 const PLAYER_RESOLUTIONS = [1080, 720, 480, 360];
-const EPISODE_PAGE_SIZE = 10;
 
 const PLAYER_STATE = {
   IDLE: "IDLE",
@@ -5251,7 +3527,7 @@ let currentPlayerState = PLAYER_STATE.IDLE;
 // showed a static "Loading…"/"CONNECTING…" with no progress and no end.
 let playerLoadingTimer = null;
 let playerLoadingStartedAt = 0;
-let playerLoadingBaseMessage = "Loading stream…";
+let playerLoadingBaseMessage = "Loading video…";
 
 function clearPlayerLoadingTimer() {
   if (playerLoadingTimer) {
@@ -5266,7 +3542,7 @@ function clearPlayerLoadingTimer() {
 
 function startPlayerLoadingTimer(baseMessage) {
   clearPlayerLoadingTimer();
-  playerLoadingBaseMessage = baseMessage || "Loading stream…";
+  playerLoadingBaseMessage = baseMessage || "Loading video…";
   playerLoadingStartedAt = Date.now();
   playerLoadingTimer = setInterval(() => {
     const elapsed = Math.floor((Date.now() - playerLoadingStartedAt) / 1000);
@@ -5279,28 +3555,17 @@ function startPlayerLoadingTimer(baseMessage) {
     if (progress) progress.setAttribute("aria-valuenow", String(pct));
     if (elapsed >= 20) {
       clearPlayerLoadingTimer();
-      // If a unified chain is mid-attempt, abort it: the 20s budget is
-      // the hard cap for the whole attempt, and the chain respects the
-      // same budget, so this only fires when an attempt hung.
-      if (playbackChain) {
-        playbackChain.aborted = true;
-        const embed = $("#embed-player");
-        if (embed) { try { embed.src = "about:blank"; } catch {} }
-        playbackChain = null;
-      }
-      setPlayerState(PLAYER_STATE.ERROR, "Stream did not start within 20 seconds. Retry to run auto server selection again.");
+      setPlayerState(PLAYER_STATE.ERROR, "The video did not start within 20 seconds. Check your connection, then retry.");
     }
   }, 1000);
 }
 
 function setPlayerState(nextState, customMessage = "") {
   currentPlayerState = nextState;
-
-  const wasLivePlayback = livePlaybackActive;
-  livePlaybackActive = nextState === PLAYER_STATE.PLAYING;
-  if (wasLivePlayback !== livePlaybackActive) updateStatusBadge(catalogIsLive, catalogLiveCount);
+  const wasPlaying = playerIsPlaying;
+  playerIsPlaying = nextState === PLAYER_STATE.PLAYING;
+  if (wasPlaying !== playerIsPlaying) updateStatusBadge(catalogIsLive, catalogLiveCount);
   if (nextState !== PLAYER_STATE.LOADING) clearPlayerLoadingTimer();
-  if (nextState !== PLAYER_STATE.PLAYING) clearEmbedWatchTimer();
 
   const liveLabel = $("#player-live-label");
   const liveText = $("#player-live-text");
@@ -5309,18 +3574,15 @@ function setPlayerState(nextState, customMessage = "") {
   const loadingText = $("#player-loading-text");
   const errorEl = $("#player-error-indicator");
   const errorText = $("#player-error-text");
-  const startBtn = $("#start-player");
   const retryBtn = $("#player-retry-button");
   const region = $("#player-status-region");
 
   if (region) region.setAttribute("aria-busy", String(nextState === PLAYER_STATE.LOADING));
-
-  // Hide all mutually exclusive elements first so they NEVER overlap
-  if (statusEl) { statusEl.hidden = true; statusEl.style.display = "none"; }
-  if (loadingEl) { loadingEl.hidden = true; loadingEl.style.display = "none"; }
-  if (errorEl) { errorEl.hidden = true; errorEl.style.display = "none"; }
-  if (retryBtn) { retryBtn.hidden = true; retryBtn.style.display = "none"; }
-  if (startBtn) { startBtn.hidden = true; startBtn.style.display = "none"; }
+  for (const element of [statusEl, loadingEl, errorEl, retryBtn]) {
+    if (!element) continue;
+    element.hidden = true;
+    element.style.display = "none";
+  }
 
   switch (nextState) {
     case PLAYER_STATE.IDLE:
@@ -5328,88 +3590,52 @@ function setPlayerState(nextState, customMessage = "") {
       if (statusEl) {
         statusEl.hidden = false;
         statusEl.style.display = "block";
-        statusEl.textContent = customMessage || "Choose a title to start watching";
-      }
-      if (startBtn) {
-        startBtn.hidden = false;
-        startBtn.style.display = "inline-flex";
-        startBtn.disabled = true;
-        startBtn.innerHTML = `${renderIcon("play", "icon-sm")} <span>Start playback</span>`;
+        statusEl.textContent = customMessage || "Choose a community video or official trailer.";
       }
       break;
-
     case PLAYER_STATE.LOADING:
       if (liveLabel) {
         liveLabel.hidden = false;
-        if (liveText) liveText.textContent = "Connecting…";
+        if (liveText) liveText.textContent = "Loading";
       }
       if (loadingEl) {
         loadingEl.hidden = false;
         loadingEl.style.display = "flex";
-        if (loadingText) loadingText.textContent = customMessage || "Loading stream…";
-        startPlayerLoadingTimer(customMessage || "Loading stream…");
-      }
-      if (startBtn) {
-        startBtn.hidden = false;
-        startBtn.style.display = "inline-flex";
-        startBtn.disabled = true;
-        startBtn.innerHTML = "<span class='player-loading-indicator' aria-hidden='true'></span> <span>Loading stream…</span>";
+        if (loadingText) loadingText.textContent = customMessage || "Loading video…";
+        startPlayerLoadingTimer(customMessage || "Loading video…");
       }
       break;
-
     case PLAYER_STATE.READY:
       if (liveLabel) {
         liveLabel.hidden = false;
-        if (liveText) liveText.textContent = "Ready to watch";
+        if (liveText) liveText.textContent = "Ready";
       }
       if (statusEl) {
         statusEl.hidden = false;
         statusEl.style.display = "block";
-        statusEl.textContent = customMessage || "Ready to watch";
-      }
-      if (startBtn) {
-        startBtn.hidden = false;
-        startBtn.style.display = "inline-flex";
-        startBtn.disabled = false;
-        startBtn.innerHTML = `${renderIcon("play", "icon-sm")} <span>Start playback</span>`;
+        statusEl.textContent = customMessage || "Ready to play.";
       }
       break;
-
     case PLAYER_STATE.PLAYING:
       if (liveLabel) {
         liveLabel.hidden = false;
-        // Round 2: nothing on this service is live any more (Sports /
-        // Live TV are gone) — an on-demand title is "Now playing",
-        // never "Streaming live".
         if (liveText) liveText.textContent = "Now playing";
       }
       if (statusEl) {
         statusEl.hidden = false;
         statusEl.style.display = "block";
-        statusEl.textContent = customMessage || (state.player?.item ? `Playing: ${state.player.item.title}` : "Playing stream");
+        statusEl.textContent = customMessage || (state.player?.item ? `Playing: ${state.player.item.title}` : "Playing video");
       }
-      if (startBtn) {
-        startBtn.hidden = false;
-        startBtn.style.display = "inline-flex";
-        startBtn.disabled = false;
-        startBtn.innerHTML = `${renderIcon("pause", "icon-sm")} <span>Pause</span>`;
-      }
-      armEmbedWatchTimer();
       break;
-
     case PLAYER_STATE.ERROR:
       if (liveLabel) {
         liveLabel.hidden = false;
-        if (liveText) liveText.textContent = "Playback failed";
+        if (liveText) liveText.textContent = "Unavailable";
       }
       if (errorEl) {
         errorEl.hidden = false;
         errorEl.style.display = "flex";
-        if (errorText) errorText.textContent = customMessage || "Playback failed";
-      }
-      if (startBtn) {
-        startBtn.hidden = true;
-        startBtn.style.display = "none";
+        if (errorText) errorText.textContent = customMessage || "This video could not be played.";
       }
       if (retryBtn) {
         retryBtn.hidden = false;
@@ -5427,1250 +3653,100 @@ function setPlayerLoading(message, isLoading = true) {
   }
 }
 
-// --- Unified playback chain (round 2: one Play action, all servers) ---
-// One Play action tries the servers in order and uses the first that
-// actually loads. A single 20s budget covers the whole attempt (the
-// existing loading watchdog): each attempt is capped by the remaining
-// budget, and the elapsed timer is started once at chain start and
-// never reset per server. Only when every server has failed (or the
-// budget is spent) does the user see an error — Retry re-runs the
-// auto-selection.
-const PLAYBACK_CHAIN_BUDGET_MS = 20000;
-const EMBED_ATTEMPT_MS = 8000;
-let playbackChain = null; // { order, index, item, tmdbId, season, episode, startedAt, requestId, aborted }
-let embedWatchTimer = null; // 30s continuous-embed-playback recorder (bug 15)
 
-function chainRemainingMs() {
-  if (!playbackChain) return 0;
-  return Math.max(0, PLAYBACK_CHAIN_BUDGET_MS - (Date.now() - playbackChain.startedAt));
-}
-function setChainLoadingMessage(message) {
-  // Update the loading line without restarting the elapsed timer: the
-  // timer re-renders playerLoadingBaseMessage every second, so setting
-  // the base message is what keeps the server name + elapsed time
-  // coherent across attempts.
-  playerLoadingBaseMessage = message;
-  const loadingText = $("#player-loading-text");
-  if (loadingText) loadingText.textContent = `${message} (${Math.floor((Date.now() - (playbackChain?.startedAt || Date.now())) / 1000)}s)`;
-}
-function clearEmbedWatchTimer() {
-  if (embedWatchTimer) { clearTimeout(embedWatchTimer); embedWatchTimer = null; }
-}
-function armEmbedWatchTimer() {
-  clearEmbedWatchTimer();
-  const item = state.player?.item;
-  const embed = $("#embed-player");
-  if (!item || !embed || embed.hidden) return;
-  embedWatchTimer = setTimeout(() => {
-    // 30s of continuous embed playback = real progress, even though a
-    // cross-origin frame reports no position to resume from.
-    if (currentPlayerState === PLAYER_STATE.PLAYING && state.player?.item?.title === item.title) {
-      recordPlaybackProgress(item, { embedWatchedSeconds: 30 });
-    }
-  }, 30000);
-}
-async function attemptGaiaflixHls(item, tmdbId) {
-  const timeoutMs = Math.min(4500, chainRemainingMs());
-  if (timeoutMs <= 500) return false;
-  const m3u8Url = await resolveGaiaflixStream(tmdbId, timeoutMs);
-  if (!m3u8Url || !playbackChain || playbackChain.aborted) return false;
-  return await playWithGaiaflixHls(m3u8Url, item);
-}
-function attemptEmbedServer(url) {
-  return new Promise((resolve) => {
-    const embed = $("#embed-player");
-    const customWrapper = $("#custom-player-wrapper");
-    const video = $("#video-player");
-    if (!embed) return resolve(false);
 
-    // CRITICAL: Ensure native video player and its custom-player-wrapper
-    // are hidden so they never obscure the embed iframe with a solid black screen!
-    if (customWrapper) customWrapper.hidden = true;
-    if (video) {
-      try { video.pause(); } catch {}
-      video.hidden = true;
-      video.removeAttribute("src");
-    }
-    if (window._currentHlsInstance) {
-      try { window._currentHlsInstance.destroy(); } catch {}
-      window._currentHlsInstance = null;
-    }
-    if (window._currentHlsBlobUrl) {
-      try { URL.revokeObjectURL(window._currentHlsBlobUrl); } catch {}
-      window._currentHlsBlobUrl = null;
-    }
 
-    const chain = playbackChain;
-    let settled = false;
-    const done = (ok) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      embed.removeEventListener("load", onLoad);
-      resolve(ok);
-    };
-    const onLoad = () => {
-      // Ignore the about:blank navigation used to reset the frame, and
-      // loads that belong to a superseded attempt.
-      if (!embed.src || embed.src === "about:blank") return;
-      if (chain !== playbackChain || !playbackChain || playbackChain.aborted) return done(false);
-      done(true);
-    };
-    const timeoutMs = Math.min(EMBED_ATTEMPT_MS, chainRemainingMs());
-    if (timeoutMs <= 500) return done(false);
-    const timer = setTimeout(() => {
-      // Dead server: blank the frame so a late load can never promote
-      // this attempt after we moved on, then fail the attempt.
-      try { embed.src = "about:blank"; } catch {}
-      done(false);
-    }, timeoutMs);
-    embed.addEventListener("load", onLoad);
-    // Force a fresh navigation even when retrying the same URL.
-    try { embed.src = "about:blank"; } catch {}
-    setTimeout(() => {
-      if (settled || chain !== playbackChain || !playbackChain || playbackChain.aborted) return;
-      if (customWrapper) customWrapper.hidden = true;
-      embed.removeAttribute("sandbox");
-      embed.src = url;
-      embed.hidden = false;
-    }, 50);
-  });
-}
-async function runPlaybackChain(item, tmdbId, { season = 1, episode = 1 } = {}) {
-  const order = getPlaybackChain(item);
-  playbackChain = {
-    order, index: -1, item, tmdbId, season, episode,
-    startedAt: Date.now(), requestId: state.player.requestId, aborted: false,
-  };
-  return continuePlaybackChain();
-}
-async function continuePlaybackChain() {
-  const chain = playbackChain;
-  if (!chain) return null;
-  for (let i = chain.index + 1; i < chain.order.length; i++) {
-    if (chain.aborted || chain.requestId !== state.player.requestId || $("#player-backdrop")?.hidden) {
-      playbackChain = null;
-      return null;
-    }
-    if (chainRemainingMs() <= 1500) break;
-    const key = chain.order[i];
-    chain.index = i;
-    currentServerKey = key;
-    syncServerSelect();
-    const server = STREAM_SERVERS[key];
-    const seasonEpLabel = isItemSeries(chain.item) ? ` · S${chain.season}:E${chain.episode}` : "";
-    const langLabel = currentLanguageKey !== "auto" ? ` · ${LANGUAGE_LABELS[currentLanguageKey] || currentLanguageKey.toUpperCase()}` : "";
-    setChainLoadingMessage(`Trying ${server?.name || key} for ${chain.item.title}${seasonEpLabel}${langLabel}…`);
-    let ok = false;
-    try {
-      if (key === "gaiaflix") {
-        ok = await attemptGaiaflixHls(chain.item, chain.tmdbId);
-      } else {
-        const url = getEmbedStreamUrl(chain.tmdbId, chain.item, chain.season, chain.episode, key);
-        const popout = $("#player-popout-btn");
-        if (popout) popout.href = url;
-        ok = await attemptEmbedServer(url);
-      }
-    } catch (err) {
-      console.warn(`[Ustream Playback] ${key} failed:`, err);
-      ok = false;
-    }
-    if (ok) return key;
-    // Dead server: fall through to the next one automatically. The user
-    // only sees an error once the whole chain is exhausted.
-    console.warn(`[Ustream Playback] ${key} did not load — trying the next server`);
-  }
-  playbackChain = null;
-  return null;
-}
 
-function ensurePlayerFlowUI() {
-  return $(".player-modal");
-}
 
-function getRelatedTitle(currentItem) {
-  // Same-type / shared-genre only; the old fallback returned the first
-  // unrelated title in the pool (e.g. Chainsaw Man for Avengers: Endgame).
-  return getRelatedTitles(currentItem, 1)[0] || null;
-}
 
-function isEpisodicPlayer(player = state.player) {
-  return Boolean(player?.isSeries && player.seasons?.some((season) => season.episodes?.length));
-}
 
-function getOrderedEpisodes(player = state.player) {
-  return (player.seasons || [])
-    .slice()
-    .sort((a, b) => a.season - b.season)
-    .flatMap((season) => (season.episodes || []).slice().sort((a, b) => a.episode - b.episode));
-}
 
-function getAdjacentEpisode(direction, player = state.player) {
-  if (!isEpisodicPlayer(player)) return null;
-  const episodes = getOrderedEpisodes(player);
-  const currentIndex = episodes.findIndex((episode) => episode.season === player.selectedSeason && episode.episode === player.selectedEpisode);
-  const nextIndex = currentIndex < 0 ? (direction > 0 ? 0 : -1) : currentIndex + direction;
-  return nextIndex >= 0 && nextIndex < episodes.length ? episodes[nextIndex] : null;
-}
 
-function getPreviousEpisode(player = state.player) {
-  return getAdjacentEpisode(-1, player);
-}
-
-function getNextEpisode(player = state.player) {
-  return getAdjacentEpisode(1, player);
-}
-
-function updatePlayerEpisodeFlow() {
-  const player = state.player;
-  const episodic = isEpisodicPlayer(player);
-  if (!episodic) player.autoplayNext = false;
-  const previous = getPreviousEpisode(player);
-  const next = getNextEpisode(player);
-  const previousButton = $("#player-prev");
-  const nextButton = $("#player-next");
-  const upNextButton = $("#player-up-next-button");
-  const autoplay = $("#player-autoplay");
-  const upNext = $("#player-up-next");
-  const upNextArt = $("#player-up-next-art");
-  const upNextLabel = $("#player-up-next-label");
-  const upNextTitle = $("#player-up-next-title");
-  const upNextDescription = $("#player-up-next-description");
-
-  if (previousButton) previousButton.disabled = !episodic || !previous;
-  if (nextButton) nextButton.disabled = !episodic || !next;
-
-  if (autoplay) {
-    autoplay.disabled = !episodic;
-    autoplay.setAttribute("aria-pressed", String(episodic && player.autoplayNext));
-    autoplay.classList.toggle("active", episodic && player.autoplayNext);
-  }
-
-  // Ensure Up Next container is always visible
-  if (upNext) upNext.hidden = false;
-
-  if (episodic && next) {
-    // Current title is episodic and has a next episode
-    if (upNextLabel) upNextLabel.textContent = "Next episode";
-    if (upNextTitle) upNextTitle.textContent = `S${next.season} E${next.episode} · ${next.title || `Episode ${next.episode}`}`;
-    if (upNextDescription) {
-      upNextDescription.textContent = player.autoplayNext
-        ? "Autoplay will begin when this episode ends."
-        : "The next episode is ready to play.";
-    }
-    if (upNextButton) {
-      upNextButton.disabled = false;
-      upNextButton.innerHTML = `<span>Play next</span>${renderIcon("arrowRight", "icon-sm")}`;
-      upNextButton.dataset.action = "play-next";
-    }
-    if (upNextArt) {
-      upNextArt.innerHTML = player.item?.image
-        ? `<img class="player-preview-thumb" src="${player.item.image}" alt="${escapeHtml(player.item.title || "Next episode")} preview" loading="lazy" decoding="async" />`
-        : `<span class="player-art-icon">${renderIcon("play", "icon-md")}</span>`;
-    }
-  } else if (episodic && !next) {
-    // Current title is episodic and reached the end of available episodes
-    const related = getRelatedTitle(player.item);
-    if (upNextLabel) upNextLabel.textContent = "Season complete · Up next";
-    if (upNextTitle) upNextTitle.textContent = related ? `Up next: ${related.title}` : "All caught up";
-    if (upNextDescription) {
-      upNextDescription.textContent = related
-        ? `You finished the season! The next episode will appear here when available. Continue with ${related.title}.`
-        : "You finished the season! The next episode will appear here when available.";
-    }
-    if (upNextButton) {
-      if (related) {
-        upNextButton.disabled = false;
-        upNextButton.innerHTML = `<span>Play title</span>${renderIcon("arrowRight", "icon-sm")}`;
-        upNextButton.dataset.action = "play-related";
-        upNextButton.dataset.title = related.title;
-      } else {
-        upNextButton.disabled = true;
-        upNextButton.innerHTML = "<span>All caught up</span>";
-      }
-    }
-    if (upNextArt) {
-      upNextArt.innerHTML = related?.image
-        ? `<img class="player-preview-thumb" src="${related.image}" alt="${escapeHtml(related.title || "Recommended title")} preview" loading="lazy" decoding="async" />`
-        : `<span class="player-art-icon">${renderIcon("anime", "icon-md")}</span>`;
-    }
-  } else {
-    // Movie or single title: populate with related content from the catalog
-    const related = getRelatedTitle(player.item);
-    if (related) {
-      if (upNextLabel) upNextLabel.textContent = "Recommended next";
-      if (upNextTitle) upNextTitle.textContent = related.title;
-      if (upNextDescription) {
-        upNextDescription.textContent = `${related.year || ""} · ${related.genre?.slice(0, 2).join(", ") || "Featured"} · ★ ${normalizeRating(related.rating).toFixed(1)}`;
-      }
-      if (upNextButton) {
-        upNextButton.disabled = false;
-        upNextButton.innerHTML = `<span>Play title</span>${renderIcon("arrowRight", "icon-sm")}`;
-        upNextButton.dataset.action = "play-related";
-        upNextButton.dataset.title = related.title;
-      }
-      if (upNextArt) {
-        upNextArt.innerHTML = related.image
-          ? `<img class="player-preview-thumb" src="${related.image}" alt="${escapeHtml(related.title || "Recommended title")} preview" loading="lazy" decoding="async" />`
-          : `<span class="player-art-icon">${renderIcon("play", "icon-md")}</span>`;
-      }
-    } else {
-      const hasHistory = continuation.length > 0;
-      if (upNextLabel) upNextLabel.textContent = "Your queue";
-      if (upNextTitle) upNextTitle.textContent = hasHistory ? "Continue watching" : "Start watching to build your queue";
-      if (upNextDescription) {
-        upNextDescription.textContent = hasHistory
-          ? "The next episode will appear here when available."
-          : "Start watching titles to build your queue.";
-      }
-      if (upNextButton) {
-        upNextButton.disabled = true;
-        upNextButton.textContent = "Browse catalog";
-      }
-    }
-  }
-}
 
 function togglePlayerSettings(force) {
-  const panel = $("#player-settings");
-  const toggle = $("#player-settings-toggle");
+  const panel = $("[data-player-settings]");
+  const toggle = $("[data-player-settings-toggle]");
   if (!panel || !toggle) return;
   const open = typeof force === "boolean" ? force : !panel.open;
   panel.open = open;
   toggle.setAttribute("aria-expanded", String(open));
 }
 
-async function fetchJson(endpoint) {
-  const response = await fetch(endpoint);
-  if (!response.ok) throw new Error(`Request failed with HTTP ${response.status}`);
-  return response.json();
-}
-
-function firstNumber(...values) {
-  for (const value of values) {
-    const number = Number.parseInt(String(value ?? "").match(/\d+/)?.[0] || "", 10);
-    if (Number.isFinite(number)) return number;
-  }
-  return null;
-}
-
-function languageLabel(entry) {
-  return String(entry?.lanName || entry?.languageName || entry?.language || entry?.lang || entry?.audioName || entry?.dubName || entry?.name || entry?.title || entry?.label || entry?.corner || "Dub").trim() || "Dub";
-}
-
-function collectLanguageEntries(payload) {
-  const results = [];
-  const visited = new Set();
-  const interestingKeys = /dub|language|audio|version|resourceDetector/i;
-
-  const visit = (value, key = "") => {
-    if (!value || typeof value !== "object" || visited.has(value)) return;
-    visited.add(value);
-    if (Array.isArray(value)) {
-      value.forEach((entry) => visit(entry, key));
-      return;
-    }
-    const subjectId = value.subjectId || value.subject_id;
-    if (subjectId && (interestingKeys.test(key) || value.lanName || value.languageName || value.language || value.dub)) results.push(value);
-    Object.entries(value).forEach(([childKey, childValue]) => {
-      if (interestingKeys.test(childKey) || typeof childValue === "object") visit(childValue, childKey);
-    });
-  };
-
-  visit(payload);
-  return results;
-}
-
-function getLanguageOptions(payload, item) {
-  const originalSubjectId = String(item.subjectId || "");
-  const options = [{ subjectId: originalSubjectId, label: "Original audio", isOriginal: true, type: 0 }];
-  const seen = new Set([originalSubjectId]);
-  collectLanguageEntries(payload).forEach((entry) => {
-    const subjectId = String(entry.subjectId || entry.subject_id || "");
-    const label = languageLabel(entry);
-    const type = Number(entry.type);
-    if (!subjectId || seen.has(subjectId) || type === 1 || /\bsub(?:title)?\b/i.test(label)) return;
-    seen.add(subjectId);
-    options.push({ subjectId, label, isOriginal: false, type: 0 });
-  });
-  return options;
-}
-
-function getSubtitleOptions(payload) {
-  const options = [{ value: "off", label: "Off", kind: "off" }];
-  const seen = new Set(["off"]);
-  collectLanguageEntries(payload).forEach((entry) => {
-    const subjectId = String(entry.subjectId || entry.subject_id || "");
-    const label = languageLabel(entry);
-    if (Number(entry.type) !== 1 || !subjectId || seen.has(subjectId)) return;
-    seen.add(subjectId);
-    options.push({ value: subjectId, label, kind: "variant", subjectId });
-  });
-
-  const subtitles = String(payload?.data?.subtitles || payload?.subtitles || "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-  subtitles.forEach((label) => {
-    const normalized = label.toLowerCase();
-    if (!/english|hindi|हिन्दी|हिंदी/.test(normalized)) return;
-    const value = `label:${label}`;
-    if (!seen.has(value)) {
-      seen.add(value);
-      options.push({ value, label: `${label} subtitles (not supplied)`, kind: "label", labelOnly: true, disabled: true });
-    }
-  });
-  return options;
-}
-
-function getQualityOptions(payload) {
-  const options = [];
-  const seen = new Set();
-  const visit = (value) => {
-    if (!value || typeof value !== "object") return;
-    if (Array.isArray(value)) return value.forEach(visit);
-    const resolution = firstNumber(value.resolution, value.definition, value.height);
-    const resourceLink = value.resourceLink || value.downloadUrl;
-    if (resolution && isHttpUrl(resourceLink) && /\.(mp4|m3u8)(?:$|\?)/i.test(resourceLink)) {
-      const key = String(resolution);
-      if (!seen.has(key)) {
-        seen.add(key);
-        options.push({ value: resolution, label: `${resolution}p`, resolution, url: resourceLink });
-      }
-    }
-    Object.values(value).forEach(visit);
-  };
-  visit(payload?.data || payload);
-  return options.sort((a, b) => a.resolution - b.resolution);
-}
-
-function getPlayerQualityOptions(payload, isSeries = false) {
-  const options = getQualityOptions(payload);
-  if (options.length || !isSeries) return options;
-  return PLAYER_RESOLUTIONS.slice().sort((a, b) => a - b).map((resolution) => ({
-    value: resolution,
-    label: `${resolution}p`,
-    resolution,
-  }));
-}
-
-function getResourceLink(entry) {
-  return extractPlaybackUrl(entry) || [entry?.resourceLink, entry?.resource_link, entry?.playUrl?.url, entry?.playUrl?.playUrl].find(isHttpUrl) || "";
-}
-
-function normalizeEpisode(entry, fallbackSeason = 1, fallbackEpisode = null) {
-  if (!entry || typeof entry !== "object") return null;
-  const nested = entry.data && typeof entry.data === "object" ? entry.data : {};
-  const episodeNumber = firstNumber(entry.ep, entry.episode, entry.episodeNumber, entry.episodeNum, nested.ep, nested.episode, fallbackEpisode);
-  if (!episodeNumber) return null;
-  return {
-    episode: episodeNumber,
-    title: entry.title || entry.name || nested.title || nested.name || `Episode ${episodeNumber}`,
-    resourceLink: getResourceLink(entry),
-    season: firstNumber(entry.season, entry.se, entry.seasonNumber, fallbackSeason) || fallbackSeason,
-    raw: entry,
-  };
-}
-
-function normalizeEpisodeSeasons(payload) {
-  const root = payload?.data || payload || {};
-  const seasons = new Map();
-  const add = (episode) => {
-    if (!episode) return;
-    if (!seasons.has(episode.season)) seasons.set(episode.season, new Map());
-    const episodes = seasons.get(episode.season);
-    const current = episodes.get(episode.episode);
-    if (!current || (!current.resourceLink && episode.resourceLink)) episodes.set(episode.episode, episode);
-  };
-
-  const addArray = (entries, seasonNumber = 1) => {
-    if (!Array.isArray(entries)) return;
-    entries.forEach((entry, index) => {
-      if (!entry || typeof entry !== "object") return;
-      const nested = entry.episodes || entry.episodeList || entry.items || entry.list || entry.resources || entry.data?.list || entry.data?.episodes;
-      if (Array.isArray(nested)) {
-        const nestedSeason = firstNumber(entry.season, entry.se, entry.seasonNumber, entry.number) || seasonNumber;
-        addArray(nested, nestedSeason);
-        return;
-      }
-      add(normalizeEpisode(entry, firstNumber(entry.season, entry.se, entry.seasonNumber, seasonNumber) || seasonNumber, index + 1));
-    });
-  };
-
-  const seasonArrays = [root.seasons, root.seasonList, root.season_list, root.episodesBySeason].filter(Array.isArray);
-  seasonArrays.forEach((entries) => addArray(entries));
-  [root.items, root.list, root.episodes, root.episodeList, root.episode_list, root.resources].filter(Array.isArray).forEach((entries) => addArray(entries));
-
-  const collectNestedArrays = (value, seasonNumber = 1, depth = 0) => {
-    if (!value || typeof value !== "object" || depth > 5) return;
-    if (Array.isArray(value)) {
-      addArray(value, seasonNumber);
-      return;
-    }
-    const nextSeason = firstNumber(value.season, value.se, value.seasonNumber, seasonNumber) || seasonNumber;
-    Object.entries(value).forEach(([key, child]) => {
-      if (Array.isArray(child) || (child && typeof child === "object" && /data|season|episode|list|resource/i.test(key))) collectNestedArrays(child, nextSeason, depth + 1);
-    });
-  };
-  collectNestedArrays(root);
-
-  const output = [...seasons.entries()].map(([season, episodes]) => ({
-    season,
-    episodes: [...episodes.values()].sort((a, b) => a.episode - b.episode),
-  })).filter((entry) => entry.episodes.length).sort((a, b) => a.season - b.season);
-  return output;
-}
-
-function ensurePlayerSelectionUI() {
-  return $("#player-options");
-}
-
-function setSelectOptions(select, options, selectedValue, emptyLabel) {
-  if (!select) return;
-  select.replaceChildren();
-  if (!options.length) {
-    const option = document.createElement("option");
-    option.textContent = emptyLabel;
-    option.value = "";
-    select.append(option);
-    select.disabled = true;
-    return;
-  }
-  options.forEach((entry) => {
-      const option = document.createElement("option");
-      option.value = String(entry.value);
-      option.textContent = entry.label;
-      option.disabled = Boolean(entry.disabled);
-      option.selected = String(entry.value) === String(selectedValue);
-    select.append(option);
-  });
-  select.disabled = false;
-}
-
-function updatePlayerSelectionUI(message = "") {
-  const player = state.player;
-  const isEpisodic = Boolean(player.isSeries && player.seasons && player.seasons.length > 0);
-
-  // 1. Language selector in player bar
-  const languageBarSelect = $("#player-language-bar-select");
-  if (languageBarSelect) {
-    languageBarSelect.value = currentLanguageKey;
-  }
-
-  // 2. Action bar season and episode selectors
-  const seasonBarField = $("#player-season-bar-field");
-  const seasonBarSelect = $("#player-season-bar-select");
-  const episodeBarField = $("#player-episode-bar-field");
-  const episodeBarSelect = $("#player-episode-bar-select");
-  const episodesSection = $("#player-episodes-section");
-
-  if (!isEpisodic) {
-    if (seasonBarField) seasonBarField.hidden = true;
-    if (episodeBarField) episodeBarField.hidden = true;
-    if (episodesSection) episodesSection.hidden = true;
-  } else {
-    if (seasonBarField) seasonBarField.hidden = false;
-    if (episodeBarField) episodeBarField.hidden = false;
-
-    const seasons = player.seasons.map((entry) => ({
-      value: entry.season,
-      label: entry.title || `Season ${entry.season}`
-    }));
-    setSelectOptions(seasonBarSelect, seasons, player.selectedSeason, "Select season");
-
-    const selectedSeason = player.seasons.find((entry) => entry.season === player.selectedSeason) || player.seasons[0];
-    const episodes = selectedSeason?.episodes || [];
-    setSelectOptions(
-      episodeBarSelect,
-      episodes.map((entry) => ({
-        value: entry.episode,
-        label: `Ep ${entry.episode}${entry.title && entry.title !== `Episode ${entry.episode}` ? `: ${entry.title}` : ""}`,
-      })),
-      player.selectedEpisode,
-      "Select episode"
-    );
-
-    // 3. Episodes Section with Season Pills and Episode Grid
-    if (episodesSection) {
-      episodesSection.hidden = false;
-      const seasonTitleEl = $("#player-episodes-season-title");
-      if (seasonTitleEl) {
-        seasonTitleEl.textContent = selectedSeason?.title || `Season ${player.selectedSeason || 1}`;
-      }
-
-      const seasonPillsContainer = $("#player-season-pills");
-      if (seasonPillsContainer) {
-        seasonPillsContainer.innerHTML = player.seasons.map((s) => {
-          const isActive = s.season === player.selectedSeason;
-          const sTitle = escapeHtml(s.title || `Season ${s.season}`);
-          return `<button class="season-pill${isActive ? " active" : ""}" type="button" data-season="${s.season}" aria-label="${sTitle}">
-            ${sTitle}
-          </button>`;
-        }).join("");
-      }
-
-      const episodesGrid = $("#player-episodes-grid");
-      if (episodesGrid) {
-        episodesGrid.innerHTML = episodes.map((ep) => {
-          const isCurrent = ep.episode === player.selectedEpisode;
-          const epTitle = escapeHtml(ep.title || `Episode ${ep.episode}`);
-          return `<button class="episode-pill${isCurrent ? " active" : ""}" type="button" data-season="${selectedSeason?.season || 1}" data-episode="${ep.episode}" aria-label="Play Season ${selectedSeason?.season || 1} Episode ${ep.episode}: ${epTitle}">
-            <span class="ep-num">E${ep.episode}</span>
-            <span class="ep-title">${epTitle}</span>
-          </button>`;
-        }).join("");
-      }
-    }
-  }
-
-  // 4. Drawer options
-  const panel = ensurePlayerSelectionUI();
-  if (panel) {
-    const hasControls = player.languageOptions.length > 1 || player.subtitleOptions.length > 1 || player.qualityOptions.length > 1 || isEpisodic;
-    panel.hidden = !hasControls;
-    const languageSelect = $("#player-language-select");
-    const subtitleSelect = $("#player-subtitle-select");
-    const qualitySelect = $("#player-quality-select");
-    const seasonSelect = $("#player-season-select");
-    const episodeSelect = $("#player-episode-select");
-    const seasonField = $("#player-season-field");
-    const episodeField = $("#player-episode-field");
-    const optionsHint = $("#player-options-hint");
-
-    setSelectOptions(languageSelect, player.languageOptions.map((entry) => ({ value: entry.subjectId, label: entry.label })), player.selectedLanguage?.subjectId, "No alternate languages");
-    setSelectOptions(subtitleSelect, player.subtitleOptions.map((entry) => ({ value: entry.value, label: entry.label })), player.selectedSubtitle, "No subtitles available");
-    setSelectOptions(qualitySelect, player.qualityOptions.map((entry) => ({ value: entry.value, label: entry.label })), player.selectedQuality, "Auto");
-
-    if (!isEpisodic) {
-      if (seasonField) seasonField.hidden = true;
-      if (episodeField) episodeField.hidden = true;
-    } else {
-      const seasons = player.seasons.map((entry) => ({ value: entry.season, label: `Season ${entry.season}` }));
-      setSelectOptions(seasonSelect, seasons, player.selectedSeason, "Select season");
-      const selectedSeason = player.seasons.find((entry) => entry.season === player.selectedSeason) || player.seasons[0];
-      const episodes = selectedSeason?.episodes || [];
-      setSelectOptions(
-        episodeSelect,
-        episodes.map((entry) => ({
-          value: entry.episode,
-          label: `Episode ${entry.episode}${entry.title && entry.title !== `Episode ${entry.episode}` ? ` · ${entry.title}` : ""}`,
-        })),
-        player.selectedEpisode,
-        "Select episode"
-      );
-      if (seasonField) seasonField.hidden = seasons.length <= 1;
-      if (episodeField) episodeField.hidden = episodes.length === 0;
-    }
-
-    if (optionsHint) optionsHint.textContent = isEpisodic ? "Choose audio, subtitles, quality, season, or episode." : "Choose audio, subtitles, or quality before playback.";
-  }
-
-  updatePlayerEpisodeFlow();
-}
-
-async function fetchEpisodeList(subjectId, preferredResolution = null) {
-  // 1. Resolve TMDB ID for series/anime to fetch full seasons and all episodes
-  let tmdbId = (state.player?.tmdbId && isValidTmdbId(state.player.tmdbId)) ? String(state.player.tmdbId) : null;
-  if (!tmdbId) {
-    if (TMDB_MAP[subjectId]?.tmdbId && isValidTmdbId(TMDB_MAP[subjectId].tmdbId)) {
-      tmdbId = String(TMDB_MAP[subjectId].tmdbId);
-    } else if (isValidTmdbId(subjectId)) {
-      tmdbId = String(subjectId);
-    } else {
-      const itemToResolve = state.player?.item || findCatalogItem(subjectId) || findTitle(subjectId);
-      if (itemToResolve) {
-        tmdbId = await resolveTmdbId(itemToResolve);
-      }
-    }
-  }
-
-  // Fetch verified complete season list & all available episode counts from TMDB
-  if (tmdbId && isValidTmdbId(tmdbId)) {
-    const tmdbSeasons = await fetchTmdbSeriesSeasons(tmdbId);
-    if (tmdbSeasons && tmdbSeasons.length > 0) {
-      // Pre-fetch actual episode titles for initial season so they display immediately
-      try {
-        const initialSeasonNum = state.player?.selectedSeason || 1;
-        const targetSeason = tmdbSeasons.find(s => s.season === initialSeasonNum) || tmdbSeasons[0];
-        if (targetSeason) {
-          const seasonEpisodes = await fetchTmdbSeasonEpisodes(tmdbId, targetSeason.season);
-          if (seasonEpisodes && seasonEpisodes.length > 0) {
-            targetSeason.episodes = seasonEpisodes;
-            targetSeason.episodesLoaded = true;
-          }
-        }
-      } catch {}
-      return { seasons: tmdbSeasons, resolution: preferredResolution || 1080 };
-    }
-  }
-
-  // 2. Next, check catalog item metadata (runtime / seNum / epNum)
-  const currentItem = state.player?.item || findCatalogItem(subjectId) || findTitle(subjectId);
-  if (currentItem) {
-    const runtimeStr = currentItem.runtime || currentItem.duration || "";
-    const seasonsMatch = runtimeStr.match(/(\d+)\s*Seasons?/i);
-    const episodesMatch = runtimeStr.match(/(\d+)\s*Episodes?/i);
-    const totalSeasons = seasonsMatch ? Number(seasonsMatch[1]) : (Number(currentItem.seNum) || 1);
-    const totalEpisodes = episodesMatch ? Number(episodesMatch[1]) : (Number(currentItem.epNum) || (totalSeasons * 12));
-
-    if (totalSeasons > 0 && totalEpisodes > 0) {
-      const epsPerSeason = Math.max(1, Math.round(totalEpisodes / totalSeasons));
-      const seasons = Array.from({ length: totalSeasons }, (_, sIdx) => {
-        const sNum = sIdx + 1;
-        const isLast = sNum === totalSeasons;
-        const count = isLast ? Math.max(1, totalEpisodes - (epsPerSeason * (totalSeasons - 1))) : epsPerSeason;
-        return {
-          season: sNum,
-          title: `Season ${sNum}`,
-          episodes: Array.from({ length: count }, (_, eIdx) => ({
-            season: sNum,
-            episode: eIdx + 1,
-            title: `Episode ${eIdx + 1}`,
-            resourceLink: ""
-          }))
-        };
-      });
-      return { seasons, resolution: preferredResolution || 1080 };
-    }
-  }
-
-  // 3. Fallback: EPISODE_MAP only if nothing else returned
-  if (subjectId && EPISODE_MAP[subjectId]) {
-    const list = EPISODE_MAP[subjectId];
-    const seasonsMap = new Map();
-    list.forEach((ep) => {
-      const s = ep.season || 1;
-      if (!seasonsMap.has(s)) seasonsMap.set(s, []);
-      seasonsMap.get(s).push({
-        episode: ep.ep,
-        title: ep.name || `Episode ${ep.ep}`,
-        resourceLink: ep.resourceLink,
-        season: s
-      });
-    });
-    const seasons = [...seasonsMap.entries()].map(([season, episodes]) => ({ season, episodes }));
-    return { seasons, resolution: preferredResolution || 1080 };
-  }
-
-  // 4. Default fallback: 1 season with 12 episodes
-  const defaultEpisodes = Array.from({ length: 12 }, (_, i) => ({
-    episode: i + 1,
-    title: `Episode ${i + 1}`,
-    resourceLink: "",
-    season: 1
-  }));
-  return { seasons: [{ season: 1, title: "Season 1", episodes: defaultEpisodes }], resolution: preferredResolution || 1080 };
-}
-
-function chooseEpisode(seasons, preferredSeason, preferredEpisode) {
-  const season = seasons.find((entry) => entry.season === preferredSeason) || seasons[0];
-  const episode = season?.episodes.find((entry) => entry.episode === preferredEpisode) || season?.episodes[0];
-  return { season: season?.season || null, episode: episode?.episode || null };
-}
-
-async function loadEpisodeState(subjectId, preferredSeason = state.player.selectedSeason, preferredEpisode = state.player.selectedEpisode, requestId = state.player.requestId, preferredResolution = state.player.selectedQuality) {
-  const result = await fetchEpisodeList(subjectId, preferredResolution);
-  if (requestId !== state.player.requestId) return false;
-  state.player.seasons = result.seasons;
-  state.player.resolution = result.resolution;
-  state.player.selectedQuality = result.resolution || state.player.selectedQuality;
-  const selected = chooseEpisode(result.seasons, preferredSeason, preferredEpisode);
-  state.player.selectedSeason = selected.season;
-  state.player.selectedEpisode = selected.episode;
-  updatePlayerSelectionUI(result.seasons.length ? `Loaded ${result.seasons.reduce((count, season) => count + season.episodes.length, 0)} episode${result.seasons.reduce((count, season) => count + season.episodes.length, 0) === 1 ? "" : "s"} · ${result.resolution}p` : "Episode list unavailable");
-  return true;
-}
-
-async function loadPreviewDetails(subjectId) {
-  // 1. Try server proxy endpoint
-  try {
-    const res = await fetchJson(buildApiUrl("details", { id: subjectId }));
-    if (res?.data) return res;
-  } catch {}
-
-  // 2. Direct RapidAPI fallback
-  try {
-    const directUrl = `https://moviebox-api.p.rapidapi.com/preview/${encodeURIComponent(subjectId)}`;
-    const directRes = await fetch(directUrl, {
-      headers: {
-        "x-rapidapi-host": "moviebox-api.p.rapidapi.com",
-        "x-rapidapi-key": "68d9a25612msh6bb2c17daf102cdp1fe4fbjsnc2adc8510c22",
-        "accept": "application/json"
-      }
-    });
-    if (directRes.ok) {
-      const data = await directRes.json();
-      if (data?.data) return data;
-    }
-  } catch {}
-
-  return null;
-}
-
-function getSelectedEpisode() {
-  const season = state.player.seasons.find((entry) => entry.season === state.player.selectedSeason);
-  return season?.episodes.find((entry) => entry.episode === state.player.selectedEpisode) || null;
-}
-
-async function resolveCurrentPlayback(requestId) {
-  const player = state.player;
-  const item = player.item;
-  if (!item) return null;
-  if (isUnreleasedItem(item)) return null;
-  if (requestId !== player.requestId) return null;
-
-  const currentEp = player.selectedEpisode || 1;
-
-  if (player.isSeries) {
-    let episode = getSelectedEpisode();
-    if (episode?.resourceLink && isDirectPlayableVideoUrl(episode.resourceLink)) {
-      return { url: episode.resourceLink, label: `Episode ${episode.episode} · ${player.resolution || player.selectedQuality || 1080}p HD` };
-    }
-    const seriesStream = getStreamForTitle(item.title, currentEp);
-    return { url: seriesStream, label: `Episode ${currentEp} · ${player.resolution || player.selectedQuality || 1080}p HD` };
-  }
-
-  const subjectId = player.subtitleSubjectId || player.selectedLanguage?.subjectId || item.subjectId;
-  if (subjectId) {
-    const details = subjectId === player.selectedLanguage?.subjectId && player.details ? player.details : await loadPreviewDetails(subjectId);
-    if (requestId !== player.requestId) return null;
-    const selectedQuality = player.selectedQuality ? Number(player.selectedQuality) : null;
-    const quality = getQualityOptions(details).find((entry) => entry.resolution === selectedQuality && isDirectPlayableVideoUrl(entry.url));
-    const url = quality?.url || extractPlaybackUrl(details);
-    if (url && isDirectPlayableVideoUrl(url)) {
-      return { url, label: `${quality?.resolution || 1080}p Ultra HD` };
-    }
-  }
-
-  if (item.video && isDirectPlayableVideoUrl(item.video)) {
-    return { url: item.video, label: "1080p Ultra HD" };
-  }
-
-  // Guaranteed resilient HD stream based on title hash so every title has its own working HD video!
-  const movieStream = getStreamForTitle(item.title, 1);
-  return { url: movieStream, label: "1080p Ultra HD" };
-}
-
-async function resolvePlayback(item) {
-  const requestId = ++state.player.requestId;
-  state.player = {
-    requestId,
-    item,
-    subjectId: String(item.subjectId || ""),
-    details: null,
-    languageOptions: [],
-    selectedLanguage: null,
-    subtitleOptions: [],
-    selectedSubtitle: "off",
-    subtitleSubjectId: "",
-    qualityOptions: [],
-    selectedQuality: null,
-    resolution: null,
-    seasons: [],
-    selectedSeason: null,
-    selectedEpisode: null,
-    isSeries: item.type === "series" || item.type === "anime",
-    autoplayNext: false,
-  };
-  ensurePlayerSelectionUI();
-  updatePlayerSelectionUI("Loading playback options...");
-
-  if (state.player.subjectId) {
-    const details = await loadPreviewDetails(state.player.subjectId);
-    if (requestId !== state.player.requestId) return null;
-    state.player.details = details;
-    state.player.languageOptions = getLanguageOptions(details, item);
-    state.player.selectedLanguage = state.player.languageOptions[0] || null;
-    state.player.subtitleOptions = getSubtitleOptions(details);
-    state.player.qualityOptions = getPlayerQualityOptions(details, state.player.isSeries);
-    state.player.selectedQuality = state.player.qualityOptions.at(-1)?.resolution || null;
-    updatePlayerSelectionUI("Loading playback options...");
-    if (state.player.isSeries) {
-      const episodeSubjectId = state.player.selectedLanguage?.subjectId || state.player.subjectId;
-      await loadEpisodeState(episodeSubjectId, null, null, requestId);
-      if (requestId !== state.player.requestId) return null;
-    }
-  } else if (state.player.isSeries) {
-    await loadEpisodeState(item.title, null, null, requestId);
-    if (requestId !== state.player.requestId) return null;
-  }
-
-  // Ensure episodic player has at least 1 season with episodes
-  if (state.player.isSeries && (!state.player.seasons || state.player.seasons.length === 0)) {
-    await loadEpisodeState(item.title, null, null, requestId);
-  }
-
-  const source = await resolveCurrentPlayback(requestId);
-  if (source) return source;
-  return null;
-}
-
-function clearPlayerSource(message) {
-  const video = $("#video-player");
-  video.pause();
-  video.removeAttribute("src");
-  video.load();
-  const startBtn = $("#start-player");
-  if (startBtn) startBtn.disabled = true;
-  setPlayerLoading(message, true);
-}
-
-function applyPlayerSource(source) {
-  const video = $("#video-player");
-  if (!source?.url) {
-    clearPlayerSource("No playable resource was returned for this selection.");
-    return false;
-  }
-  video.dataset.sourceLabel = source.label;
-  video.dataset.playerRequestId = String(state.player.requestId);
-  video.src = source.url;
-  const startBtn = $("#start-player");
-  if (startBtn) {
-    startBtn.disabled = false;
-    startBtn.innerHTML = `${renderIcon("play", "icon-sm")} <span>Start playback</span>`;
-  }
-  setPlayerLoading(`${source.label} · press Start playback`, false);
-  video.load();
-  updatePlayerEpisodeFlow();
-
-  const playPromise = video.play();
-  if (playPromise !== undefined) {
-    playPromise.then(() => {
-      setPlayerState(PLAYER_STATE.PLAYING, `Playing: ${video.dataset.itemTitle || "Stream"}`);
-    }).catch(() => {
-      setPlayerState(PLAYER_STATE.READY, "Ready to watch · Click Start playback");
-    });
-  }
-  return true;
-}
-
-async function reloadSelectedPlayback(statusMessage = "Resolving playback source...", requestId = state.player.requestId) {
-  clearPlayerSource(statusMessage);
-  const source = await resolveCurrentPlayback(requestId);
-  if (requestId !== state.player.requestId || $("#player-backdrop").hidden) return;
-  if (!source) {
-    updatePlayerSelectionUI("No playable resource was returned for this selection.");
-    return;
-  }
-  applyPlayerSource(source);
-}
-
-async function changePlayerLanguage(subjectId) {
-  const player = state.player;
-  const language = player.languageOptions.find((entry) => entry.subjectId === subjectId);
-  if (!language || language.subjectId === player.selectedLanguage?.subjectId) return;
-  const preferredSeason = player.selectedSeason;
-  const preferredEpisode = player.selectedEpisode;
-  player.requestId += 1;
-  player.selectedLanguage = language;
-  player.subtitleSubjectId = "";
-  player.seasons = [];
-  player.selectedSeason = null;
-  player.selectedEpisode = null;
-  const requestId = player.requestId;
-  setPlayerLoading(`Loading ${language.label}...`);
-  updatePlayerSelectionUI(`Loading ${language.label}...`);
-  const details = await loadPreviewDetails(language.subjectId);
-  if (requestId !== player.requestId) return;
-  player.details = details;
-  player.subtitleOptions = getSubtitleOptions(details);
-  player.qualityOptions = getPlayerQualityOptions(details, player.isSeries);
-  player.selectedQuality = player.qualityOptions.at(-1)?.resolution || player.selectedQuality;
-  if (player.isSeries) {
-    const loaded = await loadEpisodeState(language.subjectId, preferredSeason, preferredEpisode, requestId, player.selectedQuality);
-    if (!loaded || requestId !== player.requestId) return;
-  }
-  if (requestId !== player.requestId) return;
-  await reloadSelectedPlayback(`Loading ${language.label} playback...`, requestId);
-}
-
-async function changePlayerSubtitle(value) {
-  const player = state.player;
-  const option = player.subtitleOptions.find((entry) => entry.value === value);
-  if (!option || option.value === player.selectedSubtitle) return;
-  if (option.labelOnly) {
-    showToast(`${option.label} subtitles are not available for this stream.`);
-    updatePlayerSelectionUI();
-    return;
-  }
-  player.requestId += 1;
-  const requestId = player.requestId;
-  player.selectedSubtitle = option.value;
-  player.subtitleSubjectId = option.kind === "variant" ? option.subjectId : "";
-  setPlayerLoading(option.value === "off" ? "Subtitles disabled" : `Loading ${option.label}...`);
-  updatePlayerSelectionUI(option.value === "off" ? "Subtitles disabled" : `Loading ${option.label}...`);
-  const subtitleSubjectId = player.subtitleSubjectId || player.selectedLanguage?.subjectId || player.subjectId;
-  if (player.isSeries) {
-    const subtitleDetails = await loadPreviewDetails(subtitleSubjectId);
-    if (requestId !== player.requestId) return;
-    player.qualityOptions = getPlayerQualityOptions(subtitleDetails, player.isSeries);
-    player.selectedQuality = player.qualityOptions.at(-1)?.resolution || player.selectedQuality;
-    const loaded = await loadEpisodeState(subtitleSubjectId, player.selectedSeason, player.selectedEpisode, requestId, player.selectedQuality);
-    if (!loaded || requestId !== player.requestId) return;
-  }
-  if (requestId !== player.requestId) return;
-  player.details = await loadPreviewDetails(player.subtitleSubjectId || player.selectedLanguage?.subjectId || player.subjectId);
-  if (!player.subtitleSubjectId) {
-    player.qualityOptions = getPlayerQualityOptions(player.details, player.isSeries);
-    player.selectedQuality = player.qualityOptions.at(-1)?.resolution || player.selectedQuality;
-  }
-  await reloadSelectedPlayback(`Loading ${option.label} playback...`, requestId);
-}
-
-async function changePlayerQuality(value) {
-  const player = state.player;
-  const quality = Number(value);
-  if (!Number.isFinite(quality) || quality === Number(player.selectedQuality)) return;
-  player.requestId += 1;
-  const requestId = player.requestId;
-  player.selectedQuality = quality;
-  setPlayerLoading(`Loading ${quality}p playback...`);
-  updatePlayerSelectionUI(`Loading ${quality}p playback...`);
-  if (player.isSeries) {
-    const subjectId = player.subtitleSubjectId || player.selectedLanguage?.subjectId || player.subjectId;
-    const loaded = await loadEpisodeState(subjectId, player.selectedSeason, player.selectedEpisode, requestId, quality);
-    if (!loaded || requestId !== player.requestId) return;
-  }
-  if (requestId !== player.requestId) return;
-  await reloadSelectedPlayback(`Loading ${quality}p playback...`, requestId);
-}
-
-async function reloadCurrentEmbed() {
-  const player = state.player;
-  const item = player.item;
-  if (!item || !player.tmdbId) return null;
-
-  syncServerSelect();
-
-  // Clean up native HLS / video player before the chain starts. The
-  // Gaiaflix HLS step re-shows the video element itself when it runs.
-  if (window._currentHlsInstance) {
-    try { window._currentHlsInstance.destroy(); } catch {}
-    window._currentHlsInstance = null;
-  }
-  if (window._currentHlsBlobUrl) {
-    try { URL.revokeObjectURL(window._currentHlsBlobUrl); } catch {}
-    window._currentHlsBlobUrl = null;
-  }
-  const video = $("#video-player");
-  if (video) {
-    video.pause();
-    video.removeAttribute("src");
-    video.hidden = true;
-  }
-  const customWrapper = $("#custom-player-wrapper");
-  if (customWrapper) customWrapper.hidden = true;
-
-  resetDefaultLanguageOptions();
-
-  const season = player.selectedSeason || 1;
-  const episode = player.selectedEpisode || 1;
-  // One LOADING state for the whole chain: the 20s elapsed timer starts
-  // here and is never reset per server (bug 24).
-  setPlayerState(PLAYER_STATE.LOADING, `Loading ${item.title}${player.isSeries ? ` · S${season}:E${episode}` : ""} · Auto server selection…`);
-  const key = await runPlaybackChain(item, player.tmdbId, { season, episode });
-  if (!key) {
-    // Only now does the user see an error: every server failed or the
-    // 20s budget ran out. Retry re-runs auto selection.
-    setPlayerState(PLAYER_STATE.ERROR, "No server could play this title. Retry to run auto server selection again.");
-    return null;
-  }
-  updatePlayerEpisodeFlow();
-  return key;
-}
-
-async function changePlayerSeason(seasonNumber) {
-  const num = Number(seasonNumber);
-  const season = state.player.seasons.find((entry) => entry.season === num);
-  if (!season) return;
-  const selection = chooseEpisode([season], season.season, null);
-  state.player.selectedSeason = selection.season;
-  state.player.selectedEpisode = selection.episode;
-  state.player.requestId += 1;
-  const seasonTitle = season.title || `Season ${season.season}`;
-  setPlayerState(PLAYER_STATE.LOADING, `Loading ${seasonTitle}…`);
-  updatePlayerSelectionUI();
-  reloadCurrentEmbed();
-
-  // Asynchronously fetch real episode names for this season from TMDB if not yet loaded
-  if (state.player.tmdbId && isValidTmdbId(state.player.tmdbId) && !season.episodesLoaded) {
-    fetchTmdbSeasonEpisodes(state.player.tmdbId, season.season).then((realEps) => {
-      if (realEps && realEps.length > 0) {
-        season.episodes = realEps;
-        season.episodesLoaded = true;
-        updatePlayerSelectionUI();
-      }
-    });
-  }
-}
-
-async function changePlayerEpisode(episodeNumber) {
-  const num = Number(episodeNumber);
-  const season = state.player.seasons.find((entry) => entry.season === state.player.selectedSeason);
-  const episode = season?.episodes.find((entry) => entry.episode === num) || state.player.seasons.flatMap((entry) => entry.episodes).find((entry) => entry.episode === num);
-  if (!episode) return;
-  state.player.selectedSeason = episode.season;
-  state.player.selectedEpisode = episode.episode;
-  state.player.requestId += 1;
-  const epLabel = `Episode ${episode.episode}${episode.title && episode.title !== `Episode ${episode.episode}` ? `: ${episode.title}` : ""}`;
-  setPlayerState(PLAYER_STATE.LOADING, `Loading ${epLabel}…`);
-  updatePlayerSelectionUI();
-  reloadCurrentEmbed();
-}
-
-async function navigateToEpisode(episode, { autoplay = false } = {}) {
-  if (!episode || !isEpisodicPlayer()) return false;
-  const player = state.player;
-  player.selectedSeason = episode.season;
-  player.selectedEpisode = episode.episode;
-  player.requestId += 1;
-  const label = `S${episode.season} E${episode.episode}${episode.title ? ` · ${episode.title}` : ""}`;
-  setPlayerLoading(`Loading ${label}...`);
-  updatePlayerSelectionUI(`Loading ${label}...`);
-  reloadCurrentEmbed();
-  return true;
-}
-
-function previousEpisode() {
-  return navigateToEpisode(getPreviousEpisode());
-}
-
-function nextEpisode(options = {}) {
-  return navigateToEpisode(getNextEpisode(), options);
-}
-
-async function handlePlayerEnded() {
-  const player = state.player;
-  if (!isEpisodicPlayer(player)) return;
-  const next = getNextEpisode(player);
-  updatePlayerEpisodeFlow();
-  if (!next) {
-    setPlayerLoading("Episode complete · no more episodes available", false);
-    return;
-  }
-  if (player.autoplayNext) {
-    await nextEpisode({ autoplay: true });
-    return;
-  }
-  const nextLabel = `S${next.season} E${next.episode}${next.title ? ` · ${next.title}` : ""}`;
-  setPlayerLoading(`Episode complete · ${nextLabel} is up next`, false);
-}
-
-async function playTitle(title, { resumeTime = 0 } = {}) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Ustream does not stream catalog titles. "Watch" on a movie, series,
+// anime or cartoon opens its details at the "Where to watch" hub, which
+// links out to authorised providers (TMDB watch-provider data, powered
+// by JustWatch). The native player plays community uploads only, and
+// official trailers play in the YouTube-nocookie embed.
+function playTitle(title) {
   const item = findTitle(title);
   if (!item) return;
-  // Bug 10: never play an unreleased title — and never let it fall
-  // through to the hash-based sample stream or an embed URL.
-  if (isUnreleasedItem(item)) {
-    showToast(`${item.title} is coming soon — not yet released, so it cannot be played yet.`);
-    return;
-  }
-  // Resume: prefer the explicit resume request, else the saved position.
-  const savedPosition = resumeTime > 0 ? resumeTime : getSavedPosition(item);
-  if (savedPosition > 0) {
-    showToast(`Resuming ${item.title} at ${formatTime(savedPosition)}`);
-  }
-  const embed = $("#embed-player");
-  const video = $("#video-player");
-  const customWrapper = $("#custom-player-wrapper");
-  const player = $("#player-backdrop");
-  ensurePlayerFlowUI();
-  $("#player-title").textContent = item.title;
-  player.style.setProperty("--player-backdrop-image", item.image ? `url("${item.image}")` : "none");
-  if (video) {
-    video.poster = item.image || "";
-    video.removeAttribute("src");
-    video.dataset.itemTitle = item.title;
-    video.dataset.fallbackAttempted = "";
-    video.hidden = true;
-  }
-  if (customWrapper) customWrapper.hidden = true;
-  if (embed) embed.hidden = true;
-  setPlayerState(PLAYER_STATE.LOADING, "Connecting to HD streaming server…");
-  player.hidden = false;
-  player.removeAttribute("hidden");
-  document.querySelector("#player-backdrop .player-modal")?.focus({ preventScroll: true });
-
-  // Resolve actual TMDB ID for full movie / TV show stream
-  const tmdbId = await resolveTmdbId(item);
-  // No verified stream id: do not open an embed for another title.
-  if (!tmdbId) {
-    showToast(`No stream is available for ${item.title} yet.`);
-    try { closePlayer(); } catch {}
-    return;
-  }
-  state.player.item = item;
-  state.player.tmdbId = tmdbId;
-  const isSeries = isItemSeries(item);
-  state.player.isSeries = isSeries;
-  state.player.selectedSeason = 1;
-  state.player.selectedEpisode = 1;
-  // New attempt id: any chain still running for a previous title aborts.
-  state.player.requestId = (state.player.requestId || 0) + 1;
-
-  if (state.player.isSeries) {
-    await loadEpisodeState(item.subjectId || item.title, 1, 1, ++state.player.requestId);
-  } else {
-    updatePlayerSelectionUI();
-  }
-
-  // One Play action, one auto chain: reloadCurrentEmbed tries the
-  // servers in order (Gaiaflix HLS for movies, then VidSrc, VidLink,
-  // 2Embed, Vidstuck — AniEmbed first for anime) and uses the first
-  // that actually loads. A manual server override, if set, is honoured
-  // instead. No recordPlaybackProgress here (bug 15): Continue
-  // Watching is only written after 30s of real playback.
-  await reloadCurrentEmbed();
+  openDetails(item.title, { focusWatch: true });
 }
 
-function getSavedDuration(item) {
-  const entry = continuation.find((c) => c.title === item?.title);
-  return Number(entry?.durationSeconds) || 0;
-}
 
-function startPlayer() {
-  reloadCurrentEmbed();
-}
 
 async function retryPlayback() {
-  if (!state.player?.item) return;
-  // Retry always re-runs auto server selection (round 2 merge), even if
-  // a manual server was picked before.
-  serverMode = "auto";
-  try { localStorage.setItem("ustream-server", "auto"); } catch {}
-  syncServerSelect();
-  setPlayerState(PLAYER_STATE.LOADING, "Reconnecting with auto server selection…");
-  await playTitle(state.player.item.title);
+  const source = state.player?.nativeSource;
+  if (source?.url) {
+    playNativeVideo(source.url, source.title, source.poster, { videoId: source.videoId });
+    return;
+  }
+  if (state.player?.trailerTitle) {
+    await playTrailer(state.player.trailerTitle);
+  }
 }
 
 function handlePlaybackError() {
-  // Advance the unified chain to the next untried server instead of
-  // cycling forever through the server list; only error once every
-  // server has failed.
-  if (playbackChain && playbackChain.index + 1 < playbackChain.order.length) {
-    showToast("This server failed · Trying the next server…");
-    setPlayerState(PLAYER_STATE.LOADING, "Trying the next server…");
-    void continuePlaybackChain().then((key) => {
-      if (!key) setPlayerState(PLAYER_STATE.ERROR, "Playback failed on every server. Retry to try again.");
-    });
-    return;
-  }
-  setPlayerState(PLAYER_STATE.ERROR, "Playback failed");
+  if (isNativeVideoActive() && retryNativeVideo()) return;
+  setPlayerState(PLAYER_STATE.ERROR, "This video could not be played. Retry, or try again later.");
 }
 
 function closePlayer() {
   clearLiveStatus();
-  clearEmbedWatchTimer();
   nativeRetryCount = 0;
   clearNativeStallTimer();
-  if (playbackChain) playbackChain.aborted = true;
-  playbackChain = null;
   const bufferingSpinner = $("#player-buffering-spinner");
   if (bufferingSpinner) bufferingSpinner.hidden = true;
   const embed = $("#embed-player");
   const video = $("#video-player");
   const customWrapper = $("#custom-player-wrapper");
   state.player.requestId += 1;
+  state.player.nativeSource = null;
+  state.player.trailerTitle = null;
   togglePlayerSettings(false);
   if (embed) {
     embed.src = "about:blank";
@@ -6679,36 +3755,22 @@ function closePlayer() {
   if (video) {
     video.pause();
     video.removeAttribute("src");
-    video.dataset.fallbackAttempted = "";
     video.load();
     video.hidden = true;
   }
   if (customWrapper) customWrapper.hidden = true;
-  if (window._currentHlsInstance) {
-    try {
-      window._currentHlsInstance.destroy();
-    } catch {}
-    window._currentHlsInstance = null;
-  }
-  if (window._currentHlsBlobUrl) {
-    try { URL.revokeObjectURL(window._currentHlsBlobUrl); } catch {}
-    window._currentHlsBlobUrl = null;
-  }
-  resetDefaultLanguageOptions();
-  const resumeBanner = $("#player-resume-banner");
-  if (resumeBanner) resumeBanner.hidden = true;
-  const episodesSection = $("#player-episodes-section");
-  if (episodesSection) episodesSection.hidden = true;
-  const seasonBarField = $("#player-season-bar-field");
-  if (seasonBarField) seasonBarField.hidden = true;
-  const episodeBarField = $("#player-episode-bar-field");
-  if (episodeBarField) episodeBarField.hidden = true;
   const pb = $("#player-backdrop");
+  const wasOpen = pb && !pb.hidden;
   if (pb) {
     pb.hidden = true;
     pb.setAttribute("hidden", "true");
   }
   setPlayerState(PLAYER_STATE.IDLE);
+  if (wasOpen && playerReturnFocus?.isConnected) {
+    const target = playerReturnFocus;
+    playerReturnFocus = null;
+    requestAnimationFrame(() => target.focus({ preventScroll: true }));
+  }
 }
 
 // Prompt 5: retry for the native HTML5 player (community uploads and
@@ -6753,7 +3815,7 @@ function armNativeStallTimer() {
   }, 8000);
 }
 
-function playNativeVideo(streamUrl, title, poster = "", { videoId = null, resumeTime = 0 } = {}) {
+function playNativeVideo(videoUrl, title, poster = "", { videoId = null } = {}) {
   const embed = $("#embed-player");
   const video = $("#video-player");
   const customWrapper = $("#custom-player-wrapper");
@@ -6769,66 +3831,24 @@ function playNativeVideo(streamUrl, title, poster = "", { videoId = null, resume
   nativeRetryCount = 0;
   clearNativeStallTimer();
   video.poster = poster || "";
-  $("#player-title").textContent = title || "Now Playing";
-  playerBackdrop.hidden = false;
+  const titleEl = $("#player-title");
+  if (titleEl) titleEl.textContent = title || "Community video";
+  if (playerBackdrop) playerBackdrop.hidden = false;
 
-  // HLS stream support if URL ends in .m3u8
-  if (streamUrl.includes(".m3u8") && typeof window.Hls !== "undefined" && window.Hls.isSupported()) {
-    if (window._currentHlsInstance) {
-      window._currentHlsInstance.destroy();
-    }
-    const hls = new window.Hls();
-    window._currentHlsInstance = hls;
-    hls.loadSource(streamUrl);
-    hls.attachMedia(video);
-  } else {
-    video.src = streamUrl;
-  }
-
+  // Native playback is limited to community uploads; official trailers
+  // use the YouTube privacy-enhanced embed above.
+  video.src = videoUrl;
+  state.player.nativeSource = { url: videoUrl, title, poster, videoId };
+  state.player.trailerTitle = null;
+  if (!playerReturnFocus) playerReturnFocus = document.activeElement;
   video.load();
-  setPlayerState(PLAYER_STATE.LOADING, `Streaming: ${title}`);
+  setPlayerState(PLAYER_STATE.LOADING, `Loading ${title || "community video"}…`);
 
-  // Resume playback check
-  const savedKey = `ustream-pos-${videoId || title}`;
-  const savedPos = parseFloat(localStorage.getItem(savedKey) || "0");
-  const banner = $("#player-resume-banner");
-  if (savedPos > 15 && (!resumeTime || resumeTime < 1)) {
-    const resumeLabel = $("#resume-time-label");
-    if (resumeLabel) resumeLabel.textContent = formatTime(savedPos);
-    if (banner) {
-      banner.hidden = false;
-      const acceptBtn = $("#resume-accept-btn");
-      const dismissBtn = $("#resume-dismiss-btn");
-      if (acceptBtn) {
-        acceptBtn.onclick = () => {
-          video.currentTime = savedPos;
-          banner.hidden = true;
-          video.play().catch(() => {});
-        };
-      }
-      if (dismissBtn) {
-        dismissBtn.onclick = () => {
-          localStorage.removeItem(savedKey);
-          banner.hidden = true;
-          video.currentTime = 0;
-          video.play().catch(() => {});
-        };
-      }
-    }
-  } else if (resumeTime > 0) {
-    video.currentTime = resumeTime;
-  }
-
-  // Safe playback start
   video.play().then(() => {
-    setPlayerState(PLAYER_STATE.PLAYING, `Playing: ${title}`);
+    setPlayerState(PLAYER_STATE.PLAYING, `Playing: ${title || "Community video"}`);
   }).catch(() => {
-    setPlayerState(PLAYER_STATE.READY, `Ready to play: ${title}`);
+    setPlayerState(PLAYER_STATE.READY, `Ready to play: ${title || "Community video"}`);
   });
-
-  // No continuation entry here (bug 15): Continue Watching is only
-  // written after 30s of real playback (see the timeupdate handler
-  // below) — opening the player must not create a 0% row.
 }
 
 function initCustomVideoPlayer() {
@@ -6873,7 +3893,7 @@ function initCustomVideoPlayer() {
 
   wrapper.addEventListener("mousemove", showControls);
   wrapper.addEventListener("click", (e) => {
-    if (e.target.closest("#custom-player-controls") || e.target.closest(".player-resume-banner")) return;
+    if (e.target.closest("#custom-player-controls")) return;
     showControls();
   });
 
@@ -6933,13 +3953,6 @@ function initCustomVideoPlayer() {
     if (scrubberHandle) scrubberHandle.style.left = `${pct}%`;
     if (scrubberWrap) scrubberWrap.setAttribute("aria-valuenow", String(Math.round(pct)));
 
-    // Prompt 5: clear the saved position once 95% is watched, so a
-    // finished video never offers "Resume".
-    if (pct >= 95) {
-      const doneKey = video.dataset.itemTitle || state.player?.item?.title;
-      if (doneKey) storage.remove(`ustream-pos-${doneKey}`);
-    }
-
     // Update buffer progress
     if (video.buffered.length > 0 && scrubberBuffer) {
       try {
@@ -6949,21 +3962,6 @@ function initCustomVideoPlayer() {
       } catch {}
     }
 
-    // Save playback position periodically (real progress, not fabricated).
-    // Round 2 (bug 15): only once 30s have actually been watched, so
-    // opening a title never seeds Continue Watching.
-    if (current >= 30 && Math.floor(current) % 5 === 0) {
-      const vidKey = video.dataset.itemTitle || state.player?.item?.title;
-      if (vidKey) {
-        storage.setDebounced(`ustream-pos-${vidKey}`, Math.floor(current), 800);
-        if (state.player?.item?.title) {
-          recordPlaybackProgress(state.player.item, {
-            positionSeconds: Math.floor(current),
-            durationSeconds: Math.floor(dur) || 0,
-          });
-        }
-      }
-    }
   });
 
   video.addEventListener("loadedmetadata", () => {
@@ -7291,7 +4289,7 @@ function initCreatorStudioAndUploads() {
     if (file) handleSelectedFile(file);
   });
 
-  // Form submission with live streaming upload
+  // Community-video upload form
   uploadForm?.addEventListener("submit", (e) => {
     e.preventDefault();
     if (!selectedFile) {
@@ -7372,24 +4370,26 @@ async function loadCommunityVideos() {
   // section instead of leaving stale placeholders behind.
   const isHomeView = state.section === "home" && !state.search.trim();
   const communityRowEarly = $("#community-row");
-  if (communityRowEarly && isHomeView) {
-    communityRowEarly.innerHTML = createCommunitySkeletonsHtml();
-  }
+  const finishCommunityLoading = communityRowEarly && isHomeView
+    ? beginLoading(communityRowEarly, { label: "Loading community uploads…", slowLabel: "Community uploads are taking a while…", size: "sm", slowAfterMs: 4000 })
+    : () => {};
   try {
     const res = await fetch("/api/videos?limit=12&status=ready");
     if (!res.ok) throw new Error(`Community videos request failed: ${res.status}`);
     const data = await res.json();
     const section = $("#community-section");
     const row = $("#community-row");
-    if (!section || !row) return;
+    if (!section || !row) { finishCommunityLoading(); return; }
 
     if (!data.videos || data.videos.length === 0) {
-      row.innerHTML = "";
-      section.hidden = true;
+      finishCommunityLoading();
+      row.innerHTML = stateHtml({ kind: "empty", message: "No community uploads yet." });
+      section.hidden = false;
       return;
     }
 
     section.hidden = false;
+    finishCommunityLoading();
     row.innerHTML = data.videos.map((v) => `
       <div class="community-card" data-video-id="${v.id}" tabindex="0" role="button" aria-label="Play ${escapeHtml(v.title)}">
         <img src="${v.thumbnailPath || `/api/videos/thumbnail/${v.id}`}" alt="${escapeHtml(v.title)} video thumbnail" loading="lazy" decoding="async" />
@@ -7416,11 +4416,15 @@ async function loadCommunityVideos() {
       });
     });
   } catch (err) {
+    finishCommunityLoading();
     console.warn("Failed to load community videos:", err);
     const row = $("#community-row");
-    if (row) row.innerHTML = "";
     const section = $("#community-section");
-    if (section) section.hidden = true;
+    if (row) {
+      row.innerHTML = stateHtml({ kind: "error", title: "Community uploads could not be loaded", message: "Check your connection and try again.", actionLabel: "Try again", actionAttr: "data-community-retry" });
+      row.querySelector("[data-community-retry]")?.addEventListener("click", () => void loadCommunityVideos(), { once: true });
+    }
+    if (section) section.hidden = false;
   }
 }
 
@@ -7429,14 +4433,18 @@ async function loadUserUploads() {
   const listEl = $("#my-uploads-list");
   const emptyEl = $("#my-uploads-empty");
   if (!listEl || !emptyEl) return;
+  listEl.hidden = false;
+  const finishUploadsLoading = beginLoading(listEl, { label: "Loading your uploads…", slowLabel: "Your uploads are taking a while to load…", size: "sm", slowAfterMs: 4000 });
+  emptyEl.hidden = true;
 
   try {
     const res = await fetch(`/api/videos?userId=${encodeURIComponent(state.auth.user.id)}&limit=20&status=all`, { credentials: "include" });
-    if (!res.ok) return;
+    if (!res.ok) throw new Error(`Uploads request failed: ${res.status}`);
     const data = await res.json();
     const videos = data.videos || [];
 
     if (videos.length === 0) {
+      finishUploadsLoading();
       listEl.hidden = true;
       emptyEl.hidden = false;
       return;
@@ -7444,6 +4452,7 @@ async function loadUserUploads() {
 
     emptyEl.hidden = true;
     listEl.hidden = false;
+    finishUploadsLoading();
     listEl.innerHTML = videos.map((v) => `
       <div class="my-upload-item">
         <div class="my-upload-info">
@@ -7487,7 +4496,11 @@ async function loadUserUploads() {
       });
     });
   } catch (err) {
+    finishUploadsLoading();
     console.warn("Failed to load user uploads:", err);
+    listEl.hidden = false;
+    listEl.innerHTML = stateHtml({ kind: "error", title: "Your uploads could not be loaded", message: "Check your connection and try again.", actionLabel: "Try again", actionAttr: "data-user-uploads-retry" });
+    listEl.querySelector("[data-user-uploads-retry]")?.addEventListener("click", () => void loadUserUploads(), { once: true });
   }
 }
 
@@ -7499,6 +4512,12 @@ function closeDetails({ updateHash = true } = {}) {
     mb.setAttribute("hidden", "true");
   }
   state.activeModal = null;
+  detailLoadGeneration += 1;
+  const returnTarget = detailsReturnFocus;
+  detailsReturnFocus = null;
+  if (returnTarget?.isConnected && typeof returnTarget.focus === "function") {
+    requestAnimationFrame(() => returnTarget.focus({ preventScroll: true }));
+  }
   // Round 2 (bug: URL stuck on #/title/... after Escape/X/backdrop):
   // closing a deep-linked dialog reverts the hash to the section route
   // so the URL and the back button stay consistent. pushState does not
@@ -7582,7 +4601,6 @@ document.addEventListener("click", (event) => {
     render();
     return;
   }
-  if (button.dataset.action === "resume") return void resumeTitle(button.dataset.title);
   if (button.dataset.action === "details") return openDetails(button.dataset.title);
   if (button.dataset.action === "play") { playTitle(button.dataset.title); return; }
   if (button.dataset.action === "trailer") return void playTrailer(button.dataset.title);
@@ -7604,7 +4622,7 @@ document.addEventListener("click", (event) => {
   if (button.dataset.clearFilter !== undefined) {
     const target = button.dataset.clearFilter;
     const defaults = makeFilterDefaults(getFilterChannel());
-    if (target === "search") { state.search = ""; const sInp = $("#search-input"); if (sInp) sInp.value = ""; }
+    if (target === "search") { state.search = ""; const sInp = $("#modal-search-input"); if (sInp) sInp.value = ""; }
     if (target === "rate") { state.filters.rateMin = defaults.rateMin; state.filters.rateMax = defaults.rateMax; }
     if (target !== "search" && target !== "rate" && target in defaults) state.filters[target] = defaults[target];
     render();
@@ -7617,32 +4635,9 @@ document.addEventListener("click", (event) => {
     return;
   }
   if (button.id === "close-modal") return closeDetails();
-  if (button.id === "modal-play") { playTitle(state.activeModal?.title || featured.title); closeDetails(); return; }
-  if (button.id === "start-player") return startPlayer();
+  if (button.id === "modal-play") { focusWatchHub(); return; }
   if (button.id === "player-retry-button" || button.id === "player-inline-retry") return void retryPlayback();
   if (button.id === "player-settings-toggle") return togglePlayerSettings();
-  if (button.classList.contains("season-pill") && button.dataset.season) {
-    void changePlayerSeason(button.dataset.season);
-    return;
-  }
-  if (button.classList.contains("episode-pill") && button.dataset.episode) {
-    void changePlayerEpisode(button.dataset.episode);
-    return;
-  }
-  if (button.id === "player-prev") { void previousEpisode(); return; }
-  if (button.id === "player-next") { void nextEpisode({ autoplay: true }); return; }
-  if (button.id === "player-up-next-button") {
-    if (button.dataset.action === "play-related" && button.dataset.title) {
-      return void playTitle(button.dataset.title);
-    }
-    return void nextEpisode({ autoplay: true });
-  }
-  if (button.id === "player-autoplay") {
-    state.player.autoplayNext = !state.player.autoplayNext && isEpisodicPlayer();
-    updatePlayerEpisodeFlow();
-    setPlayerLoading(state.player.autoplayNext ? "Autoplay next episode enabled" : "Autoplay next episode disabled", false);
-    return;
-  }
   if (button.id === "close-player") return closePlayer();
   if (button.id === "modal-list" && state.activeModal) return toggleList(state.activeModal.title);
   if (button.id === "retry-button") return void retryCatalog();
@@ -7658,18 +4653,6 @@ document.addEventListener("click", (event) => {
   if (button.id === "profile-signout-btn") {
     showToast("Signed out. Switched to guest mode.");
     setSection("home", true);
-    return;
-  }
-  if (button.id === "profile-save-btn") {
-    showToast("Preferences saved successfully!");
-    return;
-  }
-  if (button.id === "profile-autoplay-toggle") {
-    button.classList.toggle("active");
-    const active = button.classList.contains("active");
-    button.setAttribute("aria-pressed", String(active));
-    button.textContent = active ? "ON" : "OFF";
-    showToast(`Autoplay ${active ? "enabled" : "disabled"}`);
     return;
   }
 });
@@ -7695,17 +4678,17 @@ async function openStatusView() {
   try {
     const res = await fetch(buildApiUrl("config"));
     const data = await res.json().catch(() => ({}));
-    const configured = data.configured ?? data.rapidApiKeyConfigured ?? data.rapidApiConfigured;
-    rows.push(["Catalog API", configured ? "Connected" : "Not configured", configured ? "Live catalog service is configured." : "Running on the curated showcase catalog."]);
+    const configured = Boolean(data.tmdbApiKeyConfigured ?? data.configured);
+    rows.push(["TMDB proxy", configured ? "Configured" : "Using browser fallback", configured ? "TMDB requests use the server-side proxy when available." : "TMDB_API_KEY is not set on the server. The browser may use its existing fallback key."]);
   } catch {
     rows.push(["Catalog API", "Unavailable", "Could not reach the catalog service — check your connection."]);
   }
   try {
     const res = await fetch("/api/health.json");
     const data = await res.json().catch(() => ({}));
-    rows.push(["Streaming service", data.ok ? (data.status || "Healthy") : "Unknown", `Service: ${data.service || "ustream"}`]);
+    rows.push(["Community upload service", data.ok ? (data.status || "Healthy") : "Unknown", `Service: ${data.service || "ustream"}`]);
   } catch {
-    rows.push(["Streaming service", "Unavailable", "Health endpoint did not respond."]);
+    rows.push(["Community upload service", "Unavailable", "Health endpoint did not respond."]);
   }
   rows.push(["Catalog loaded", `${catalog.length} titles`, `Current section: ${state.section || "home"}`]);
   rows.push(["Adult (18+) content", isAdultEnabled() ? "Enabled (age confirmed)" : "Off (default)", "Toggle it in Settings — an age confirmation is required to enable it."]);
@@ -7726,9 +4709,9 @@ function closeStatusView() {
 // links (the task explicitly forbids dead external URLs) and no invented
 // contact address: Contact points at the existing Discord community.
 const INFO_PAGES = {
-  about: ["About Ustream", "Ustream is a curated streaming showcase: movies, series, anime and cartoons in one place. Titles come from the curated catalog and live search providers; availability and streams can change, and some titles are served by third-party players. This product uses the TMDB API but is not endorsed or certified by TMDB."],
-  privacy: ["Privacy", "What stays on your device: your theme and accent, your My List, and your Continue Watching progress (including resume positions) are stored in this browser's localStorage. If you sign in, your profiles, watchlist and playback history sync to your Ustream account. We do not sell personal data. Clearing your browser data removes the locally stored items."],
-  terms: ["Terms of Use", "Ustream is provided for personal, non-commercial viewing. Content availability, quality and streams may change without notice and are subject to the rights holders' terms. Do not misuse the service, attempt to bypass access controls, or redistribute streams. Continued use after changes to these terms means you accept them. This product uses the TMDB API but is not endorsed or certified by TMDB."],
+  about: ["About UstreamPro", "UstreamPro helps you discover movies, TV series and animation, view official trailers, and find regional listings from authorised providers. It does not host or stream third-party films or shows. Community uploads are provided by users. This product uses the TMDB API but is not endorsed or certified by TMDB."],
+  privacy: ["Privacy", "Some settings and your My List are stored in this browser. If you sign in, your account and profile information is handled by the account service. Clearing browser data removes locally stored items."],
+  terms: ["Terms of Use", "UstreamPro provides catalog information, official trailer links, community uploads, and links to third-party provider listings. Availability and provider terms may change; subscriptions, rentals, purchases, and access are controlled by each provider. Do not misuse the service or redistribute content without permission. This product uses the TMDB API but is not endorsed or certified by TMDB."],
   dmca: ["DMCA", "If you are a rights holder and believe content on Ustream infringes your copyright, send a takedown notice via the Contact page (Discord community) including: the title and URL of the allegedly infringing content, proof that you own the rights, and your contact details. Valid notices are reviewed and the content is removed or disabled where appropriate."],
   contact: ["Contact", "Questions, title requests, or takedown notices: reach the team through the Discord community linked in the footer. Include the title or page URL you are asking about so we can help quickly."],
 };
@@ -7760,7 +4743,7 @@ function openSettings() {
     .then((r) => r.json())
     .then(() => {
       // /api/config only proves a key is configured — it says nothing about
-      // whether any stream plays. Re-render from the real playback flags.
+      // whether a community video or official trailer is playing.
       updateStatusBadge(catalogIsLive, catalogLiveCount);
     })
     .catch(() => {});
@@ -7790,121 +4773,12 @@ function clearWatchlist() {
   showToast("Watchlist cleared");
 }
 
-$("#search-input")?.addEventListener("input", (event) => {
-  state.search = event.target.value;
-  state.displayLimit = CONTENT_BATCH_SIZE;
-  render();
-  window.clearTimeout(searchTimer);
-  searchTimer = window.setTimeout(() => void loadSearchResults(state.search), 350);
-});
-
 $("#filter-groups")?.addEventListener("change", (event) => {
   const input = event.target.closest("[data-filter]");
   if (!input) return;
   state.filters[input.dataset.filter] = input.value;
   state.displayLimit = CONTENT_BATCH_SIZE;
   render();
-});
-
-document.addEventListener("change", (event) => {
-  if (event.target.id === "player-server-select") {
-    // Round 2 merge: "auto" (default) runs the unified chain; the six
-    // servers are only an advanced manual override.
-    const value = event.target.value;
-    if (value === "auto") {
-      serverMode = "auto";
-      try { localStorage.setItem("ustream-server", "auto"); } catch {}
-      showToast("Auto server selection on — the first working server plays");
-    } else if (STREAM_SERVERS[value]) {
-      serverMode = "manual";
-      manualServerKey = value;
-      currentServerKey = value;
-      try { localStorage.setItem("ustream-server", value); } catch {}
-      showToast(`Manual server: ${STREAM_SERVERS[value]?.name || "HD Server"}`);
-    }
-    syncServerSelect();
-    reloadCurrentEmbed();
-    return;
-  }
-  if (event.target.id === "player-language-bar-select") {
-    const selectedVal = event.target.value;
-    if (selectedVal === "off") {
-      // Subtitles Off (bug 24): never let an embed/HLS default track —
-      // often Hindi on multi-audio sources — become the subtitle default.
-      currentLanguageKey = "en";
-      state.player.selectedSubtitle = "off";
-      try { localStorage.setItem("ustream-language", "en"); } catch {}
-      if (window._currentHlsInstance) {
-        try { window._currentHlsInstance.subtitleTrack = -1; } catch {}
-      }
-      const nativeVideo = $("#video-player");
-      if (nativeVideo) Array.from(nativeVideo.textTracks || []).forEach((t) => { t.mode = "disabled"; });
-      showToast("Subtitles off");
-      event.target.value = "en";
-      return;
-    }
-    currentLanguageKey = selectedVal;
-    try {
-      localStorage.setItem("ustream-language", currentLanguageKey);
-    } catch {}
-
-    // If playing via native HLS (window._currentHlsInstance):
-    if (window._currentHlsInstance && window._currentHlsInstance.audioTracks && window._currentHlsInstance.audioTracks.length > 0) {
-      const tracks = window._currentHlsInstance.audioTracks;
-      const numVal = Number(selectedVal);
-      const track = tracks.find((t) => t.id === numVal) ||
-                    tracks.find((t) => String(t.id) === String(selectedVal)) ||
-                    tracks.find((t) => (t.lang && t.lang.toLowerCase() === selectedVal.toLowerCase()) || (t.name && t.name.toLowerCase().includes(selectedVal.toLowerCase())));
-      if (track) {
-        window._currentHlsInstance.audioTrack = track.id !== undefined ? track.id : numVal;
-        const trackClean = String(track.name || track.lang || "Audio").replace(/^\s*\d+\.\s*/, "").trim();
-        showToast(`Switched audio to ${trackClean} (Multi-Audio)`);
-        return;
-      }
-    }
-
-    // Round 2 merge: no forced server switch on language change — the
-    // auto chain already tries AniEmbed first for anime.
-    const isAnime = state.player?.item && (state.player.item.type === "anime" || state.player.item.category === "anime");
-    const langName = LANGUAGE_LABELS[currentLanguageKey] || currentLanguageKey.toUpperCase();
-    if (isAnime) {
-      const animeMode = currentLanguageKey === "en" ? "English Dub" : "Japanese Sub (Original)";
-      showToast(`Anime audio set to ${animeMode}`);
-      reloadCurrentEmbed();
-    } else {
-      if (currentLanguageKey === "auto" || currentLanguageKey === "en") {
-        showToast("Audio set to Original English");
-      } else {
-        showToast(`Language: ${langName} · Use [CC] button inside player for subtitles`);
-      }
-    }
-    return;
-  }
-  if (event.target.id === "player-season-bar-select") {
-    void changePlayerSeason(event.target.value);
-    return;
-  }
-  if (event.target.id === "player-episode-bar-select") {
-    void changePlayerEpisode(event.target.value);
-    return;
-  }
-  if (event.target.id === "player-language-select") {
-    void changePlayerLanguage(event.target.value);
-    return;
-  }
-  if (event.target.id === "player-subtitle-select") {
-    void changePlayerSubtitle(event.target.value);
-    return;
-  }
-  if (event.target.id === "player-quality-select") {
-    void changePlayerQuality(event.target.value);
-    return;
-  }
-  if (event.target.id === "player-season-select") {
-    void changePlayerSeason(event.target.value);
-    return;
-  }
-  if (event.target.id === "player-episode-select") void changePlayerEpisode(event.target.value);
 });
 
 $("#filter-groups").addEventListener("input", (event) => {
@@ -7930,8 +4804,8 @@ $("#settings-backdrop")?.addEventListener("click", (event) => {
   if (event.target.id === "settings-backdrop") closeSettings();
 });
 
-$("#player-settings")?.addEventListener("toggle", (event) => {
-  $("#player-settings-toggle")?.setAttribute("aria-expanded", String(event.currentTarget.open));
+$("[data-player-settings]")?.addEventListener("toggle", (event) => {
+  $("[data-player-settings-toggle]")?.setAttribute("aria-expanded", String(event.currentTarget.open));
 });
 
 $("#video-player").addEventListener("canplay", () => {
@@ -7948,7 +4822,7 @@ $("#embed-player")?.addEventListener("load", () => {
   const embed = $("#embed-player");
   if (!embed || !embed.src || embed.src === "about:blank") return;
   if (currentPlayerState === PLAYER_STATE.LOADING) {
-    setPlayerState(PLAYER_STATE.PLAYING, state.player?.item ? `Playing: ${state.player.item.title}` : "Playing stream");
+    setPlayerState(PLAYER_STATE.PLAYING, state.player?.item ? `Playing: ${state.player.item.title}` : "Playing video");
   }
 });
 
@@ -7963,7 +4837,7 @@ $("#video-player").addEventListener("pause", () => {
 });
 
 $("#video-player").addEventListener("waiting", () => {
-  setPlayerState(PLAYER_STATE.LOADING, "Loading stream…");
+  setPlayerState(PLAYER_STATE.LOADING, "Loading video…");
   if (isNativeVideoActive()) armNativeStallTimer();
 });
 
@@ -7975,24 +4849,10 @@ $("#video-player").addEventListener("playing", () => {
 
 $("#video-player").addEventListener("ended", () => {
   clearNativeStallTimer();
-  const video = $("#video-player");
-  const doneKey = video?.dataset.itemTitle || state.player?.item?.title;
-  if (doneKey) storage.remove(`ustream-pos-${doneKey}`);
-  void handlePlayerEnded();
+  setPlayerState(PLAYER_STATE.READY, "Finished. Play again or close the player.");
 });
 
 $("#video-player").addEventListener("error", () => {
-  if (isNativeVideoActive()) { retryNativeVideo(); return; }
-  const video = $("#video-player");
-  if (!video.dataset.fallbackAttempted && video.dataset.itemTitle) {
-    // Do NOT silently swap in an unrelated sample/cartoon clip: the old
-    // getStreamForTitle() fallback served Google sample videos (Big Buck
-    // Bunny, Sintel, TearsOfSteel), which is how a wrong, anime-style
-    // frame could appear for a title like Avengers: Endgame. Surface the
-    // failure and switch embed server instead.
-    video.dataset.fallbackAttempted = "true";
-    console.warn("[Ustream Video Player] Video source failed for", video.dataset.itemTitle, "— switching server instead of a sample clip.");
-  }
   handlePlaybackError();
 });
 
@@ -8012,7 +4872,6 @@ document.addEventListener("keydown", (event) => {
     closePinPrompt();
     closeSearchModal();
     $("#profile-dropdown")?.setAttribute("hidden", "true");
-    $("#search-box")?.classList.remove("mobile-open");
   }
 });
 }
@@ -8318,6 +5177,36 @@ async function authApi(endpoint, method = "GET", body = null) {
   }
 }
 
+function updateAuthUI() {
+  const signedIn = Boolean(state.auth.user);
+  const profile = state.auth.activeProfile;
+  if (topbarLoginBtn) topbarLoginBtn.hidden = signedIn;
+  if (profileMenuWrap) profileMenuWrap.hidden = !signedIn;
+  if (authStateSec) authStateSec.hidden = !signedIn;
+  if (guestStateSec) guestStateSec.hidden = signedIn;
+
+  const profileButton = $("#profile-button");
+  const dropdown = $("#profile-dropdown");
+  if (!signedIn) {
+    dropdown?.setAttribute("hidden", "true");
+    profileButton?.setAttribute("aria-expanded", "false");
+    return;
+  }
+  if (profileButton) {
+    profileButton.textContent = profile?.avatar || "U";
+    profileButton.setAttribute("aria-label", profile?.name ? `Account profile: ${profile.name}` : "Account profile");
+    profileButton.title = profile?.name ? `${profile.name} profile` : "Account profile";
+  }
+  const dropAvatar = $("#dropdown-active-avatar");
+  const dropName = $("#dropdown-active-name");
+  const dropEmail = $("#dropdown-active-email");
+  const dropKids = $("#dropdown-kids-tag");
+  if (dropAvatar) dropAvatar.textContent = profile?.avatar || "U";
+  if (dropName) dropName.textContent = profile?.name || state.auth.user.name || "Viewer";
+  if (dropEmail) dropEmail.textContent = state.auth.user.email || "";
+  if (dropKids) dropKids.hidden = !profile?.isKids;
+}
+
 async function initAuth() {
   const res = await authApi("/api/auth/me");
   if (res.ok && res.data.user) {
@@ -8325,6 +5214,7 @@ async function initAuth() {
     state.auth.profiles = res.data.profiles || [];
     state.auth.activeProfile = res.data.activeProfile || state.auth.profiles[0] || null;
     state.auth.session = res.data.session || null;
+    updateAuthUI();
 
     // Synchronize active profile's remote watchlist
     try {
@@ -8335,60 +5225,6 @@ async function initAuth() {
       }
     } catch {}
 
-    // Synchronize playback history
-    try {
-      const histRes = await authApi("/api/profile/history");
-      if (histRes.ok && Array.isArray(histRes.data.history) && histRes.data.history.length > 0) {
-        // Merge into continuation — only entries with real progress
-        // (bug 15): a 0% server-side row must not seed the row.
-        histRes.data.history.forEach((h) => {
-          const histProgress = Math.round((h.progressSeconds / (h.durationSeconds || 1)) * 100);
-          if (!continuation.some((c) => c.title === h.title)
-              && (Number(h.progressSeconds) >= 30 || histProgress > 1)) {
-            continuation.unshift({
-              title: h.title,
-              season: h.season,
-              episode: h.episode,
-              progress: histProgress,
-              positionSeconds: Number(h.progressSeconds) || 0,
-              durationSeconds: Number(h.durationSeconds) || 0,
-              watchedAt: h.watchedAt || new Date().toISOString(),
-              image: h.itemData?.image || h.itemData?.cover?.url || ""
-            });
-          }
-        });
-      }
-    } catch {}
-  } else {
-    if (res.status === 401) {
-      localStorage.removeItem("ustream_auth_token");
-    }
-    state.auth.user = null;
-    state.auth.profiles = [];
-    state.auth.activeProfile = null;
-    state.auth.session = null;
-  }
-
-  updateAuthUI();
-  render();
-  renderContinue();
-  updateProfileStats();
-}
-
-function updateAuthUI() {
-  const topbarLoginBtn = $("#topbar-login-btn");
-  const profileMenuWrap = $("#profile-menu-wrap");
-  const profileBtn = $("#profile-button");
-  const authStateSec = $("#profile-auth-state");
-  const guestStateSec = $("#profile-guest-state");
-
-  if (state.auth.user && state.auth.activeProfile) {
-    if (topbarLoginBtn) topbarLoginBtn.hidden = true;
-    if (profileMenuWrap) profileMenuWrap.hidden = false;
-    if (profileBtn) {
-      profileBtn.textContent = state.auth.activeProfile.avatar || state.auth.activeProfile.name.charAt(0).toUpperCase();
-      profileBtn.title = `${state.auth.activeProfile.name} (${state.auth.user.email})`;
-    }
 
     // Topbar Dropdown
     const dropAvatar = $("#dropdown-active-avatar");
@@ -8465,6 +5301,7 @@ function updateAuthUI() {
     void loadSessions();
   } else {
     // Guest State
+    updateAuthUI();
     if (topbarLoginBtn) topbarLoginBtn.hidden = false;
     if (profileMenuWrap) profileMenuWrap.hidden = true;
     if (authStateSec) authStateSec.hidden = true;
@@ -9191,7 +6028,7 @@ function hideStartupLoader() {
 }
 
 /* ==========================================================================
-   Appearance & Personalization Engine (GaiaFlix replicate)
+   Appearance & Personalization
    ========================================================================== */
 function initAppearanceSettings() {
   const savedAccent = localStorage.getItem("ustream-accent") || "#e7ff51";
@@ -9313,7 +6150,7 @@ function initAppearanceSettings() {
 }
 
 /* ==========================================================================
-   Global Search Modal Engine (GaiaFlix replicate)
+   Global Search Modal
    ========================================================================== */
 let modalSearchType = "all";
 let modalSearchDebounce = null;
@@ -9391,8 +6228,13 @@ let searchAbortController = null;
 async function executeModalSearch(query) {
   const resultsEl = $("#modal-search-results");
   if (!resultsEl) return;
-  resultsEl.innerHTML = `
-    <div style="margin-bottom: 12px; font-size: 13px; color: var(--muted);">Searching for “${escapeHtml(query)}”…</div>
+  const finishModalSearchLoading = beginLoading(resultsEl, {
+    label: `Searching for ${query}…`,
+    slowLabel: "Search is taking a while…",
+    size: "sm",
+    slowAfterMs: 4000,
+  });
+  resultsEl.insertAdjacentHTML("beforeend", `
     <div class="search-results-grid" aria-hidden="true">
       ${Array.from({ length: 6 }).map(() => `
         <div class="skeleton-card" style="min-height: 180px;">
@@ -9404,7 +6246,7 @@ async function executeModalSearch(query) {
         </div>
       `).join("")}
     </div>
-  `;
+  `);
 
   if (searchAbortController) {
     searchAbortController.abort();
@@ -9425,8 +6267,8 @@ async function executeModalSearch(query) {
                 <img class="search-result-poster" src="${item.image || "assets/logo-mark.png"}" alt="${escapeHtml(item.title)} poster" loading="lazy" decoding="async">
                 <span class="search-result-title">${escapeHtml(item.title)}</span>
                 <div class="search-result-meta">
-                  <span>${item.year || "2024"}</span>
-                  <span style="color: var(--accent); font-weight: 700;">★ ${normalizeRating(item.rating).toFixed(1)}</span>
+                  <span>${item.year || "Year unknown"}</span>
+                  <span style="color: var(--accent); font-weight: 700;">${(() => { const r = normalizeRating(item.rating); return r == null ? "No TMDB rating" : `★ ${r.toFixed(1)}`; })()}</span>
                   <span>${escapeHtml(item.badge || item.type || "")}</span>
                 </div>
               </article>
@@ -9436,6 +6278,7 @@ async function executeModalSearch(query) {
       `;
     }
 
+    finishModalSearchLoading();
     resultsEl.innerHTML = markup;
 
     resultsEl.querySelectorAll("[data-search-card-title]").forEach((el) => {
@@ -9470,33 +6313,34 @@ async function executeModalSearch(query) {
 
     // 2. TMDB search via direct TMDB / proxy
     let tmdbResults = [];
+    let tmdbSearchFailed = false;
     try {
       const data = await fetchTmdbApi(`/search/multi?query=${encodeURIComponent(query)}&language=${localStorage.getItem("ustream-lang") || "en-US"}`);
-      if (signal.aborted) return;
+      if (signal.aborted) { finishModalSearchLoading(); return; }
       if (data) {
         tmdbResults = (data.results || []).filter((item) => item.media_type === "movie" || item.media_type === "tv").slice(0, 12).map((item) => {
           const isMovie = item.media_type === "movie";
           const title = isMovie ? item.title : item.name;
-          const year = (isMovie ? item.release_date : item.first_air_date || "").slice(0, 4);
+          const year = String(isMovie ? (item.release_date || "") : (item.first_air_date || "")).slice(0, 4);
           const isAnime = item.original_language === "ja" && item.genre_ids?.includes(16);
           const isCartoon = item.original_language === "en" && item.genre_ids?.includes(16);
           const normalized = {
             title: title || "Untitled",
             type: isMovie ? "movie" : "series",
-            year: year || "2024",
-            rating: normalizeRating(item.vote_average),
+            year: Number.parseInt(year, 10) || null,
+            rating: tmdbRatingFromVotes(item.vote_average, item.vote_count),
             releaseDate: (isMovie ? item.release_date : item.first_air_date) || "",
-            runtime: "—",
+            runtime: "",
             image: item.poster_path ? `https://image.tmdb.org/t/p/w342${item.poster_path}` : "",
             badge: isAnime ? "Anime" : isCartoon ? "Cartoon" : isMovie ? "Movie" : "Series",
-            genre: isAnime ? ["anime"] : isCartoon ? ["animation"] : [isMovie ? "movie" : "drama"],
+            genre: (item.genre_ids || []).map((id) => TMDB_GENRE_NAMES[id]).filter(Boolean),
             isJapaneseAnime: isAnime,
             isCartoon: isCartoon,
             tmdbId: item.id,
             mediaType: item.media_type,
             adult: Boolean(item.adult),
             isAdult: Boolean(item.adult),
-            country: "Global",
+            country: item.origin_country?.[0] || "",
             kicker: isMovie ? "Movie" : "TV Series",
             gradient: "linear-gradient(145deg, #1e293b, #0f172a 50%, #020617)",
           };
@@ -9504,9 +6348,20 @@ async function executeModalSearch(query) {
           return normalized;
         });
       }
-    } catch {}
+    } catch {
+      tmdbSearchFailed = true;
+    }
 
-    if (signal.aborted) return;
+    if (signal.aborted) { finishModalSearchLoading(); return; }
+
+    const hasTmdbTv = tmdbResults.some((item) => item.mediaType === "tv" || item.type === "series");
+    let tvmazeItems = [];
+    let tvMazeSearchFailed = false;
+    if (["all", "tv"].includes(modalSearchType) && !hasTmdbTv) {
+      tvmazeItems = await searchTvMaze(query);
+      tvMazeSearchFailed = Boolean(tvMazeLastError);
+    }
+    if (signal.aborted) { finishModalSearchLoading(); return; }
 
     if (!isAdultEnabled()) {
       tmdbResults = tmdbResults.filter((i) => !isAdultContent(i));
@@ -9522,7 +6377,7 @@ async function executeModalSearch(query) {
     // exists, pure substring matches are noise (e.g. "WWA The Inception"
     // for "Inception") and are dropped.
     let finalCards = sortBySearchRelevance(
-      dedupeCatalogItems([...matchedCatalog, ...tmdbResults]),
+      dedupeCatalogItems([...matchedCatalog, ...tmdbResults, ...tvmazeItems]),
       query
     );
     if (finalCards.some((card) => searchRelevanceScore(card.title, query) === 0)) {
@@ -9531,39 +6386,40 @@ async function executeModalSearch(query) {
     finalCards = finalCards.slice(0, 24);
 
     if (!finalCards.length) {
-      resultsEl.innerHTML = `
-        <div class="search-empty-prompt">
-          <p>No results found for “${escapeHtml(query)}”.</p>
-          <small>Try another keyword or select a different media filter.</small>
-        </div>
-      `;
+      finishModalSearchLoading();
+      if (tmdbSearchFailed && tvMazeSearchFailed) {
+        resultsEl.innerHTML = stateHtml({ kind: "error", title: "Search could not be completed", message: "Neither TMDB nor TVMaze returned results. Check your connection and try again.", actionLabel: "Try again", actionAttr: "data-modal-search-retry" });
+        resultsEl.querySelector("[data-modal-search-retry]")?.addEventListener("click", () => void executeModalSearch(query), { once: true });
+      } else {
+        resultsEl.innerHTML = `
+          <div class="search-empty-prompt">
+            <p>No results found for “${escapeHtml(query)}”.</p>
+            <small>Try another keyword or select a different media filter.</small>
+          </div>
+        `;
+      }
       return;
     }
 
     renderSearchResults(finalCards);
+    if (tmdbSearchFailed && tvMazeSearchFailed) {
+      resultsEl.insertAdjacentHTML("beforeend", stateHtml({ kind: "info", message: "Showing matches found so far; search providers could not return all results.", actionLabel: "Try again", actionAttr: "data-modal-search-retry" }));
+      resultsEl.querySelector("[data-modal-search-retry]")?.addEventListener("click", () => void executeModalSearch(query), { once: true });
+    }
   } catch (err) {
+    finishModalSearchLoading();
+    if (signal.aborted) return;
     console.error("Search modal error:", err);
-    resultsEl.innerHTML = `<div class="search-empty-prompt">Search error. Please try again.</div>`;
+    resultsEl.innerHTML = stateHtml({ kind: "error", title: "Search could not be completed", message: "Check your connection and try again.", actionLabel: "Try again", actionAttr: "data-modal-search-retry" });
+    resultsEl.querySelector("[data-modal-search-retry]")?.addEventListener("click", () => void executeModalSearch(query), { once: true });
   }
 }
 
 /* ==========================================================================
-   Explore / Watch Providers Directory Engine (GaiaFlix replicate)
+   Explore / Watch Providers Directory
    ========================================================================== */
-const exploreProviders = [
-  { id: 8, name: "Netflix", logo: "https://image.tmdb.org/t/p/w92/rK1KljqmbvO9HQa1PBFLILWah72.png", tag: "Movies & Series" },
-  { id: 337, name: "Disney+", logo: "https://image.tmdb.org/t/p/w92/5eZ872CghnHFLB1j8grszbrx0dx.png", tag: "Originals & Marvel" },
-  { id: 9, name: "Amazon Prime Video", logo: "https://image.tmdb.org/t/p/w92/gMZdpavHmxFNnLpMHwVxfqeux2g.png", tag: "Blockbusters" },
-  { id: 350, name: "Apple TV+", logo: "https://image.tmdb.org/t/p/w92/9icYBfYFcwgCbky5VdGUIKJ4C5i.png", tag: "Award Winners" },
-  { id: 1899, name: "Max (HBO)", logo: "https://image.tmdb.org/t/p/w92/skypuy7SXuugIQeYg0IglmzoKaS.png", tag: "HBO Originals" },
-  { id: 283, name: "Crunchyroll", logo: "https://image.tmdb.org/t/p/w92/uFL3c4Cq8M6WoLymlC5Y8bmGytV.png", tag: "Anime Simulcasts" },
-  { id: 2303, name: "Paramount+", logo: "https://image.tmdb.org/t/p/w92/4N4BMd0Mm0kHAmF7RZgL5lW3cwc.png", tag: "Paramount & CBS" },
-  { id: 15, name: "Hulu", logo: "https://image.tmdb.org/t/p/w92/44uAnmSqvA4yBOdbPWN8YgQHjWm.png", tag: "Current TV" },
-  { id: 387, name: "Peacock", logo: "https://image.tmdb.org/t/p/w92/yrEwyMzEKdqAoGhaWUARtIxByol.png", tag: "NBC Classics" },
-  { id: 2, name: "Apple TV Store", logo: "https://image.tmdb.org/t/p/w92/qdEGArH3lKfFnAtYXMkSYk5wxuG.png", tag: "Digital Cinema" },
-  { id: 3, name: "Google Play Movies", logo: "https://image.tmdb.org/t/p/w92/aZRENwYILujqs0RVOZutTh0BVGV.png", tag: "Rent & Buy" },
-  { id: 192, name: "YouTube Movies", logo: "https://image.tmdb.org/t/p/w92/5Maob4o5w8oZnNeYpCDyVFD3M7X.png", tag: "Stream & Rent" }
-];
+let exploreProviders = [];
+let currentExploreRegion = "IN";
 
 let exploreInitialized = false;
 
@@ -9576,38 +6432,85 @@ function initExploreSection() {
       $("#providers-grid")?.removeAttribute("hidden");
       const titleEl = $("#explore-title");
       const kickerEl = $("#explore-kicker");
-      if (titleEl) titleEl.textContent = "Explore by Service";
-      if (kickerEl) kickerEl.textContent = "Browse catalogs of top global streaming networks.";
+      if (titleEl) titleEl.textContent = "Explore by service";
+      if (kickerEl) kickerEl.textContent = "Browse services with current titles listed in your region.";
     });
   }
 
-  renderExploreProviders();
+  void renderExploreProviders();
 }
 
-function renderExploreProviders() {
+async function renderExploreProviders() {
   const grid = $("#providers-grid");
   if (!grid) return;
   grid.removeAttribute("hidden");
   $("#provider-catalog-view")?.setAttribute("hidden", "true");
   $("#explore-back-btn")?.setAttribute("hidden", "true");
+  const finishLoading = beginLoading(grid, { label: "Loading authorised services…", slowLabel: "The service directory is taking a while…", size: "md", slowAfterMs: 4000 });
 
-  grid.innerHTML = exploreProviders.map(p => `
-    <article class="provider-tile" data-provider-id="${p.id}">
-      <div class="provider-logo-wrap">
-        <img src="${p.logo}" alt="${escapeHtml(p.name)} provider logo" decoding="async">
-      </div>
-      <span class="provider-tile-name">${escapeHtml(p.name)}</span>
-      <span class="provider-tile-tag">${escapeHtml(p.tag)}</span>
-    </article>
-  `).join("");
-
-  grid.querySelectorAll("[data-provider-id]").forEach(tile => {
-    tile.addEventListener("click", () => {
-      const pid = Number(tile.dataset.providerId);
-      const provider = exploreProviders.find(p => p.id === pid);
-      if (provider) openProviderCatalog(provider);
+  try {
+    let region = "IN";
+    const [movieData, tvData] = await Promise.all([
+      fetchTmdbApi(`/watch/providers/movie?watch_region=${region}`),
+      fetchTmdbApi(`/watch/providers/tv?watch_region=${region}`),
+    ]);
+    let movies = Array.isArray(movieData?.results) ? movieData.results : [];
+    let shows = Array.isArray(tvData?.results) ? tvData.results : [];
+    if (!movies.length && !shows.length) {
+      region = "US";
+      const fallback = await Promise.all([
+        fetchTmdbApi(`/watch/providers/movie?watch_region=${region}`),
+        fetchTmdbApi(`/watch/providers/tv?watch_region=${region}`),
+      ]);
+      movies = Array.isArray(fallback[0]?.results) ? fallback[0].results : [];
+      shows = Array.isArray(fallback[1]?.results) ? fallback[1].results : [];
+    }
+    currentExploreRegion = region;
+    const byId = new Map();
+    for (const [kind, providers] of [["Movies", movies], ["TV", shows]]) {
+      for (const provider of providers) {
+        if (!provider.provider_id || !provider.provider_name) continue;
+        const existing = byId.get(provider.provider_id) || {
+          id: provider.provider_id,
+          name: provider.provider_name,
+          logo: provider.logo_path ? `https://image.tmdb.org/t/p/w92${provider.logo_path}` : "",
+          kinds: [],
+          displayPriority: provider.display_priority ?? 999,
+        };
+        if (!existing.kinds.includes(kind)) existing.kinds.push(kind);
+        existing.displayPriority = Math.min(existing.displayPriority, provider.display_priority ?? 999);
+        byId.set(existing.id, existing);
+      }
+    }
+    exploreProviders = [...byId.values()].sort((a, b) => a.displayPriority - b.displayPriority || a.name.localeCompare(b.name));
+    const kickerEl = $("#explore-kicker");
+    if (kickerEl) kickerEl.textContent = region === "IN"
+      ? "Services with titles listed in India. Availability may change."
+      : "No provider directory was returned for India; showing services listed in the United States.";
+    finishLoading();
+    if (!exploreProviders.length) {
+      grid.innerHTML = stateHtml({ kind: "empty", title: "No services are listed", message: "TMDB did not return provider listings for India or the United States." });
+      return;
+    }
+    grid.innerHTML = exploreProviders.map((provider) => `
+      <button class="provider-tile" type="button" data-provider-id="${provider.id}" aria-label="Browse titles listed for ${escapeHtml(provider.name)} in ${currentExploreRegion === "IN" ? "India" : "the United States"}">
+        <span class="provider-logo-wrap">${provider.logo ? `<img src="${escapeHtml(provider.logo)}" alt="" decoding="async" loading="lazy">` : `<span class="provider-logo-fallback" aria-hidden="true">${escapeHtml(provider.name.slice(0, 1))}</span>`}</span>
+        <span class="provider-tile-name">${escapeHtml(provider.name)}</span>
+        <span class="provider-tile-tag">${escapeHtml(provider.kinds.join(" · "))}</span>
+      </button>
+    `).join("");
+    grid.querySelectorAll("[data-provider-id]").forEach((tile) => {
+      tile.addEventListener("click", () => {
+        const provider = exploreProviders.find((item) => item.id === Number(tile.dataset.providerId));
+        if (provider) void openProviderCatalog(provider);
+      });
     });
-  });
+  } catch (error) {
+    console.warn("[TMDB provider directory]", error?.message || "unavailable");
+    finishLoading();
+    grid.innerHTML = stateHtml({ kind: "error", title: "Services could not be loaded", message: "The TMDB provider directory is unavailable. Check your connection and try again.", actionLabel: "Try again", actionAttr: "data-provider-retry" });
+    grid.querySelector("[data-provider-retry]")?.addEventListener("click", () => void renderExploreProviders(), { once: true });
+  }
 }
 
 async function openProviderCatalog(provider) {
@@ -9617,111 +6520,53 @@ async function openProviderCatalog(provider) {
   const backBtn = $("#explore-back-btn");
   const titleEl = $("#explore-title");
   const kickerEl = $("#explore-kicker");
-
   if (grid) grid.setAttribute("hidden", "true");
   if (view) view.removeAttribute("hidden");
   if (backBtn) backBtn.removeAttribute("hidden");
-  if (titleEl) titleEl.textContent = `${provider.name} on Ustream`;
-  if (kickerEl) kickerEl.textContent = `Streaming collection on ${provider.name}`;
-
-  const getFallbackProviderTitles = () => {
-    const clean = catalog.filter(c => !isAdultContent(c) || isAdultEnabled());
-    if (provider.id === 283) {
-      const anime = clean.filter(c => c.type === "anime" || c.isJapaneseAnime);
-      if (anime.length >= 6) return anime.slice(0, 18);
-    }
-    const offset = (provider.id * 3) % Math.max(1, Math.max(0, clean.length - 18));
-    return clean.slice(offset, offset + 18);
-  };
-
-  if (titlesGrid) {
-    const initialList = getFallbackProviderTitles();
-    if (initialList.length) {
-      titlesGrid.innerHTML = initialList.map(renderCard).join("");
-      observeLazyImages(titlesGrid);
-    } else {
-      titlesGrid.innerHTML = createSkeletonCardsHtml(8);
-    }
-  }
-
+  if (titleEl) titleEl.textContent = provider.name;
+  if (kickerEl) kickerEl.textContent = `Titles TMDB lists for ${provider.name} in ${currentExploreRegion === "IN" ? "India" : "the United States"}. Open a title for its watch options.`;
+  const finishLoading = titlesGrid ? beginLoading(titlesGrid, { label: `Loading titles for ${provider.name}…`, slowLabel: "Provider titles are taking a while…", size: "md", slowAfterMs: 4000 }) : () => {};
   try {
-    const lang = localStorage.getItem("ustream-lang") || "en-US";
-    const moviePath = `/discover/movie?with_watch_providers=${provider.id}&watch_region=US&language=${lang}&sort_by=popularity.desc`;
-    const tvPath = `/discover/tv?with_watch_providers=${provider.id}&watch_region=US&language=${lang}&sort_by=popularity.desc`;
-
+    const region = currentExploreRegion || "IN";
     const [movieData, tvData] = await Promise.all([
-      fetchTmdbApi(moviePath),
-      fetchTmdbApi(tvPath)
+      fetchTmdbApi(`/discover/movie?with_watch_providers=${provider.id}&watch_region=${region}&sort_by=popularity.desc`),
+      fetchTmdbApi(`/discover/tv?with_watch_providers=${provider.id}&watch_region=${region}&sort_by=popularity.desc`),
     ]);
-
-    const movies = Array.isArray(movieData?.results) ? movieData.results : [];
-    const tvs = Array.isArray(tvData?.results) ? tvData.results : [];
-
-    const normList = [];
-    movies.slice(0, 12).forEach(m => {
-      const poster = m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : "";
-      const item = {
-        title: m.title || "Untitled",
-        type: "movie",
-        category: "movie",
-        year: Number((m.release_date || "").slice(0, 4)) || 2024,
-        rating: normalizeRating(m.vote_average),
-        runtime: "Movie",
-        image: poster,
-        backdrop: m.backdrop_path ? `https://image.tmdb.org/t/p/original${m.backdrop_path}` : poster,
-        description: m.overview || `Stream ${m.title || "this title"} on ${provider.name} via Ustream.`,
-        badge: "HD",
-        kicker: provider.name,
-        genre: ["movie"],
-        tmdbId: m.id,
-        country: "Global",
-        gradient: "linear-gradient(145deg, #1e293b, #0f172a 50%, #020617)"
-      };
-      registerExtraTitle(item);
-      normList.push(item);
-    });
-
-    tvs.slice(0, 12).forEach(t => {
-      const poster = t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : "";
-      const item = {
-        title: t.name || "Untitled",
-        type: "series",
-        category: "series",
-        year: Number((t.first_air_date || "").slice(0, 4)) || 2024,
-        rating: normalizeRating(t.vote_average),
-        runtime: "Series",
-        image: poster,
-        backdrop: t.backdrop_path ? `https://image.tmdb.org/t/p/original${t.backdrop_path}` : poster,
-        description: t.overview || `Stream ${t.name || "this series"} on ${provider.name} via Ustream.`,
-        badge: "Series",
-        kicker: provider.name,
-        genre: ["series"],
-        tmdbId: t.id,
-        country: "Global",
-        gradient: "linear-gradient(145deg, #0369a1, #0c4a6e 50%, #082f49)"
-      };
-      registerExtraTitle(item);
-      normList.push(item);
-    });
-
-    const finalList = normList.length ? normList : getFallbackProviderTitles();
-    if (titlesGrid) {
-      titlesGrid.innerHTML = finalList.length ? finalList.map(renderCard).join("") : `<div class="empty-state" style="padding: 40px; grid-column: 1 / -1; text-align: center;">No titles currently listed for this network.</div>`;
-      observeLazyImages(titlesGrid);
+    const items = [
+      ...(Array.isArray(movieData?.results) ? movieData.results : []).map((item) => normalizeTmdbItem({ ...item, media_type: "movie" }, "movie")),
+      ...(Array.isArray(tvData?.results) ? tvData.results : []).map((item) => normalizeTmdbItem({ ...item, media_type: "tv" }, "tv")),
+    ];
+    const finalList = sortBySearchRelevance(dedupeCatalogItems(items), "");
+    if (!titlesGrid) { finishLoading(); return; }
+    finishLoading();
+    if (!finalList.length) {
+      titlesGrid.innerHTML = stateHtml({ kind: "empty", title: "No titles are listed", message: `TMDB has no current ${currentExploreRegion === "IN" ? "India" : "United States"} listings for ${provider.name}.` });
+      return;
     }
-  } catch (err) {
-    console.error("Provider catalog error:", err);
+    finalList.forEach(registerExtraTitle);
+    titlesGrid.innerHTML = finalList.slice(0, 24).map((item) => renderCard(item)).join("");
+    observeLazyImages(titlesGrid);
+  } catch (error) {
+    console.warn("[TMDB provider catalog]", error?.message || "unavailable");
+    if (titlesGrid) {
+      finishLoading();
+      titlesGrid.innerHTML = stateHtml({ kind: "error", title: "Provider titles could not be loaded", message: "Check your connection and try again.", actionLabel: "Try again", actionAttr: "data-provider-catalog-retry" });
+      titlesGrid.querySelector("[data-provider-catalog-retry]")?.addEventListener("click", () => void openProviderCatalog(provider), { once: true });
+    }
   }
 }
 
 /* ==========================================================================
-   Cartoons & Anime TMDB Category Loader (GaiaFlix replicate)
+   Cartoons & Anime TMDB Category Loader
    ========================================================================== */
 const categoryCache = new Set();
 async function loadCategoryTmdb(category) {
   if (categoryCache.has(category)) return;
-  categoryCache.add(category);
 
+  const grid = $("#card-grid");
+  const finishCategoryLoading = grid && state.section === category
+    ? beginLoading(grid, { label: `Loading ${category}…`, slowLabel: "This category is taking a while to load…", size: "md", slowAfterMs: 4000 })
+    : () => {};
   try {
     const langCode = localStorage.getItem("ustream-lang") || "en-US";
     let paths = [];
@@ -9761,12 +6606,14 @@ async function loadCategoryTmdb(category) {
       const newCards = results.flat().map(t => normalizeTmdbItem(t, category));
 
       if (newCards.length) {
+        categoryCache.add(category);
         const filtered = appendCatalogItems(newCards);
         if (filtered.length) {
           const vis = getVisibleCards();
           const displayed = vis.slice(0, state.displayLimit);
           const grid = $("#card-grid");
           if (grid && state.section === category) {
+            finishCategoryLoading();
             grid.innerHTML = displayed.map((card) => renderCard(card)).join("");
             observeLazyImages(grid);
             updateCatalogCounters(vis, displayed);
@@ -9777,8 +6624,17 @@ async function loadCategoryTmdb(category) {
         }
       }
     }
+    if (grid && state.section === category) {
+      finishCategoryLoading();
+      if (!grid.children.length) grid.innerHTML = stateHtml({ kind: "empty", message: "No titles were found in this category." });
+    }
   } catch (err) {
     console.error(`Failed to load ${category} from TMDB:`, err);
+    if (grid && state.section === category) {
+      finishCategoryLoading();
+      grid.innerHTML = stateHtml({ kind: "error", title: "This category could not be loaded", message: "Check your connection and try again.", actionLabel: "Try again", actionAttr: "data-category-retry" });
+      grid.querySelector("[data-category-retry]")?.addEventListener("click", () => { categoryCache.delete(category); void loadCategoryTmdb(category); }, { once: true });
+    }
   }
 }
 

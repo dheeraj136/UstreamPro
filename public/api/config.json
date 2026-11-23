@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "configured": true,
-  "rapidApiKeyConfigured": true,
-  "mode": "live"
+  "configured": false,
+  "tmdbApiKeyConfigured": false,
+  "mode": "browser-fallback"
 }
