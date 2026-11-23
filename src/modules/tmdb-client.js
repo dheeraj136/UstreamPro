@@ -68,7 +68,14 @@ export function createTmdbClient({
         // TMDB's own "resource not found" (status_code 34) is an answer.
         if (body && (body.status_code === 34 || body.status_message)) throw new TmdbError("Not found", 404);
       }
-      if (error.status === 503 || error.status === 404 || error.status === 405) proxyAvailable = false;
+      // Any proxy failure (503 unconfigured, 404/405 missing route, or a
+      // 5xx function crash) means the proxy is unusable for this session:
+      // stop wasting a retry + backoff on it for every request and go
+      // direct immediately. (A 500 from a crashed function used to leave
+      // proxyAvailable true, so every catalog call paid the proxy's
+      // timeout before falling back — that is why the live catalog
+      // showed only the curated titles.)
+      proxyAvailable = false;
       return undefined; // fall back to direct
     }
     const data = await res.json().catch(() => undefined);
