@@ -3790,6 +3790,12 @@ async function playStreamContent(item, episodeId = null) {
   const isCurrentRequest = () => state.player.requestId === requestId;
   const playerBackdrop = $("#player-backdrop");
   const playerTitle = $("#player-title");
+  const embedPlayer = $("#embed-player");
+  const customPlayerWrapper = $("#custom-player-wrapper");
+  const serverBar = $("#player-server-bar");
+  const serverPills = $("#player-server-pills");
+  const serverLabel = $("#player-server-label");
+
   if (!playerReturnFocus) playerReturnFocus = document.activeElement;
   state.player.item = item;
   state.player.trailerTitle = null;
@@ -3799,6 +3805,7 @@ async function playStreamContent(item, episodeId = null) {
 
   if (playerTitle) playerTitle.textContent = `${item.title} — Streaming`;
   if (playerBackdrop) { playerBackdrop.hidden = false; playerBackdrop.removeAttribute("hidden"); }
+  if (serverBar) serverBar.hidden = true;
   setPlayerState(PLAYER_STATE.LOADING, `Loading stream for ${item.title}…`);
 
   try {
@@ -3835,20 +3842,64 @@ async function playStreamContent(item, episodeId = null) {
     if (!isCurrentRequest()) return;
 
     const streamLink = streamData?.stream?.streamLink;
-    if (streamLink) {
-      const embedPlayer = $("#embed-player");
-      const customPlayerWrapper = $("#custom-player-wrapper");
+    if (streamLink && embedPlayer) {
       if (customPlayerWrapper) customPlayerWrapper.hidden = true;
-      if (embedPlayer) {
-        embedPlayer.hidden = false;
-        embedPlayer.src = streamLink;
-        embedPlayer.title = `${item.title} — Streaming`;
-      }
+      embedPlayer.hidden = false;
+      embedPlayer.src = streamLink;
+      embedPlayer.title = `${item.title} — Streaming`;
+
       if (playerTitle) {
         playerTitle.textContent = streamData.current?.title
           ? `${item.title} — ${streamData.current.title}`
           : `${item.title} — Full Feature`;
       }
+
+      // Configure multi-language tracks & multi-server switcher
+      const languages = streamData.stream?.languages || [];
+      const servers = streamData.stream?.servers || [];
+      const pillItems = [];
+
+      if (languages.length > 1) {
+        if (serverLabel) serverLabel.textContent = "Audio Language:";
+        languages.forEach((lang, idx) => {
+          pillItems.push({
+            label: lang.language,
+            url: lang.streamLink,
+            active: idx === 0 || lang.streamLink === streamLink,
+          });
+        });
+      } else if (servers.length > 1) {
+        if (serverLabel) serverLabel.textContent = "Stream Server:";
+        servers.forEach((srv, idx) => {
+          pillItems.push({
+            label: srv.name,
+            url: srv.url,
+            active: idx === 0 || srv.url === streamLink,
+          });
+        });
+      }
+
+      if (pillItems.length > 0 && serverBar && serverPills) {
+        serverPills.innerHTML = pillItems.map((p) => `
+          <button class="player-server-pill ${p.active ? "active" : ""}" type="button" data-url="${escapeHtml(p.url)}">
+            ${escapeHtml(p.label)}
+          </button>
+        `).join("");
+
+        serverPills.querySelectorAll(".player-server-pill").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            serverPills.querySelectorAll(".player-server-pill").forEach((b) => b.classList.remove("active"));
+            btn.classList.add("active");
+            const targetUrl = btn.dataset.url;
+            if (targetUrl && embedPlayer.src !== targetUrl) {
+              setPlayerState(PLAYER_STATE.LOADING, `Loading ${btn.textContent.trim()}…`);
+              embedPlayer.src = targetUrl;
+            }
+          });
+        });
+        serverBar.hidden = false;
+      }
+
       setPlayerState(PLAYER_STATE.READY);
       return;
     }
@@ -3978,6 +4029,8 @@ function stopAllMediaPlayback() {
   const embed = $("#embed-player");
   const video = $("#video-player");
   const customWrapper = $("#custom-player-wrapper");
+  const serverBar = $("#player-server-bar");
+  if (serverBar) serverBar.hidden = true;
   if (embed) {
     embed.src = "about:blank";
     embed.hidden = true;

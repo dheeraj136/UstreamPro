@@ -114,13 +114,13 @@
     <link rel="preconnect" href="https://image.tmdb.org" crossorigin />
     <link rel="dns-prefetch" href="https://image.tmdb.org" />
     <link rel="dns-prefetch" href="https://archive.org" />
-    <link rel="preload" href="./styles.4ecaba29.css" as="style" />
+    <link rel="preload" href="./styles.d365318e.css" as="style" />
     <link rel="preload" href="./assets/logo.png" as="image" type="image/png" fetchpriority="high" />
-    <link rel="modulepreload" href="./app.a2e32468.js" />
+    <link rel="modulepreload" href="./app.b9fe4590.js" />
     <link rel="modulepreload" href="./modules/storage.js" />
     <link rel="modulepreload" href="./modules/image-loader.js" />
     <link rel="modulepreload" href="./modules/events.js" />
-    <link rel="stylesheet" href="./styles.4ecaba29.css" />
+    <link rel="stylesheet" href="./styles.d365318e.css" />
   </head>
   <body>
     <div id="startup-loader" class="startup-loader" role="status" aria-live="polite" aria-busy="true" aria-label="Loading Ustream">
@@ -753,6 +753,10 @@
             </div>
           </div>
         </div>
+        <div class="player-server-bar" id="player-server-bar" hidden>
+          <span class="player-server-label" id="player-server-label">Servers & Audio:</span>
+          <div class="player-server-pills" id="player-server-pills"></div>
+        </div>
         <div class="player-action-bar" aria-label="Player actions">
           <button class="player-action player-action-primary player-action-retry" id="player-retry-button" type="button" aria-label="Retry playback" hidden><svg class="icon icon-sm icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg> <span>Retry</span></button>
         </div>
@@ -1243,7 +1247,7 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="./app.a2e32468.js" defer></script>
+    <script type="module" src="./app.b9fe4590.js" defer></script>
     <script>
       (function() {
         function dismissStartupLoader() {

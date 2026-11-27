@@ -1,7 +1,9 @@
 // AnimeWorld India API & Streaming Handler for UstreamPro
 // Ports upstream https://github.com/queryof/AnimeWorld-India-Api-Streaming-api-for-hIndi-animes
-// to native Node.js / Vercel Serverless Functions with resilient fetching and streaming embeds.
+// to native Node.js / Vercel Serverless Functions with resilient multi-server streaming.
 
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
 import { applyCors } from "../lib/http-utils.js";
 
 const DEFAULT_BASE_URL = "https://animeworld-india.me";
@@ -29,6 +31,84 @@ function cleanText(str) {
 }
 
 /**
+ * Load anime database from lib/animeworld-db.json safely
+ */
+let animeCatalog = [];
+try {
+  const dbPath = join(process.cwd(), "lib", "animeworld-db.json");
+  if (existsSync(dbPath)) {
+    animeCatalog = JSON.parse(readFileSync(dbPath, "utf8"));
+  }
+} catch (e) {
+  console.warn("Could not load animeworld-db.json:", e);
+}
+
+/**
+ * Normalizes stream links and extracts multi-language tracks (Hindi, Tamil, Telugu, English, Japanese)
+ */
+export function normalizeStream(rawUrl) {
+  if (!rawUrl) return null;
+  if (rawUrl.includes("data=")) {
+    try {
+      const b64 = decodeURIComponent(rawUrl.split("data=")[1].split("&")[0]);
+      const jsonText = Buffer.from(b64, "base64").toString("utf8");
+      const list = JSON.parse(jsonText);
+      if (Array.isArray(list) && list.length > 0) {
+        const languages = list.map((item) => ({
+          language: item.language || "Hindi",
+          streamLink: (item.link || "").replace("short.icu/", "abyssplayer.com/"),
+        }));
+        const defaultStream = languages.find((l) => (l.language || "").toLowerCase() === "hindi") || languages[0];
+        return {
+          streamLink: defaultStream.streamLink,
+          languages,
+        };
+      }
+    } catch {}
+  }
+  const cleanLink = rawUrl.replace("short.icu/", "abyssplayer.com/");
+  return {
+    streamLink: cleanLink,
+    languages: [{ language: "Hindi (Default)", streamLink: cleanLink }],
+  };
+}
+
+/**
+ * Find anime in catalog by title, slug, or keywords
+ */
+export function findAnimeInDb(queryStr) {
+  if (!queryStr || !animeCatalog.length) return null;
+  const q = String(queryStr).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  if (!q) return null;
+
+  // Exact title or slug match
+  let match = animeCatalog.find((a) => {
+    const t = a.title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const s = (a.slug || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    return t === q || s === q;
+  });
+  if (match) return match;
+
+  // Substring match
+  match = animeCatalog.find((a) => {
+    const t = a.title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const s = (a.slug || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    return t.includes(q) || q.includes(t) || (s && (s.includes(q) || q.includes(s)));
+  });
+  if (match) return match;
+
+  // Token match
+  const tokens = q.split(" ").filter((w) => w.length > 2);
+  if (tokens.length > 0) {
+    match = animeCatalog.find((a) => {
+      const t = a.title.toLowerCase();
+      return tokens.every((tok) => t.includes(tok));
+    });
+  }
+  return match || null;
+}
+
+/**
  * Fetch HTML with timeouts, rotating user agents, and proxy support
  */
 export async function fetchHtml(targetUrl) {
@@ -53,7 +133,6 @@ export async function fetchHtml(targetUrl) {
       throw new Error(`Upstream returned HTTP ${res.status}`);
     }
     const html = await res.text();
-    // Guard against parked / domain sale pages
     if (html.includes("This domain is for sale") || html.includes("domain_sal")) {
       throw new Error("Upstream domain is parked or for sale");
     }
@@ -88,7 +167,7 @@ const CURATED_ANIME = [
       episodeNumber: String(i + 1),
       airDate: "2002-10-03",
       image: "https://image.tmdb.org/t/p/w500/vQirn2uK4t6f5vGepq0u7Bq6FvA.jpg",
-      overview: `Naruto Uzumaki begins his journey as a ninja in the Hidden Leaf Village. (Hindi Dubbed)`,
+      overview: "Naruto Uzumaki begins his journey as a ninja in the Hidden Leaf Village. (Hindi Dubbed)",
     })),
   },
   {
@@ -113,7 +192,7 @@ const CURATED_ANIME = [
       episodeNumber: String(i + 1),
       airDate: "2007-02-15",
       image: "https://image.tmdb.org/t/p/w500/kV27gVLo4jsP7aDdQw96O1085gP.jpg",
-      overview: `After two and a half years of training with Jiraiya, Naruto returns to Konoha. (Hindi Dubbed)`,
+      overview: "After two and a half years of training with Jiraiya, Naruto returns to Konoha. (Hindi Dubbed)",
     })),
   },
   {
@@ -138,7 +217,7 @@ const CURATED_ANIME = [
       episodeNumber: String(i + 1),
       airDate: "2020-10-03",
       image: "https://image.tmdb.org/t/p/w500/hFWP5HkbVEe40hrXgtCeNpzwTMv.jpg",
-      overview: `Yuji swallows a cursed talisman and becomes host to Sukuna. (Hindi Dubbed)`,
+      overview: "Yuji Itadori is a boy with tremendous physical strength, though he lives a completely ordinary high school life.",
     })),
   },
   {
@@ -148,7 +227,7 @@ const CURATED_ANIME = [
     image: "https://image.tmdb.org/t/p/w500/xUfRZu2mi8jH6SzQEJGP6tjBuYj.jpg",
     year: "2019",
     rating: "8.7",
-    description: "It is the Taisho Period in Japan. Tanjiro Kamado discovers that his family was slaughtered by a demon.",
+    description: "It is the Taisho Period in Japan. Tanjiro, a kindhearted boy who sells charcoal for a living, finds his family slaughtered by a demon.",
     seasons: [
       {
         seasonNumber: "1",
@@ -163,53 +242,18 @@ const CURATED_ANIME = [
       episodeNumber: String(i + 1),
       airDate: "2019-04-06",
       image: "https://image.tmdb.org/t/p/w500/xUfRZu2mi8jH6SzQEJGP6tjBuYj.jpg",
-      overview: `Tanjiro's peaceful life is shattered when demons attack his family. (Hindi Dubbed)`,
+      overview: "Tanjiro Kamado lives a modest but blissful life in the mountains with his family.",
     })),
-  },
-  {
-    title: "Dragon Ball Super",
-    type: "series",
-    seriesId: "dragon-ball-super-hindi",
-    image: "https://image.tmdb.org/t/p/w500/qEUrbofLC9Tvugv89z674Ziztvh.jpg",
-    year: "2015",
-    rating: "8.1",
-    description: "After defeating Majin Buu, life is peaceful once again. Goku now works as a radish farmer.",
-    seasons: [
-      {
-        seasonNumber: "1",
-        seasonName: "Season 1 (Hindi Dub)",
-        seasonId: "dbs-s1",
-        episodes: "131",
-      },
-    ],
-    episodes: Array.from({ length: 20 }, (_, i) => ({
-      episodeId: `dbs-ep-${i + 1}`,
-      title: `Episode ${i + 1} - A God of Destruction Appears`,
-      episodeNumber: String(i + 1),
-      airDate: "2015-07-05",
-      image: "https://image.tmdb.org/t/p/w500/qEUrbofLC9Tvugv89z674Ziztvh.jpg",
-      overview: `Beerus, the God of Destruction, awakens from a long slumber. (Hindi Dubbed)`,
-    })),
-  },
-  {
-    title: "Spirited Away",
-    type: "movie",
-    movieId: "spirited-away-hindi",
-    image: "https://image.tmdb.org/t/p/w500/393r3eYA0utkQAqvWvf9e6Bbg4Y.jpg",
-    year: "2001",
-    rating: "8.5",
-    description: "A young girl, Chihiro, becomes trapped in a strange new world of spirits. (Hindi Audio)",
   },
 ];
 
 export function parseStreamHtml(html, { episodeId = null, movieId = null } = {}) {
-  // Common: stream iframe & download link
-  const iframeMatch = html.match(/<div[^>]*class=["'][^"']*video-embed[^"']*["'][^>]*>[\s\S]*?<iframe[^>]*src=["']([^"']+)["']/i) ||
-                      html.match(/<iframe[^>]*src=["']([^"']+)["']/i);
-  const downloadMatch = html.match(/<div[^>]*class=["'][^"']*archive-link-wrap[^"']*["'][^>]*>[\s\S]*?<a[^>]*href=["']([^"']+)["']/i);
+  const iframeMatch = html.match(/<iframe[^>]*src=["']([^"']+)["']/i);
+  const downloadMatch = html.match(/<a[^>]*href=["']([^"']+)["'][^>]*>\s*Download/i)
+    || html.match(/<div[^>]*class=["'][^"']*archive-link-wrap[^"']*["'][^>]*>[\s\S]*?<a[^>]*href=["']([^"']+)["']/i);
 
-  const streamLink = iframeMatch ? iframeMatch[1] : null;
-  const downloadLink = downloadMatch ? downloadMatch[1] : null;
+  const streamLink = iframeMatch?.[1] || null;
+  const downloadLink = downloadMatch?.[1] || null;
 
   if (movieId) {
     const titleMatch = html.match(/<h1[^>]*class=["'][^"']*entry-title[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i);
@@ -315,7 +359,7 @@ export function parseSearchHtml(html, query, page = 1) {
 export function parseHomeHtml(html) {
   const parseList = (sectionId, type) => {
     const list = [];
-    const secRegex = new RegExp(`<section[^>]*id=["']${sectionId}["'][^>]*>([\\s\\S]*?)<\\/section>`, "i");
+    const secRegex = new RegExp(`<section[^>]*id=["']${sectionId}["'][^>]*>([\s\S]*?)<\/section>`, "i");
     const secMatch = html.match(secRegex);
     if (!secMatch) return list;
 
@@ -357,14 +401,13 @@ export function parseHomeHtml(html) {
 }
 
 /**
- * Handle API requests matching queryof/AnimeWorld-India-Api-Streaming-api-for-hIndi-animes
+ * Main AnimeWorld India Serverless Function Handler
  */
 export default async function handler(req, res) {
   applyCors(req, res, {
     methods: "GET, HEAD, OPTIONS",
-    headers: "Content-Type, Accept",
+    headers: "Content-Type, Accept, Authorization",
   });
-  res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
 
   const method = String(req.method || "GET").toUpperCase();
   if (method === "OPTIONS") return res.status(204).end();
@@ -372,32 +415,28 @@ export default async function handler(req, res) {
     return res.status(405).json({ success: false, error: "Method not allowed" });
   }
 
-  const rawUrl = req.url || "/";
-  const parsed = new URL(rawUrl, "http://localhost");
-  const query = Object.fromEntries(parsed.searchParams.entries());
+  const urlObj = typeof req.url === "string" ? new URL(req.url, "http://localhost") : null;
+  const rawQuery = req.query || (urlObj ? Object.fromEntries(urlObj.searchParams.entries()) : {});
 
-  // Determine requested action
-  let action = query.action || "";
-  const pathParam = query.path || "";
+  // Parse path or action parameter
+  let action = rawQuery.action || "";
+  const pathParam = rawQuery.path || urlObj?.searchParams.get("path") || "";
+
   if (!action && pathParam) {
-    action = pathParam.replace(/\.php$/i, "").replace(/^\//, "");
-  }
-  if (!action) {
-    if (parsed.pathname.includes("search")) action = "search";
-    else if (parsed.pathname.includes("home")) action = "home";
-    else if (parsed.pathname.includes("series")) action = "series";
-    else if (parsed.pathname.includes("movie")) action = "movie";
-    else if (parsed.pathname.includes("seasons")) action = "seasons";
-    else if (parsed.pathname.includes("episodes")) action = "episodes";
-    else if (parsed.pathname.includes("stream")) action = "stream";
-    else if (parsed.pathname.includes("a2z")) action = "a2z";
-    else action = "home";
+    if (pathParam.includes("stream.php") || pathParam === "stream") action = "stream";
+    else if (pathParam.includes("search.php") || pathParam === "search") action = "search";
+    else if (pathParam.includes("allseries.php") || pathParam === "series") action = "series";
+    else if (pathParam.includes("allmovie.php") || pathParam === "movie") action = "movie";
+    else if (pathParam.includes("episodes.php") || pathParam === "episodes") action = "episodes";
+    else if (pathParam.includes("seasons.php") || pathParam === "seasons") action = "seasons";
+    else if (pathParam.includes("home.php") || pathParam === "home") action = "home";
   }
 
+  const query = { ...rawQuery };
   const baseUrl = process.env.ANIMEWORLD_BASE_URL || DEFAULT_BASE_URL;
 
   try {
-    // 1. STREAM
+    // 1. STREAM RESOLUTION
     if (action === "stream") {
       let episodeId = query.episodeId || query.episode || null;
       let movieId = query.movieId || query.movie || null;
@@ -426,36 +465,76 @@ export default async function handler(req, res) {
         return res.status(400).json({ success: false, error: "Missing episodeId or movieId parameter" });
       }
 
-      // Try upstream first
-      const targetUrl = episodeId
-        ? `${baseUrl}/episode/${encodeURIComponent(episodeId)}`
-        : `${baseUrl}/movie/${encodeURIComponent(movieId)}`;
+      // Check Anime DB first (AbyssPlayer high-speed streams with multi-language tracks)
+      const animeMatch = findAnimeInDb(title) || findAnimeInDb(movieId) || findAnimeInDb(episodeId);
+      if (animeMatch && Array.isArray(animeMatch.episodes) && animeMatch.episodes.length > 0) {
+        const epNumMatch = episodeId ? (String(episodeId).match(/(\d+)$/)?.[1] || "1") : "1";
+        const targetEp = animeMatch.episodes.find((ep) => String(ep.ep) === String(epNumMatch) || ep.ep === epNumMatch)
+          || animeMatch.episodes[0];
 
-      try {
-        const html = await fetchHtml(targetUrl);
-        const data = parseStreamHtml(html, { episodeId, movieId });
-        if (data.stream?.streamLink) {
-          return res.status(200).json(data);
-        }
-      } catch {
-        // Fall back to resilient stream link
+        const normalized = normalizeStream(targetEp.u);
+        const servers = [
+          { name: "Server 1 (Abyss HD)", url: normalized.streamLink },
+          { name: "Server 2 (AnimeWorld)", url: normalized.streamLink },
+        ];
+
+        return res.status(200).json({
+          success: true,
+          type: "episode",
+          source: "animeworld-india",
+          stream: {
+            streamLink: normalized.streamLink,
+            languages: normalized.languages,
+            servers,
+            file: null,
+          },
+          current: {
+            episodeId: episodeId || `${animeMatch.slug}-ep-${targetEp.ep}`,
+            title: targetEp.t || `Episode ${targetEp.ep}`,
+            episodeNumber: String(targetEp.ep),
+            season: String(targetEp.s || "1"),
+            overview: `Hindi & Multi-language anime streaming for ${animeMatch.title}.`,
+          },
+          series: {
+            title: animeMatch.title,
+            season: `Season ${targetEp.s || "1"}`,
+            poster: animeMatch.poster,
+          },
+        });
       }
 
-      // Generate fallback stream response with universal player
-      const epNum = episodeId ? (episodeId.match(/(\d+)$/)?.[1] || "1") : "1";
-      const seriesSlug = episodeId ? episodeId.replace(/-ep-\d+$/, "") : "";
-      const streamId = tmdbId || (episodeId ? seriesSlug : movieId);
+      // Universal Embed streaming for Movies and TV Series (2embed + vidsrc.pm)
+      const cleanStreamId = tmdbId || movieId || (episodeId ? episodeId.replace(/-ep-\d+$/, "") : "");
+      const epNum = episodeId ? (String(episodeId).match(/(\d+)$/)?.[1] || "1") : "1";
+      const seasonNum = "1";
 
-      const fallbackStreamLink = episodeId
-        ? `https://vidsrc.cc/v2/embed/tv/${encodeURIComponent(streamId)}/1/${epNum}?autoPlay=1`
-        : `https://vidsrc.cc/v2/embed/movie/${encodeURIComponent(streamId)}?autoPlay=1`;
+      const isMovie = type === "movie" || !episodeId;
+      const server1 = isMovie
+        ? `https://www.2embed.cc/embed/${encodeURIComponent(cleanStreamId)}`
+        : `https://www.2embed.cc/embedtv/${encodeURIComponent(cleanStreamId)}&s=${seasonNum}&e=${epNum}`;
+
+      const server2 = isMovie
+        ? `https://vidsrc.pm/embed/movie/${encodeURIComponent(cleanStreamId)}`
+        : `https://vidsrc.pm/embed/tv/${encodeURIComponent(cleanStreamId)}/${seasonNum}/${epNum}`;
+
+      const server3 = isMovie
+        ? `https://www.2embed.skin/embed/${encodeURIComponent(cleanStreamId)}`
+        : `https://www.2embed.skin/embedtv/${encodeURIComponent(cleanStreamId)}&s=${seasonNum}&e=${epNum}`;
+
+      const servers = [
+        { name: "Server 1 (Primary HD)", url: server1 },
+        { name: "Server 2 (Fast Stream)", url: server2 },
+        { name: "Server 3 (Mirror)", url: server3 },
+      ];
 
       return res.status(200).json({
         success: true,
-        type: episodeId ? "episode" : "movie",
-        source: "animeworld-india.me",
+        type: isMovie ? "movie" : "episode",
+        source: "ustream-streaming-engine",
         stream: {
-          streamLink: fallbackStreamLink,
+          streamLink: server1,
+          servers,
+          languages: [{ language: "Original Audio", streamLink: server1 }],
           file: null,
         },
         current: {
@@ -464,8 +543,8 @@ export default async function handler(req, res) {
           overview: "Full-length streaming enabled.",
         },
         series: {
-          title: title || (episodeId ? seriesSlug.replace(/-/g, " ") : "Streaming Feature"),
-          season: "Season 1",
+          title: title || cleanStreamId.replace(/-/g, " "),
+          season: `Season ${seasonNum}`,
         },
       });
     }
@@ -479,21 +558,49 @@ export default async function handler(req, res) {
         return res.status(400).json({ success: false, error: "Missing query parameter" });
       }
 
-      try {
-        const targetUrl = `${baseUrl}/search?q=${encodeURIComponent(q)}&page=${page}`;
-        const html = await fetchHtml(targetUrl);
-        const data = parseSearchHtml(html, q, page);
-        if (data.results?.length) {
-          return res.status(200).json(data);
-        }
-      } catch {
-        // Upstream offline: search curated fallback list
+      // Search in anime catalog database first
+      const qLower = q.toLowerCase();
+      const matchedDb = animeCatalog.filter((a) => {
+        const t = a.title.toLowerCase();
+        const s = (a.slug || "").toLowerCase();
+        return t.includes(qLower) || s.includes(qLower);
+      });
+
+      if (matchedDb.length > 0) {
+        const results = matchedDb.slice(0, 24).map((a) => ({
+          title: a.title,
+          image: a.poster || null,
+          year: "2024",
+          rating: "8.5",
+          type: "series",
+          seriesId: a.slug,
+          totalEpisodes: a.episodes?.length || 12,
+        }));
+
+        return res.status(200).json({
+          success: true,
+          query: q,
+          currentPage: page,
+          totalPages: 1,
+          hasNextPage: false,
+          source: "animeworld-india/catalog",
+          results,
+        });
       }
 
-      const qLower = q.toLowerCase();
-      const matched = CURATED_ANIME.filter(
+      // Curated anime fallback
+      const matchedCurated = CURATED_ANIME.filter(
         (a) => a.title.toLowerCase().includes(qLower) || qLower.includes(a.title.toLowerCase())
       );
+
+      const results = (matchedCurated.length ? matchedCurated : CURATED_ANIME).map((a) => ({
+        title: a.title,
+        image: a.image,
+        year: a.year,
+        rating: a.rating,
+        type: a.type,
+        seriesId: a.seriesId,
+      }));
 
       return res.status(200).json({
         success: true,
@@ -501,83 +608,44 @@ export default async function handler(req, res) {
         currentPage: page,
         totalPages: 1,
         hasNextPage: false,
-        source: "animeworld-india.me/search",
-        results: matched.length ? matched : CURATED_ANIME.slice(0, 4),
+        source: "animeworld-india/curated",
+        results,
       });
     }
 
-    // 3. HOME
-    if (action === "home") {
-      try {
-        const html = await fetchHtml(`${baseUrl}/`);
-        const data = parseHomeHtml(html);
-        if (data.latest_series?.length || data.latest_movies?.length) {
-          return res.status(200).json(data);
-        }
-      } catch {
-        // Fallback
-      }
-
-      return res.status(200).json({
-        success: true,
-        source: "animeworld-india.me",
-        latest_series: CURATED_ANIME.filter((a) => a.type === "series"),
-        latest_movies: CURATED_ANIME.filter((a) => a.type === "movie"),
-      });
-    }
-
-    // 4. SEASONS
+    // 3. SEASONS
     if (action === "seasons") {
       const seriesID = String(query.seriesID || query.seriesId || "").trim();
       if (!seriesID) {
         return res.status(400).json({ success: false, error: "Missing seriesID parameter" });
       }
 
-      try {
-        const html = await fetchHtml(`${baseUrl}/series/${encodeURIComponent(seriesID)}`);
-        // If parsed successfully
-        const titleMatch = html.match(/<h1[^>]*class=["'][^"']*entry-title[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i);
-        const posterMatch = html.match(/<div[^>]*class=["'][^"']*post-thumbnail[^"']*["'][^>]*>[\s\S]*?<img[^>]*src=["']([^"']+)["']/i);
-        const descMatch = html.match(/<div[^>]*class=["'][^"']*description[^"']*["'][^>]*>[\s\S]*?<p>([\s\S]*?)<\/p>/i);
-
-        const seasons = [];
-        const cardRegex = /<div[^>]*class=["'][^"']*season-card[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi;
-        let cm;
-        while ((cm = cardRegex.exec(html)) !== null) {
-          const num = cm[1].match(/<div[^>]*class=["'][^"']*season-number[^"']*["'][^>]*>([\s\S]*?)<\/div>/i);
-          const name = cm[1].match(/<div[^>]*class=["'][^"']*season-name[^"']*["'][^>]*>([\s\S]*?)<\/div>/i);
-          const ep = cm[1].match(/<span[^>]*class=["'][^"']*episode-count[^"']*["'][^>]*>([\s\S]*?)<\/span>/i);
-          const link = cm[1].match(/<a[^>]*class=["'][^"']*season-link[^"']*["'][^>]*href=["']([^"']+)["']/i);
-          const seasonId = link?.[1]?.includes("/season/") ? link[1].split("/season/")[1]?.replace(/\/$/, "") : null;
-          seasons.push({
-            seasonNumber: cleanText(num?.[1]),
-            seasonName: cleanText(name?.[1]),
-            episodes: cleanText(ep?.[1]),
-            seasonId,
-          });
-        }
-
-        if (seasons.length) {
-          return res.status(200).json({
-            success: true,
-            source: "animeworld-india.me/series",
-            series: {
-              seriesId: seriesID,
-              title: cleanText(titleMatch?.[1]),
-              poster: posterMatch?.[1] || null,
-              description: cleanText(descMatch?.[1]),
+      const foundAnime = findAnimeInDb(seriesID);
+      if (foundAnime) {
+        return res.status(200).json({
+          success: true,
+          source: "animeworld-india/seasons",
+          series: {
+            seriesId: foundAnime.slug,
+            title: foundAnime.title,
+            poster: foundAnime.poster,
+            totalEpisodes: String(foundAnime.episodes?.length || 12),
+          },
+          seasons: [
+            {
+              seasonNumber: "1",
+              seasonName: "Season 1 (Hindi Dubbed)",
+              seasonId: `${foundAnime.slug}-s1`,
+              episodes: String(foundAnime.episodes?.length || 12),
             },
-            seasons,
-          });
-        }
-      } catch {
-        // Fallback
+          ],
+        });
       }
 
       const found = CURATED_ANIME.find((a) => a.seriesId === seriesID) || CURATED_ANIME[0];
       return res.status(200).json({
         success: true,
-        source: "animeworld-india.me/series",
+        source: "animeworld-india/seasons",
         series: {
           seriesId: found.seriesId,
           title: found.title,
@@ -591,50 +659,41 @@ export default async function handler(req, res) {
       });
     }
 
-    // 5. EPISODES
+    // 4. EPISODES
     if (action === "episodes") {
       const seasonId = String(query.seasonId || "").trim();
       if (!seasonId) {
         return res.status(400).json({ success: false, error: "Missing seasonId parameter" });
       }
 
-      try {
-        const html = await fetchHtml(`${baseUrl}/season/${encodeURIComponent(seasonId)}`);
-        const epRegex = /<a[^>]*href=["']([^"']*\/episode\/[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
-        const episodes = [];
-        let em;
-        while ((em = epRegex.exec(html)) !== null) {
-          const href = em[1];
-          const block = em[2];
-          const epId = href.split("/episode/")[1]?.replace(/\/$/, "");
-          const title = block.match(/<h2[^>]*class=["'][^"']*entry-title[^"']*["'][^>]*>([\s\S]*?)<\/h2>/i);
-          const img = block.match(/<img[^>]*src=["']([^"']+)["']/i);
-          const num = block.match(/<span[^>]*class=["'][^"']*year[^"']*["'][^>]*>([\s\S]*?)<\/span>/i);
+      const cleanSlug = seasonId.replace(/-s\d+$/, "");
+      const foundAnime = findAnimeInDb(cleanSlug);
+      if (foundAnime && Array.isArray(foundAnime.episodes) && foundAnime.episodes.length > 0) {
+        const episodes = foundAnime.episodes.map((ep) => ({
+          episodeId: `${foundAnime.slug}-ep-${ep.ep}`,
+          title: ep.t || `Episode ${ep.ep}`,
+          episodeNumber: String(ep.ep),
+          image: ep.thumbnail || foundAnime.poster,
+        }));
 
-          episodes.push({
-            episodeId: epId,
-            title: cleanText(title?.[1]),
-            episodeNumber: cleanText(num?.[1]),
-            image: img?.[1] || null,
-          });
-        }
-
-        if (episodes.length) {
-          return res.status(200).json({
-            success: true,
-            source: "animeworld-india.me/season",
-            season: { seasonId },
-            episodes,
-          });
-        }
-      } catch {
-        // Fallback
+        return res.status(200).json({
+          success: true,
+          source: "animeworld-india/episodes",
+          season: {
+            seasonId,
+            animeTitle: foundAnime.title,
+            seasonName: "Season 1",
+            totalEpisodes: String(episodes.length),
+            poster: foundAnime.poster,
+          },
+          episodes,
+        });
       }
 
       const found = CURATED_ANIME.find((a) => a.seasons?.some((s) => s.seasonId === seasonId)) || CURATED_ANIME[0];
       return res.status(200).json({
         success: true,
-        source: "animeworld-india.me/season",
+        source: "animeworld-india/season",
         season: {
           seasonId,
           animeTitle: found.title,
@@ -647,7 +706,46 @@ export default async function handler(req, res) {
       });
     }
 
-    // 6. DEFAULT / UNKNOWN
+    // 5. HOME
+    if (action === "home") {
+      const seriesList = animeCatalog.slice(0, 16).map((a) => ({
+        title: a.title,
+        image: a.poster,
+        year: "2024",
+        rating: "8.6",
+        seriesId: a.slug,
+      }));
+
+      return res.status(200).json({
+        success: true,
+        source: "animeworld-india",
+        latest_series: seriesList.length ? seriesList : CURATED_ANIME.map((a) => ({
+          title: a.title,
+          image: a.image,
+          year: a.year,
+          rating: a.rating,
+          seriesId: a.seriesId,
+        })),
+        latest_movies: [
+          {
+            title: "Demon Slayer: Mugen Train",
+            image: "https://image.tmdb.org/t/p/w500/h8Rb9gBr48ODIwYUttZNYeMWeUU.jpg",
+            year: "2020",
+            rating: "8.8",
+            movieId: "demon-slayer-mugen-train",
+          },
+          {
+            title: "Jujutsu Kaisen 0",
+            image: "https://image.tmdb.org/t/p/w500/3pTwMAnsYV42Hgq97g9dHRI3JK5.jpg",
+            year: "2021",
+            rating: "8.7",
+            movieId: "jujutsu-kaisen-0",
+          },
+        ],
+      });
+    }
+
+    // DEFAULT
     return res.status(200).json({
       success: true,
       service: "AnimeWorld India API for UstreamPro",
@@ -659,7 +757,6 @@ export default async function handler(req, res) {
         "/api/animeworld?action=seasons&seriesID=<seriesID>",
         "/api/animeworld?action=episodes&seasonId=<seasonId>",
         "/api/animeworld?action=stream&episodeId=<episodeId>",
-        "/api/anime-world-india/v1/stream.php?episodeId=<episodeId>",
       ],
     });
   } catch (err) {
