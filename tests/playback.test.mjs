@@ -7,6 +7,9 @@ import { createTmdbClient, TmdbError } from "../src/modules/tmdb-client.js";
 import { TMDB_ATTRIBUTION, normalizeWatchProviders, pickRegion, watchHubHtml } from "../src/modules/watch-providers.js";
 import { tmdbRatingFromVotes } from "../src/modules/ratings.js";
 import tmdbHandler from "../api/tmdb.js";
+import configHandler from "../api/config.js";
+import routerHandler from "../api/router.js";
+import { verifyArchiveIdentifier } from "../api/archive.js";
 import { handler as localApiHandler } from "../lib/server.js";
 
 function response(status, data, headers = {}) {
@@ -256,4 +259,68 @@ test("removed playback sources and server selector are absent from app", async (
   assert.doesNotMatch(app, /STREAM_SERVERS|gaiaflix|vidsrc/i);
   assert.doesNotMatch(html, /STREAM_SERVERS|gaiaflix|vidsrc|server-selector/i);
   assert.doesNotMatch(app, /getEmbedStreamUrl|loadPreviewDetails|fetchEpisodeList|getStreamForTitle/);
+});
+
+test("/api/config reports capabilities without leaking secrets", async () => {
+  const priorKey = process.env.TMDB_API_KEY;
+  process.env.TMDB_API_KEY = "super-secret-do-not-leak";
+  try {
+    const res = mockRes();
+    await configHandler({ method: "GET", headers: {} }, res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.ok, true);
+    assert.equal(res.body.tmdbApiKeyConfigured, true);
+    assert.equal(res.body.mode, "live");
+    assert.ok(res.body.auth);
+    assert.ok(res.body.uploads);
+    assert.equal(JSON.stringify(res.body).includes("super-secret-do-not-leak"), false);
+  } finally {
+    if (priorKey === undefined) delete process.env.TMDB_API_KEY;
+    else process.env.TMDB_API_KEY = priorKey;
+  }
+});
+
+test("/api/archive verifies public-domain MP4 availability and rejects bad identifiers", async () => {
+  const bad = await verifyArchiveIdentifier("../etc/passwd");
+  assert.equal(bad.status, 400);
+  assert.equal(bad.payload.playable, false);
+
+  const ok = await verifyArchiveIdentifier("HisGirlFriday", {
+    fetchImpl: async () => response(200, {
+      metadata: { identifier: "HisGirlFriday", title: "His Girl Friday", year: 1940 },
+      files: [{ name: "HisGirlFriday.mp4", format: "h.264", size: 12345, length: 5290 }],
+    }),
+  });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.payload.playable, true);
+  assert.equal(ok.payload.mimeType, "video/mp4");
+  assert.match(ok.payload.streamUrl, /^https:\/\/archive\.org\/download\/HisGirlFriday\//);
+
+  const noMp4 = await verifyArchiveIdentifier("AudioOnlyItem", {
+    fetchImpl: async () => response(200, {
+      metadata: { identifier: "AudioOnlyItem" },
+      files: [{ name: "audio.mp3", format: "VBR MP3", size: 1000 }],
+    }),
+  });
+  assert.equal(noMp4.status, 422);
+  assert.equal(noMp4.payload.playable, false);
+});
+
+test("/api/router handles Vercel rewrite endpoint queries for auth and videos", async () => {
+  const priorVercel = process.env.VERCEL;
+  process.env.VERCEL = "1";
+  try {
+    const meRes = mockRes();
+    await routerHandler({ method: "GET", url: "/api/router?endpoint=/auth/me", headers: {}, query: { endpoint: "/auth/me" } }, meRes);
+    assert.equal(meRes.statusCode, 200);
+    assert.equal(meRes.body.ok, true);
+    assert.equal(meRes.body.authAvailable, false);
+
+    const streamRes = mockRes();
+    await routerHandler({ method: "GET", url: "/api/router?endpoint=/videos/stream/missing", headers: {}, query: { endpoint: "/videos/stream/missing" } }, streamRes);
+    assert.equal(streamRes.statusCode, 404);
+  } finally {
+    if (priorVercel === undefined) delete process.env.VERCEL;
+    else process.env.VERCEL = priorVercel;
+  }
 });

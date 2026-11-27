@@ -1,13 +1,27 @@
+# Environment & secret files (keep .env.example committed)
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Logs & OS junk
 *.log
 *.err
-node_modules/
 nul
+
+# Dependencies & tooling
+node_modules/
 .agents/
+.vercel
 demostream/
+
+# Local databases & user uploads
 data/*.db*
+data/ustream-auth-db.json
 data/uploads/videos/*
 data/uploads/thumbnails/*
 !data/uploads/videos/.gitkeep
 !data/uploads/thumbnails/.gitkeep
+
 .vercel

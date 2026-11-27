@@ -12,6 +12,7 @@
   ],
   "headers": [
     {
+      "source": "/(.*)",
       "headers": [
         {
           "key": "X-Content-Type-Options",
@@ -31,90 +32,101 @@
         },
         {
           "key": "Content-Security-Policy-Report-Only",
-          "value": "default-src 'self'; script-src 'self' 'sha256-6O67DjTf+tsVLoOSTvJyPnMM+O8W4wao45I1N2tUwhQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://image.tmdb.org https://static.tvmaze.com; font-src 'self' data:; media-src 'self' blob:; connect-src 'self' https://api.themoviedb.org https://api.tvmaze.com; frame-src https://www.youtube-nocookie.com; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+          "value": "default-src 'self'; script-src 'self' 'sha256-6O67DjTf+tsVLoOSTvJyPnMM+O8W4wao45I1N2tUwhQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://image.tmdb.org https://static.tvmaze.com https://archive.org https://*.archive.org; font-src 'self' data:; media-src 'self' blob: https://archive.org https://*.archive.org; connect-src 'self' https://api.tvmaze.com https://archive.org https://*.archive.org; frame-src 'self' https://www.youtube-nocookie.com https:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
         }
-      ],
-      "source": "/(.*)"
+      ]
     },
     {
+      "source": "/api/(.*)",
       "headers": [
         {
-          "key": "Access-Control-Allow-Origin",
-          "value": "https://ustream-pro.vercel.app"
-        },
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "GET, OPTIONS, POST"
-        },
-        {
-          "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type, Accept"
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
         }
-      ],
-      "source": "/api/(.*)"
+      ]
     },
     {
+      "source": "/",
       "headers": [
         {
           "key": "Cache-Control",
           "value": "public, max-age=0, must-revalidate"
         }
-      ],
-      "source": "/"
+      ]
     },
     {
+      "source": "/index.html",
       "headers": [
         {
           "key": "Cache-Control",
           "value": "public, max-age=0, must-revalidate"
         }
-      ],
-      "source": "/index.html"
+      ]
     },
     {
+      "source": "/assets/(.*)",
       "headers": [
         {
           "key": "Cache-Control",
           "value": "public, max-age=86400, stale-while-revalidate=604800"
         }
-      ],
-      "source": "/assets/(.*)"
+      ]
     },
     {
+      "source": "/modules/(.*)",
       "headers": [
         {
           "key": "Cache-Control",
           "value": "public, max-age=86400, stale-while-revalidate=604800"
         }
-      ],
-      "source": "/modules/(.*)"
+      ]
     },
     {
+      "source": "/(app|styles)\\.([0-9a-f]{8})\\.(js|css)",
       "headers": [
         {
           "key": "Cache-Control",
           "value": "public, max-age=31536000, immutable"
         }
-      ],
-      "source": "/(app|styles)\\.([0-9a-f]{8})\\.(js|css)"
+      ]
     }
   ],
   "rewrites": [
     {
-      "destination": "/api/health.json",
-      "source": "/api/health"
+      "source": "/api/anime-world-india/v1/(.*)",
+      "destination": "/api/animeworld?path=$1"
     },
     {
-      "destination": "/api/catalog.json",
-      "source": "/api/catalog"
+      "source": "/api/animeworld",
+      "destination": "/api/animeworld"
     },
     {
-      "destination": "/api/search.json",
-      "source": "/api/search"
+      "source": "/api/auth",
+      "destination": "/api/router?endpoint=/auth"
     },
     {
-      "destination": "/api/videos.json",
-      "source": "/api/videos"
+      "source": "/api/auth/(.*)",
+      "destination": "/api/router?endpoint=/auth/$1"
+    },
+    {
+      "source": "/api/profiles",
+      "destination": "/api/router?endpoint=/profiles"
+    },
+    {
+      "source": "/api/profiles/(.*)",
+      "destination": "/api/router?endpoint=/profiles/$1"
+    },
+    {
+      "source": "/api/profile/(.*)",
+      "destination": "/api/router?endpoint=/profile/$1"
+    },
+    {
+      "source": "/api/videos",
+      "destination": "/api/router?endpoint=/videos"
+    },
+    {
+      "source": "/api/videos/(.*)",
+      "destination": "/api/router?endpoint=/videos/$1"
     }
   ],
   "functions": {

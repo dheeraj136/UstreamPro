@@ -287,3 +287,26 @@ test("frozen total: unchanged while scrolling and appending batches", () => {
   assert.equal(h.frozenCounterTotal(258, 259), null);
   assert.equal(h.frozenCounterTotal(0, 10), null);
 });
+
+test("built public/app.js evaluates top-level initializers without TDZ or ReferenceError", async () => {
+  const prevDoc = globalThis.document;
+  const noopEl = {
+    addEventListener: () => {},
+    setAttribute: () => {},
+    removeAttribute: () => {},
+    classList: { toggle: () => {}, add: () => {}, remove: () => {} },
+    querySelector: () => null,
+    querySelectorAll: () => [],
+  };
+  globalThis.document = {
+    querySelector: () => noopEl,
+    querySelectorAll: () => [],
+    addEventListener: () => {},
+  };
+  try {
+    await assert.doesNotReject(() => import("../public/app.js"));
+  } finally {
+    if (prevDoc === undefined) delete globalThis.document;
+    else globalThis.document = prevDoc;
+  }
+});

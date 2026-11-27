@@ -4403,10 +4403,40 @@ main#main-content { padding-bottom: max(28px, var(--tabbar-offset)); }
 .modal-specs-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
 .modal-spec-item { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 12px 14px; }
 .modal-spec-item span { color: var(--muted); }
+.episodes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.episode-card {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: all .2s ease;
+}
+.episode-card:hover {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+.episode-card img {
+  width: 90px;
+  height: 52px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex: 0 0 90px;
+  background: var(--surface-3);
+}
+.episode-info { min-width: 0; }
+.episode-num { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; }
+.episode-name { font-size: 13px; font-weight: 600; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .watch-hub {
-  margin-top: 24px;
-  border-top: 1px solid var(--line);
-  padding-top: 20px;
+  display: none !important;
 }
 .watch-hub__heading { display: flex; justify-content: space-between; align-items: end; gap: 16px; margin-bottom: 10px; }
 .watch-hub__heading h3 { margin: 0; font-size: 20px; letter-spacing: -.02em; }
@@ -4551,4 +4581,46 @@ main#main-content { padding-bottom: max(28px, var(--tabbar-offset)); }
 @media (prefers-reduced-motion: reduce) {
   .ul-loader__dots span, .startup-loader span { animation: none; opacity: .8; }
   .nav-link, .watch-provider, .provider-tile { transition: none; }
+}
+
+.card-hover--discovery {
+  background: rgba(8, 9, 13, 0.45);
+  border-radius: var(--radius-card);
+}
+.card-hover--discovery:hover {
+  background: rgba(8, 9, 13, 0.55);
+}
+.card-discovery-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 13px;
+  border-radius: var(--radius-pill);
+  background: rgba(18, 20, 28, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+}
+.modal-playback-notice {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.player-scrubber-wrap {
+  touch-action: none;
+}
+.auth-unavailable-banner {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+  margin-bottom: 14px;
 }

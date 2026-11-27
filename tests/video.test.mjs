@@ -69,13 +69,15 @@ test("1. Video Upload Validation checks", () => {
   // Empty title
   assert.equal(validateVideoUpload({ title: "", originalFilename: "test.mp4" }).valid, false);
 
-  // Unsupported extension
+  // Unsupported extension (including .mkv lacking Safari/WebKit playback)
   assert.equal(validateVideoUpload({ title: "My Video", originalFilename: "malware.exe" }).valid, false);
+  assert.equal(validateVideoUpload({ title: "My Video", originalFilename: "movie.mkv", mimeType: "video/x-matroska" }).valid, false);
 
-  // Supported extensions
+  // Supported browser-compatible extensions
   assert.equal(validateVideoUpload({ title: "My Video", originalFilename: "clip.mp4" }).valid, true);
   assert.equal(validateVideoUpload({ title: "My Video", originalFilename: "clip.webm" }).valid, true);
   assert.equal(validateVideoUpload({ title: "My Video", originalFilename: "clip.mov" }).valid, true);
+  assert.equal(validateVideoUpload({ title: "My Video", originalFilename: "clip.ogg" }).valid, true);
 
   // File size limit
   assert.equal(validateVideoUpload({ title: "Valid", originalFilename: "test.mp4", size: MAX_VIDEO_SIZE + 100 }).valid, false);
@@ -219,4 +221,63 @@ test("5. Video Routes Integration (Authentication & Upload)", async () => {
   const listPayload = JSON.parse(listReq.res.body);
   assert.equal(listPayload.ok, true);
   assert.ok(listPayload.videos.some(v => v.title === "Creator Showcase"));
+
+  // HEAD and 206 Partial Content byte-range streaming
+  const uploadedId = uploadPayload.video.id;
+  const headStream = makeMockReqRes({
+    method: "HEAD",
+    url: `/api/videos/stream/${uploadedId}`,
+    headers: { range: "bytes=0-7" }
+  });
+  await handleVideoRoute(headStream.req, headStream.res, `/api/videos/stream/${uploadedId}`, db);
+  assert.equal(headStream.res.statusCode, 206);
+  assert.match(headStream.res.headers["content-range"], /^bytes 0-7\/\d+$/);
+  assert.equal(headStream.res.headers["accept-ranges"], "bytes");
+
+  const badRange = makeMockReqRes({
+    method: "GET",
+    url: `/api/videos/stream/${uploadedId}`,
+    headers: { range: "bytes=999999-" }
+  });
+  await handleVideoRoute(badRange.req, badRange.res, `/api/videos/stream/${uploadedId}`, db);
+  assert.equal(badRange.res.statusCode, 416);
+
+  // Clean up test upload via DELETE
+  const delReq = makeMockReqRes({
+    method: "DELETE",
+    url: `/api/videos/${uploadedId}`,
+    headers: { authorization: `Bearer ${session.token}` }
+  });
+  await handleVideoRoute(delReq.req, delReq.res, `/api/videos/${uploadedId}`, db);
+  assert.equal(delReq.res.statusCode, 200);
+});
+
+test("6. Vercel deployment without BLOB_READ_WRITE_TOKEN gates uploads cleanly", async () => {
+  const priorVercel = process.env.VERCEL;
+  const priorBlob = process.env.BLOB_READ_WRITE_TOKEN;
+  process.env.VERCEL = "1";
+  delete process.env.BLOB_READ_WRITE_TOKEN;
+  try {
+    const listReq = makeMockReqRes({ method: "GET", url: "/api/videos" });
+    await handleVideoRoute(listReq.req, listReq.res, "/api/videos");
+    assert.equal(listReq.res.statusCode, 200);
+    const listPayload = JSON.parse(listReq.res.body);
+    assert.equal(listPayload.storageConfigured, false);
+    assert.deepEqual(listPayload.videos, []);
+
+    const uploadNoOverride = makeMockReqRes({
+      method: "POST",
+      url: "/api/videos/upload",
+      headers: { "x-filename": "demo.mp4", "x-title": "Demo" }
+    });
+    await handleVideoRoute(uploadNoOverride.req, uploadNoOverride.res, "/api/videos/upload");
+    assert.equal(uploadNoOverride.res.statusCode, 503);
+    const uploadErr = JSON.parse(uploadNoOverride.res.body);
+    assert.equal(uploadErr.code, "UPLOAD_STORAGE_UNCONFIGURED");
+  } finally {
+    if (priorVercel === undefined) delete process.env.VERCEL;
+    else process.env.VERCEL = priorVercel;
+    if (priorBlob === undefined) delete process.env.BLOB_READ_WRITE_TOKEN;
+    else process.env.BLOB_READ_WRITE_TOKEN = priorBlob;
+  }
 });

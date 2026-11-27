@@ -5,11 +5,11 @@
 
 const memoryCache = new Map();
 
-// Bug 9 (storage side): same clamp as src/app.js -- ratings stored in the
-// catalog cache never exceed 9.9 and never fall back inconsistently.
+// Ratings stored in the catalog cache must never invent a fallback score.
 const clampStoredRating = (value) => {
+  if (value === null || value === undefined || value === "") return null;
   const rating = Number.parseFloat(value);
-  if (!Number.isFinite(rating) || rating <= 0) return 8.0;
+  if (!Number.isFinite(rating) || rating <= 0) return null;
   return Math.min(9.9, Math.max(0, Math.round(rating * 10) / 10));
 };
 const debouncedTimers = new Map();
@@ -128,30 +128,30 @@ export const storage = {
       tmdbId: item.tmdbId,
       subjectId: item.subjectId,
       title: item.title,
+      originalTitle: item.originalTitle || "",
       type: item.type || "movie",
       category: item.category || item.type || "movie",
-      year: item.year || 2024,
+      year: item.year ?? null,
       rating: clampStoredRating(item.rating),
       releaseDate: item.releaseDate || item.first_air_date || item.release_date || "",
       isComingSoon: Boolean(item.isComingSoon || item.comingSoon),
       comingSoon: Boolean(item.isComingSoon || item.comingSoon),
       originalLanguage: item.originalLanguage || "",
-      runtime: item.runtime || item.duration || "—",
+      runtime: item.runtime || item.duration || "",
       image: item.image || item.cover?.url || "",
       backdrop: item.backdrop || item.image || "",
       genre: Array.isArray(item.genre) ? item.genre : [item.type || "movie"],
       description: item.description ? item.description.slice(0, 280) : (item.overview ? item.overview.slice(0, 280) : ""),
       kicker: item.kicker || (item.type === "series" ? "Hit Series" : "Blockbuster"),
-      badge: item.badge || "HD",
+      badge: item.badge || "",
       gradient: item.gradient || "linear-gradient(145deg, #1e293b, #0f172a 50%, #020617)",
-      country: item.country || item.countryName || "United States",
-      language: item.language || "English, Multi Sub",
+      country: item.country || item.countryName || "",
+      language: item.language || "",
       adult: Boolean(item.adult || item.isAdult),
       isAdult: Boolean(item.adult || item.isAdult),
       maturityRating: item.maturityRating || "",
       isJapaneseAnime: Boolean(item.isJapaneseAnime),
       isCartoon: Boolean(item.isCartoon),
-      video: item.video || "",
       seNum: item.seNum ?? (item.type === "movie" ? 0 : 1),
       mediaType: item.mediaType || (item.type === "movie" ? "movie" : "tv")
     }));

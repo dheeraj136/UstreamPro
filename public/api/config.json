@@ -1,6 +1,33 @@
 {
   "ok": true,
+  "service": "ustream",
   "configured": false,
   "tmdbApiKeyConfigured": false,
-  "mode": "browser-fallback"
+  "mode": "unconfigured",
+  "auth": {
+    "enabled": true,
+    "persistence": "local",
+    "googleOAuthEnabled": false
+  },
+  "uploads": {
+    "enabled": true,
+    "mode": "local",
+    "maxBytes": 157286400,
+    "allowedExtensions": [
+      ".mp4",
+      ".webm",
+      ".ogg",
+      ".mov"
+    ],
+    "allowedMimeTypes": [
+      "video/mp4",
+      "video/webm",
+      "video/ogg",
+      "video/quicktime"
+    ]
+  },
+  "archive": {
+    "serverVerification": true,
+    "endpoint": "/api/archive"
+  }
 }

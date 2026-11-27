@@ -143,12 +143,50 @@ export function normalizeArchiveItem(payload, curated) {
       || `${title} — a public-domain classic, free to watch on Ustream.`,
     genre: ["classic"],
     rating: null,
+    authorizedPlayback: true,
+    mimeType: "video/mp4",
     streamUrl: archiveStreamUrl(identifier, file.name),
+  };
+}
+
+function normalizeServerVerifiedArchiveItem(payload, curated) {
+  if (!payload || payload.ok === false || payload.playable === false) return null;
+  const identifier = payload.identifier || curated?.identifier || "";
+  const streamUrl = payload.streamUrl || "";
+  if (!identifier || !streamUrl) return null;
+  const meta = payload.metadata || {};
+  const title = curated?.title || String(meta.title || identifier);
+  const year = metadataYear(meta, curated?.year);
+  return {
+    subjectId: `archive-${identifier}`,
+    archiveId: identifier,
+    source: "archive",
+    free: true,
+    authorizedPlayback: true,
+    title,
+    type: "movie",
+    category: "movie",
+    year,
+    releaseDate: year ? `${year}-01-01` : "",
+    runtime: formatArchiveRuntime(meta.runtimeSeconds || meta.runtime || meta.length),
+    language: "English",
+    kicker: "Public domain · Internet Archive",
+    badge: "Free",
+    image: payload.posterUrl || archivePosterUrl(identifier),
+    cover: { url: payload.posterUrl || archivePosterUrl(identifier) },
+    gradient: "linear-gradient(145deg, #1e293b, #0f172a 50%, #020617)",
+    description: cleanDescription(meta.description)
+      || `${title} — a public-domain classic, free to watch on Ustream.`,
+    genre: ["classic"],
+    rating: null,
+    mimeType: payload.mimeType || "video/mp4",
+    streamUrl,
   };
 }
 
 export function createArchiveClient({
   films = CURATED_ARCHIVE_FILMS,
+  verifyUrl = "",
   cache = null,
   fetchImpl = (typeof fetch !== "undefined" ? fetch.bind(globalThis) : null),
   timeoutMs = 8000,
@@ -167,6 +205,30 @@ export function createArchiveClient({
     const next = queue.shift();
     if (next) next(); else active -= 1;
   };
+
+  async function fetchVerifiedViaServer(curated, signal) {
+    if (!verifyUrl) return undefined;
+    const cacheKey = `archive:verified:${curated.identifier}`;
+    const cached = cache?.get(cacheKey);
+    if (cached !== undefined) return cached;
+    await acquire();
+    try {
+      const res = await fetchWithRetry(`${verifyUrl}?id=${encodeURIComponent(curated.identifier)}`, {
+        timeoutMs, retries: 0, backoffMs, signal, fetchImpl,
+      });
+      const data = await res.json().catch(() => null);
+      if (!data || typeof data !== "object") return undefined;
+      cache?.set(cacheKey, data, cacheTtlMs);
+      return data;
+    } catch (error) {
+      if (error?.status === 404 || error?.status === 422) {
+        return { ok: false, playable: false };
+      }
+      return undefined;
+    } finally {
+      release();
+    }
+  }
 
   async function fetchMetadata(curated, signal) {
     const cacheKey = `archive:${curated.identifier}`;
@@ -190,12 +252,16 @@ export function createArchiveClient({
    * getFreeMovies() -> normalised, playable films in curated order.
    * Items that fail to verify (network error, no MP4, removed item)
    * are dropped individually; an empty array means "hide the row".
-   * Throws only when the caller wants to distinguish a total failure
-   * from an empty result — in practice the section hides either way.
    */
   async function getFreeMovies({ signal } = {}) {
     const settled = await Promise.all(films.map(async (curated) => {
       try {
+        if (verifyUrl) {
+          const verified = await fetchVerifiedViaServer(curated, signal);
+          if (verified !== undefined) {
+            return normalizeServerVerifiedArchiveItem(verified, curated);
+          }
+        }
         const payload = await fetchMetadata(curated, signal);
         return normalizeArchiveItem(payload, curated);
       } catch {

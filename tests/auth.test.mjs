@@ -420,3 +420,60 @@ test("9. HTTP Auth Routes (Register, Login, Me, Profile Selection, Logout)", asy
   const meBody2 = JSON.parse(meRes2.body);
   assert.equal(meBody2.user, null);
 });
+
+test("10. Auth HTTP routes do not leak reset/verification tokens in production and handle unconfigured Vercel DB", async () => {
+  const priorNodeEnv = process.env.NODE_ENV;
+  const priorExpose = process.env.USTREAM_EXPOSE_DEV_TOKENS;
+  const priorVercel = process.env.VERCEL;
+  process.env.NODE_ENV = "production";
+  delete process.env.USTREAM_EXPOSE_DEV_TOKENS;
+  try {
+    const db = createDatabase(":memory:");
+    const { req: regReq, res: regRes } = makeMockReqRes({
+      method: "POST",
+      url: "/api/auth/register",
+      rawBody: JSON.stringify({
+        email: "prodcheck@ustream.tv",
+        password: "ProdPassword1!",
+        name: "ProdUser"
+      })
+    });
+    await handleAuthRoute(regReq, regRes, "/api/auth/register", db);
+    assert.equal(regRes.statusCode, 201);
+    const regBody = JSON.parse(regRes.body);
+    assert.equal(regBody.verificationToken, undefined);
+
+    const { req: forgotReq, res: forgotRes } = makeMockReqRes({
+      method: "POST",
+      url: "/api/auth/forgot-password",
+      rawBody: JSON.stringify({ email: "prodcheck@ustream.tv" })
+    });
+    await handleAuthRoute(forgotReq, forgotRes, "/api/auth/forgot-password", db);
+    assert.equal(forgotRes.statusCode, 200);
+    const forgotBody = JSON.parse(forgotRes.body);
+    assert.equal(forgotBody.resetToken, undefined);
+
+    process.env.VERCEL = "1";
+    const { req: meReq, res: meRes } = makeMockReqRes({ method: "GET", url: "/api/auth/me" });
+    await handleAuthRoute(meReq, meRes, "/api/auth/me");
+    assert.equal(meRes.statusCode, 200);
+    const meBody = JSON.parse(meRes.body);
+    assert.equal(meBody.authAvailable, false);
+    assert.equal(meBody.user, null);
+
+    const { req: loginReq, res: loginRes } = makeMockReqRes({
+      method: "POST",
+      url: "/api/auth/login",
+      rawBody: JSON.stringify({ email: "prodcheck@ustream.tv", password: "ProdPassword1!" })
+    });
+    await handleAuthRoute(loginReq, loginRes, "/api/auth/login");
+    assert.equal(loginRes.statusCode, 503);
+  } finally {
+    if (priorNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = priorNodeEnv;
+    if (priorExpose === undefined) delete process.env.USTREAM_EXPOSE_DEV_TOKENS;
+    else process.env.USTREAM_EXPOSE_DEV_TOKENS = priorExpose;
+    if (priorVercel === undefined) delete process.env.VERCEL;
+    else process.env.VERCEL = priorVercel;
+  }
+});

@@ -772,8 +772,12 @@ DEMO_ITEMS.forEach((item) => {
 let catalog = [...DEMO_ITEMS];
 let recommendations = DEMO_ITEMS.slice(0, 6);
 function pickRandomFeatured(items, poolSize = 20) {
-  const pool = items.slice(0, Math.min(poolSize, items.length));
-  return pool[Math.floor(Math.random() * pool.length)];
+  const list = Array.isArray(items) ? items : [];
+  const released = list.filter((item) => !isUnreleasedItem(item));
+  const rated = released.filter((item) => normalizeRating(item?.rating) != null);
+  const candidates = rated.length ? rated : (released.length ? released : list);
+  const pool = candidates.slice(0, Math.min(poolSize, candidates.length));
+  return pool[Math.floor(Math.random() * pool.length)] || null;
 }
 let featured = pickRandomFeatured(DEMO_ITEMS);
 
@@ -988,13 +992,17 @@ function catalogIndexHas(index, item) {
   return false;
 }
 function dedupeCatalogItems(items) {
-  const seen = new Set();
+  const seenIdx = new Map();
   const out = [];
   for (const item of items || []) {
     if (!item || !item.title) continue;
     const key = catalogItemKey(item);
-    if (seen.has(key)) continue;
-    seen.add(key);
+    if (seenIdx.has(key)) {
+      const idx = seenIdx.get(key);
+      if (isBetterEvidence(item, out[idx])) out[idx] = item;
+      continue;
+    }
+    seenIdx.set(key, out.length);
     out.push(item);
   }
   // Second pass (bug 11, round 3): same work under a different TMDB id
@@ -1243,12 +1251,12 @@ function isUnreleasedDate(dateStr, year) {
   }
   return false;
 }
-const isUnreleasedItem = (item) => {
+function isUnreleasedItem(item) {
   if (!item) return false;
   if (item.isComingSoon) return true;
   const dateStr = String(item.releaseDate || item.first_air_date || item.release_date || "");
   return isUnreleasedDate(dateStr, item.year);
-};
+}
 
 const apiResponseCache = createTtlCache({
   ttlMs: 30 * 60 * 1000,
@@ -1258,15 +1266,10 @@ const apiResponseCache = createTtlCache({
   storage: safeSessionStorage(),
 });
 // TMDB_API_KEY is kept server-side only. No API credentials are shipped
-// in the browser bundle; the /api/tmdb Vercel function is the sole source.
-const TMDB_PUBLIC_KEYS = [
-  "e9e9d8da18ae29fc430845952232787c", // High availability primary TMDB API v3 key
-  "16f62d38fec24f4e6c2adc9388da20ce"  // Backup key
-];
-
+// in the browser bundle; the /api/tmdb endpoint is the sole source.
 const tmdbClient = createTmdbClient({
   proxyUrl: "/api/tmdb",
-  keys: TMDB_PUBLIC_KEYS,
+  keys: [],
   cache: apiResponseCache,
   timeoutMs: 7000,
   retries: 2,
@@ -1274,10 +1277,43 @@ const tmdbClient = createTmdbClient({
 });
 const watchProviderCache = new Map();
 const WATCH_PROVIDER_TTL_MS = 12 * 60 * 60 * 1000;
-// Internet Archive public-domain films: verified at runtime against
-// the Archive metadata API, then played directly in the native player.
-// No key, no account — see src/modules/archive.js.
-const archiveClient = createArchiveClient({ cache: apiResponseCache });
+// Internet Archive public-domain films: verified via /api/archive (or
+// Archive metadata API fallback), then played directly in the native player.
+const archiveClient = createArchiveClient({ verifyUrl: "/api/archive", cache: apiResponseCache });
+let appConfig = {
+  tmdbApiKeyConfigured: false,
+  mode: "unconfigured",
+  auth: { enabled: false, persistence: "unconfigured", googleOAuthEnabled: false },
+  uploads: {
+    enabled: false,
+    mode: "disabled",
+    maxBytes: 150 * 1024 * 1024,
+    allowedExtensions: [".mp4", ".webm", ".mov", ".ogg"],
+    allowedMimeTypes: ["video/mp4", "video/webm", "video/quicktime", "video/ogg"],
+  },
+  archive: { serverVerification: true, endpoint: "/api/archive" },
+};
+let appConfigPromise = null;
+async function loadAppConfig() {
+  if (!appConfigPromise) {
+    appConfigPromise = fetch("/api/config", { headers: { Accept: "application/json" } })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && typeof data === "object") {
+          appConfig = {
+            ...appConfig,
+            ...data,
+            auth: { ...appConfig.auth, ...(data.auth || {}) },
+            uploads: { ...appConfig.uploads, ...(data.uploads || {}) },
+            archive: { ...appConfig.archive, ...(data.archive || {}) },
+          };
+        }
+        return appConfig;
+      })
+      .catch(() => appConfig);
+  }
+  return appConfigPromise;
+}
 let archiveFilms = [];
 let detailLoadGeneration = 0;
 let detailsReturnFocus = null;
@@ -1318,7 +1354,13 @@ async function loadWhereToWatch(item, { region = "", generation = detailLoadGene
     finishLoading();
     container.innerHTML = watchHubHtml(null, {
       title: item?.title,
-      extraNote: item?.source === "tvmaze" ? "TVMaze can help you find this series, but it does not provide streaming availability." : "This title does not have a verified TMDB ID, so provider availability cannot be checked.",
+      extraNote: item?.source === "archive"
+        ? "This public-domain film is free to watch directly in Ustream's native player."
+        : item?.isUserUpload
+          ? "This community upload plays directly in Ustream's native player."
+          : item?.source === "tvmaze"
+            ? "TVMaze can help you find this series, but it does not provide streaming availability."
+            : "This title does not have a verified TMDB ID, so provider availability cannot be checked.",
     });
     return;
   }
@@ -1654,7 +1696,8 @@ async function loadLiveCatalog(isRetry = false) {
   liveCatalogLoading = true;
   
   // Instant Cold-Start Rendering: Check if cached catalog exists to show immediately (0ms delay)
-  const cached = storage.get("ustream-catalog-cache-v3");
+  storage.remove("ustream-catalog-cache-v3");
+  const cached = storage.get("ustream-catalog-cache-v4");
   if (cached) {
     try {
       if (Array.isArray(cached) && cached.length >= 20 && cached[0]?.kicker) {
@@ -1710,12 +1753,12 @@ async function loadLiveCatalog(isRetry = false) {
     // flight) must not overwrite the newer catalog with stale results.
     if (catalogGen !== catalogGeneration) return;
 
-    // Single source of truth: DEMO first, then live items, deduped by
-    // TMDB id (then subject/title+year+type). First copy wins, so curated
-    // titles keep their curated ratings.
+    // Live TMDB items come first so trending/popular order and real vote_average
+    // ratings lead the catalog; DEMO_ITEMS fill in any missing curated classics.
+    const liveItems = results.flatMap(({ items }) => items || []);
     const successfulItems = dedupeCatalogItems([
+      ...liveItems,
       ...DEMO_ITEMS,
-      ...results.flatMap(({ items }) => items || []),
     ]);
 
     if (successfulItems.length >= 20) {
@@ -1729,7 +1772,7 @@ async function loadLiveCatalog(isRetry = false) {
       catalogRowsLoading = false;
       render();
       try {
-        storage.set("ustream-catalog-cache-v3", storage.compactCatalog(catalog, MAX_CACHED_CATALOG_SIZE));
+        storage.set("ustream-catalog-cache-v4", storage.compactCatalog(catalog, MAX_CACHED_CATALOG_SIZE));
       } catch {}
       if (!cached) {
         showToast(`Loaded ${successfulItems.length} titles across all categories`);
@@ -1847,7 +1890,7 @@ async function fetchNextRemoteBatch(targetSection) {
     // growing live list — same rule as the "Showing X of Y" counter.
     updateStatusBadge(true, frozenCatalogTotal);
     try {
-      storage.set("ustream-catalog-cache-v3", storage.compactCatalog(catalog, MAX_CACHED_CATALOG_SIZE));
+      storage.set("ustream-catalog-cache-v4", storage.compactCatalog(catalog, MAX_CACHED_CATALOG_SIZE));
     } catch {}
   }
   if (catalog.length >= MAX_CATALOG_SIZE) hasMoreContent = false;
@@ -2053,6 +2096,73 @@ async function loadNewestRecommendations() {
   }
 }
 
+function hasAuthorizedInAppPlayback(item) {
+  if (!item || isUnreleasedItem(item)) return false;
+  if (item.source === "archive" && item.archiveId && item.streamUrl) return true;
+  if (item.isUserUpload && (item.video || item.playUrl?.url || item.streamUrl)) return true;
+  if (item.licensed === true && item.authorizedPlayback === true && item.streamUrl) return true;
+  return false;
+}
+
+function renderMetaChipsHtml(item) {
+  const ratingVal = normalizeRating(item?.rating);
+  const ratingBadge = ratingVal == null
+    ? (item?.source === "archive"
+        ? `<span class="rating-unavailable">Public Domain</span>`
+        : item?.source === "tvmaze"
+          ? `<span class="rating-unavailable">TVMaze listing</span>`
+          : `<span class="rating-unavailable">No TMDB rating</span>`)
+    : `<span class="badge-imdb" title="TMDB audience rating">★ ${ratingVal.toFixed(1)}</span>`;
+  return `
+    ${ratingBadge}
+    ${item?.year ? `<span>${escapeHtml(item.year)}</span>` : ""}
+    ${item?.runtime && item.runtime !== "—" ? `<span>${escapeHtml(item.runtime)}</span>` : ""}
+  `;
+}
+
+function formatTmdbRuntime(details, mediaType) {
+  if (!details) return "";
+  if (mediaType === "movie" && Number(details.runtime) > 0) {
+    const h = Math.floor(details.runtime / 60);
+    const m = details.runtime % 60;
+    return h > 0 ? `${h}h ${String(m).padStart(2, "0")}m` : `${m}m`;
+  }
+  if (mediaType === "tv" && Number(details.number_of_seasons) > 0) {
+    const s = Number(details.number_of_seasons);
+    return `${s} season${s === 1 ? "" : "s"}`;
+  }
+  return "";
+}
+
+async function hydrateItemMetadata(item) {
+  const tmdbId = item?.tmdbId || item?.id;
+  if (!item || !/^\d+$/.test(String(tmdbId || ""))) return;
+  const needsRating = normalizeRating(item.rating) == null;
+  const needsRuntime = !item.runtime || item.runtime === "—";
+  if (!needsRating && !needsRuntime) return;
+  const mediaType = tmdbMediaTypeFor(item);
+  try {
+    const details = await fetchTmdbApi(`/${mediaType}/${tmdbId}`);
+    if (!details) return;
+    const nextRating = tmdbRatingFromVotes(details.vote_average, details.vote_count);
+    if (nextRating != null) {
+      item.rating = nextRating;
+      item.imdbRatingValue = String(nextRating);
+    }
+    const nextRuntime = formatTmdbRuntime(details, mediaType);
+    if (nextRuntime) item.runtime = nextRuntime;
+    if (!item.description && details.overview) item.description = details.overview;
+    if (featured === item || (featured?.tmdbId && String(featured.tmdbId) === String(tmdbId))) {
+      const heroMeta = $("#hero-meta");
+      if (heroMeta) heroMeta.innerHTML = renderMetaChipsHtml(item);
+    }
+    if (state.activeModal === item || (state.activeModal?.tmdbId && String(state.activeModal.tmdbId) === String(tmdbId))) {
+      const modalMeta = $("#modal-meta");
+      if (modalMeta) modalMeta.innerHTML = renderMetaChipsHtml(item);
+    }
+  } catch {}
+}
+
 function setFeatured(item) {
   if (!item) return;
   // Never feature an unreleased title in the hero.
@@ -2079,17 +2189,9 @@ function setFeatured(item) {
     heroDesc.textContent = item.description || "Discover this title and find authorised places to watch.";
   }
 
-  const ratingVal = normalizeRating(item.rating);
-  const maturityRating = "";
-
   const heroMeta = $("#hero-meta");
   if (heroMeta) {
-    heroMeta.innerHTML = `
-      ${ratingVal == null ? `<span class="rating-unavailable">No TMDB rating</span>` : `<span class="badge-imdb" title="TMDB audience rating">★ ${ratingVal.toFixed(1)}</span>`}
-      ${maturityRating ? `<span class="badge-age">${escapeHtml(maturityRating)}</span>` : ""}
-      ${item.year ? `<span>${escapeHtml(item.year)}</span>` : ""}
-      ${item.runtime && item.runtime !== "—" ? `<span>${escapeHtml(item.runtime)}</span>` : ""}
-    `;
+    heroMeta.innerHTML = renderMetaChipsHtml(item);
   }
 
   const genrePillsContainer = $("#hero-genre-pills");
@@ -2110,7 +2212,14 @@ function setFeatured(item) {
   if (heroCredit) heroCredit.innerHTML = `<span>${escapeHtml(item.kicker || "Featured")}</span> · ${escapeHtml(item.country || "Catalog")}`;
 
   const playBtn = $("#hero-play");
-  if (playBtn) playBtn.dataset.title = item.title;
+  if (playBtn) {
+    playBtn.dataset.title = item.title;
+    playBtn.dataset.action = item.source === "archive" ? "play-archive" : "play";
+    if (item.archiveId) playBtn.dataset.archiveId = item.archiveId;
+    else delete playBtn.dataset.archiveId;
+    playBtn.setAttribute("aria-label", `Play ${item.title}`);
+    playBtn.innerHTML = `${renderIcon("play", "icon-sm")} <span>Play</span>`;
+  }
 
   const trailerBtn = $("#hero-trailer");
   if (trailerBtn) trailerBtn.dataset.title = item.title;
@@ -2139,6 +2248,7 @@ function setFeatured(item) {
     }
   }
   stopHeroMotionPreview();
+  void hydrateItemMetadata(item);
 }
 
 // Titles for which TMDB returned no official trailer: their Trailer
@@ -2169,11 +2279,13 @@ function setTrailerButtonsHidden() {
 async function playTrailer(title) {
   const item = findTitle(title) || featured;
   if (!item) return;
+  stopAllMediaPlayback();
   const requestId = ++state.player.requestId;
   const isCurrentRequest = () => state.player.requestId === requestId && state.player.trailerTitle === item.title;
   const playerBackdrop = $("#player-backdrop");
   const playerTitle = $("#player-title");
   if (!playerReturnFocus) playerReturnFocus = document.activeElement;
+  state.player.item = item;
   state.player.trailerTitle = item.title;
   state.player.nativeSource = null;
   if (playerTitle) playerTitle.textContent = `${item.title} — Official Trailer`;
@@ -2184,7 +2296,7 @@ async function playTrailer(title) {
     let trailerKey = null;
     const tmdbId = item.tmdbId || item.id;
     const mediaType = (item.type === "series" || item.category === "series" || item.category === "tv") ? "tv" : "movie";
-    if (tmdbId) {
+    if (tmdbId && /^\d+$/.test(String(tmdbId))) {
       const videoData = await fetchTmdbApi(`/${mediaType}/${tmdbId}/videos`);
       if (!isCurrentRequest()) return;
       const trailer = pickOfficialTrailer(videoData?.results || []);
@@ -2215,7 +2327,7 @@ async function playTrailer(title) {
       }
       if (playerTitle) playerTitle.textContent = `${item.title} — Official Trailer`;
       if (playerBackdrop) playerBackdrop.hidden = false;
-      setPlayerState(PLAYER_STATE.PLAYING, `Playing official trailer: ${item.title}`);
+      setPlayerState(PLAYER_STATE.LOADING, `Loading official trailer: ${item.title}…`);
       return;
     }
 
@@ -2579,12 +2691,14 @@ function setSection(section, updateHash = true) {
   // Render the new section
   render();
 
-  // Update featured hero to a top title from the active category!
+  // Update featured hero to a top rated title from the active category!
   const visible = getVisibleCards();
   if (visible.length > 0 && target !== "home") {
-    setFeatured(visible[0]);
+    const rated = visible.find((i) => normalizeRating(i.rating) != null && !isUnreleasedItem(i));
+    setFeatured(rated || visible[0]);
   } else if (catalog.length > 0 && target === "home") {
-    const cleanItem = catalog.find((i) => isAdultEnabled() || !isAdultContent(i));
+    const cleanItems = catalog.filter((i) => isAdultEnabled() || !isAdultContent(i));
+    const cleanItem = pickRandomFeatured(cleanItems);
     if (cleanItem) setFeatured(cleanItem);
   }
 
@@ -2863,13 +2977,10 @@ function renderCard(card, { isNew = false } = {}) {
     ? `<span class="score score-unavailable">No rating</span>`
     : `<span class="score">★ ${ratingVal.toFixed(1)}</span>`;
 
-  // Archive films play directly in the native player — they never open
-  // the "Where to watch" hub, and they cannot be saved to My List
-  // (they are not catalog titles, so a saved entry could not resolve).
   const isArchive = card.source === "archive";
   const playButtonHtml = isArchive
     ? `<button class="card-hover" data-action="play-archive" data-archive-id="${escapeHtml(card.archiveId)}" aria-label="Play ${cleanTitle} free"><span class="play-circle">${renderIcon("play", "icon-md")}</span></button>`
-    : `<button class="card-hover" data-action="play" data-title="${cleanTitle}" aria-label="Where to watch ${cleanTitle}"><span class="play-circle">${renderIcon("play", "icon-md")}</span></button>`;
+    : `<button class="card-hover" data-action="play" data-title="${cleanTitle}" aria-label="Play ${cleanTitle}"><span class="play-circle">${renderIcon("play", "icon-md")}</span></button>`;
   const listButtonHtml = isArchive
     ? ""
     : `<button class="list-toggle ${saved ? "saved" : ""}" data-action="toggle-list" data-title="${cleanTitle}" aria-label="${saved ? "Remove" : "Add"} ${cleanTitle} ${saved ? "from" : "to"} my list">${saved ? renderIcon("heartFilled", "icon-sm") : renderIcon("plus", "icon-sm")}</button>`;
@@ -3328,16 +3439,8 @@ function openDetails(title, { updateHash = true, focusWatch = false } = {}) {
   if (modalTitle) modalTitle.textContent = item.title;
   if (modalKicker) modalKicker.textContent = item.kicker || "Title details";
 
-  const ratingVal = normalizeRating(item.rating);
-  const maturityRating = "";
-
   if (modalMeta) {
-    modalMeta.innerHTML = `
-      ${ratingVal == null ? `<span class="rating-unavailable">No TMDB rating</span>` : `<span class="badge-imdb" title="TMDB audience rating">★ ${ratingVal.toFixed(1)}</span>`}
-      ${maturityRating ? `<span class="badge-age">${escapeHtml(maturityRating)}</span>` : ""}
-      ${item.year ? `<span>${escapeHtml(item.year)}</span>` : ""}
-      ${item.runtime && item.runtime !== "—" ? `<span>${escapeHtml(item.runtime)}</span>` : ""}
-    `;
+    modalMeta.innerHTML = renderMetaChipsHtml(item);
   }
 
   if (modalDesc) {
@@ -3352,12 +3455,21 @@ function openDetails(title, { updateHash = true, focusWatch = false } = {}) {
   }
 
   if (modalPlay) {
-    const playLabel = modalPlay.querySelector("span");
     modalPlay.disabled = false;
     modalPlay.removeAttribute("aria-disabled");
-    if (playLabel) playLabel.textContent = "Where to watch";
-    modalPlay.onclick = focusWatchHub;
+    modalPlay.innerHTML = `${renderIcon("play", "icon-sm")} <span>Play Now</span>`;
+    modalPlay.setAttribute("aria-label", `Play ${item.title}`);
+    modalPlay.onclick = () => {
+      closeDetails();
+      playTitle(item.title);
+    };
   }
+  const playbackNotice = $("#modal-playback-notice");
+  if (playbackNotice) {
+    playbackNotice.hidden = true;
+    playbackNotice.textContent = "";
+  }
+  void hydrateItemMetadata(item);
 
   const modalTrailerBtn = $("#modal-trailer");
   if (modalTrailerBtn) modalTrailerBtn.hidden = trailerUnavailableTitles.has(item.title);
@@ -3439,11 +3551,24 @@ function openDetails(title, { updateHash = true, focusWatch = false } = {}) {
       if (listBtn && relatedGrid.contains(listBtn)) {
         return;
       }
-      const btn = e.target.closest("[data-action='play']");
-      if (btn && relatedGrid.contains(btn)) {
+      const archiveBtn = e.target.closest("[data-action='play-archive']");
+      if (archiveBtn && relatedGrid.contains(archiveBtn)) {
         e.stopPropagation();
         closeDetails();
-        playTitle(btn.dataset.title);
+        playArchiveFilm(archiveBtn.dataset.archiveId);
+        return;
+      }
+      const authBtn = e.target.closest("[data-action='play-authorized']");
+      if (authBtn && relatedGrid.contains(authBtn)) {
+        e.stopPropagation();
+        closeDetails();
+        playTitle(authBtn.dataset.title);
+        return;
+      }
+      const btn = e.target.closest("[data-action='play'], [data-action='details']");
+      if (btn && relatedGrid.contains(btn)) {
+        e.stopPropagation();
+        openDetails(btn.dataset.title);
         return;
       }
       const card = e.target.closest(".media-card");
@@ -3472,13 +3597,20 @@ function openDetails(title, { updateHash = true, focusWatch = false } = {}) {
   // Focus the dialog itself (tabindex="-1" in index.html) so Escape is
   // received by this document; focusing a button would let Space close it.
   $("#detail-modal")?.focus({ preventScroll: true });
-  const watchContent = $("#watch-hub-content");
-  if (watchContent) {
-    watchContent.innerHTML = loaderHtml({ label: "Checking authorised watch options…", size: "sm" });
-    watchContent.setAttribute("aria-busy", "true");
+
+  const isAnime = item.category === "anime" || item.isJapaneseAnime;
+  const isSeries = item.type === "series" || item.category === "series" || item.category === "tv";
+  const epTabBtn = $("#modal-tab-episodes");
+  const epContainer = $("#modal-episodes-container");
+  if (epTabBtn && epContainer) {
+    if (isAnime || isSeries) {
+      epTabBtn.hidden = false;
+      void loadAnimeEpisodes(item, epContainer);
+    } else {
+      epTabBtn.hidden = true;
+      epContainer.innerHTML = "";
+    }
   }
-  void loadWhereToWatch(item, { generation });
-  if (focusWatch) requestAnimationFrame(() => focusWatchHub());
 }
 
 const isHttpUrl = (value) => typeof value === "string" && /^https?:\/\//i.test(value);
@@ -3630,6 +3762,7 @@ function setPlayerState(nextState, customMessage = "") {
       }
       break;
     case PLAYER_STATE.READY:
+      $("#player-buffering-spinner")?.setAttribute("hidden", "true");
       if (liveLabel) {
         liveLabel.hidden = false;
         if (liveText) liveText.textContent = "Ready";
@@ -3641,6 +3774,7 @@ function setPlayerState(nextState, customMessage = "") {
       }
       break;
     case PLAYER_STATE.PLAYING:
+      $("#player-buffering-spinner")?.setAttribute("hidden", "true");
       if (liveLabel) {
         liveLabel.hidden = false;
         if (liveText) liveText.textContent = "Now playing";
@@ -3652,6 +3786,7 @@ function setPlayerState(nextState, customMessage = "") {
       }
       break;
     case PLAYER_STATE.ERROR:
+      $("#player-buffering-spinner")?.setAttribute("hidden", "true");
       if (liveLabel) {
         liveLabel.hidden = false;
         if (liveText) liveText.textContent = "Unavailable";
@@ -3730,16 +3865,142 @@ function togglePlayerSettings(force) {
 
 
 
-// Ustream does not stream catalog titles. "Watch" on a movie, series,
-// anime or cartoon opens its details at the "Where to watch" hub, which
-// links out to authorised providers (TMDB watch-provider data, powered
-// by JustWatch). The native player plays community uploads and
-// Internet Archive public-domain films only, and official trailers
-// play in the YouTube-nocookie embed.
+async function playAnime(item, episodeId = null) {
+  stopAllMediaPlayback();
+  const requestId = ++state.player.requestId;
+  const isCurrentRequest = () => state.player.requestId === requestId;
+  const playerBackdrop = $("#player-backdrop");
+  const playerTitle = $("#player-title");
+  if (!playerReturnFocus) playerReturnFocus = document.activeElement;
+  state.player.item = item;
+  state.player.trailerTitle = null;
+  state.player.nativeSource = null;
+  if (playerTitle) playerTitle.textContent = `${item.title} — Hindi Dub / Sub`;
+  if (playerBackdrop) { playerBackdrop.hidden = false; playerBackdrop.removeAttribute("hidden"); }
+  setPlayerState(PLAYER_STATE.LOADING, `Loading anime stream for ${item.title}…`);
+
+  try {
+    let epId = episodeId;
+    if (!epId) {
+      const searchRes = await fetch(`/api/animeworld?action=search&query=${encodeURIComponent(item.title)}`);
+      const searchData = await searchRes.json();
+      if (searchData?.results?.length) {
+        const first = searchData.results[0];
+        if (first.seriesId) epId = `${first.seriesId}-ep-1`;
+        else if (first.movieId) epId = first.movieId;
+      }
+      if (!epId) {
+        const slug = item.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        epId = `${slug}-ep-1`;
+      }
+    }
+
+    const streamRes = await fetch(`/api/animeworld?action=stream&episodeId=${encodeURIComponent(epId)}`);
+    const streamData = await streamRes.json();
+    if (!isCurrentRequest()) return;
+
+    const streamLink = streamData?.stream?.streamLink;
+    if (streamLink) {
+      const embedPlayer = $("#embed-player");
+      const customPlayerWrapper = $("#custom-player-wrapper");
+      if (customPlayerWrapper) customPlayerWrapper.hidden = true;
+      if (embedPlayer) {
+        embedPlayer.hidden = false;
+        embedPlayer.src = streamLink;
+        embedPlayer.title = `${item.title} — AnimeWorld Streaming`;
+      }
+      if (playerTitle) {
+        playerTitle.textContent = streamData.current?.title
+          ? `${item.title} — ${streamData.current.title}`
+          : `${item.title} — Hindi Dub / Sub`;
+      }
+      setPlayerState(PLAYER_STATE.READY);
+      return;
+    }
+  } catch (err) {
+    console.warn("[AnimeWorld Player]", err);
+  }
+
+  if (isCurrentRequest()) {
+    await playTrailer(item.title);
+  }
+}
+
+async function loadAnimeEpisodes(item, container) {
+  if (!container) return;
+  container.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--muted);"><span class="ul-loader__spinner"></span> Loading episodes…</div>`;
+  try {
+    const searchRes = await fetch(`/api/animeworld?action=search&query=${encodeURIComponent(item.title)}`);
+    const searchData = await searchRes.json();
+    let episodes = [];
+    if (searchData?.results?.length) {
+      const match = searchData.results[0];
+      if (match.seriesId) {
+        const seasonsRes = await fetch(`/api/animeworld?action=seasons&seriesID=${encodeURIComponent(match.seriesId)}`);
+        const seasonsData = await seasonsRes.json();
+        const seasonId = seasonsData?.seasons?.[0]?.seasonId || "s1";
+        const epRes = await fetch(`/api/animeworld?action=episodes&seasonId=${encodeURIComponent(seasonId)}`);
+        const epData = await epRes.json();
+        if (epData?.episodes?.length) episodes = epData.episodes;
+      }
+    }
+    if (!episodes.length) {
+      episodes = Array.from({ length: 12 }, (_, i) => ({
+        episodeId: `${item.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-ep-${i + 1}`,
+        title: `Episode ${i + 1}`,
+        episodeNumber: String(i + 1),
+        image: item.image || item.backdrop || "",
+      }));
+    }
+    container.innerHTML = episodes.map((ep) => `
+      <div class="episode-card" data-episode-id="${escapeHtml(ep.episodeId)}">
+        ${ep.image ? `<img src="${escapeHtml(ep.image)}" alt="" loading="lazy">` : ""}
+        <div class="episode-info">
+          <span class="episode-num">EP ${escapeHtml(ep.episodeNumber || "1")}</span>
+          <div class="episode-name">${escapeHtml(ep.title || "Episode")}</div>
+        </div>
+      </div>
+    `).join("");
+
+    container.querySelectorAll(".episode-card").forEach((card) => {
+      card.addEventListener("click", () => {
+        closeDetails();
+        playAnime(item, card.dataset.episodeId);
+      });
+    });
+  } catch {
+    container.innerHTML = `<p style="color: var(--muted); padding: 12px;">Episode list unavailable.</p>`;
+  }
+}
+
+function playAuthorizedItem(item) {
+  const url = item.streamUrl || item.video || item.playUrl?.url || "";
+  if (url) {
+    playNativeVideo(url, item.title, item.image || item.thumbnailPath || "", {
+      videoId: item.isUserUpload ? item.id : null,
+      mimeType: item.mimeType || "",
+    });
+    return;
+  }
+  playTitle(item.title);
+}
+
 function playTitle(title) {
   const item = findTitle(title);
   if (!item) return;
-  openDetails(item.title, { focusWatch: true });
+  if (item.source === "archive") {
+    playArchiveFilm(item.archiveId || item.id);
+    return;
+  }
+  if (item.isUserUpload) {
+    playAuthorizedItem(item);
+    return;
+  }
+  if (item.category === "anime" || item.isJapaneseAnime) {
+    playAnime(item);
+    return;
+  }
+  playTrailer(item.title);
 }
 
 
@@ -3747,7 +4008,7 @@ function playTitle(title) {
 async function retryPlayback() {
   const source = state.player?.nativeSource;
   if (source?.url) {
-    playNativeVideo(source.url, source.title, source.poster, { videoId: source.videoId });
+    playNativeVideo(source.url, source.title, source.poster, { videoId: source.videoId, mimeType: source.mimeType || "" });
     return;
   }
   if (state.player?.trailerTitle) {
@@ -3756,23 +4017,33 @@ async function retryPlayback() {
 }
 
 function handlePlaybackError() {
-  if (isNativeVideoActive() && retryNativeVideo()) return;
+  if (!isNativeVideoActive()) return;
+  const video = $("#video-player");
+  const code = video?.error?.code || 0;
+  // MediaError.MEDIA_ERR_ABORTED (1) happens on user stop/switch; do not error.
+  if (code === 1) return;
+  // MEDIA_ERR_DECODE (3) or MEDIA_ERR_SRC_NOT_SUPPORTED (4): unrecoverable by blind retry.
+  if (code === 3 || code === 4) {
+    clearNativeRetryTimer();
+    clearNativeStallTimer();
+    setPlayerState(PLAYER_STATE.ERROR, "This video format or source could not be played in this browser. Try another browser or check the source.");
+    return;
+  }
+  if (retryNativeVideo()) return;
   setPlayerState(PLAYER_STATE.ERROR, "This video could not be played. Retry, or try again later.");
 }
 
-function closePlayer() {
-  clearLiveStatus();
+function stopAllMediaPlayback() {
+  stopHeroMotionPreview();
+  clearNativeRetryTimer();
   nativeRetryCount = 0;
   clearNativeStallTimer();
+  clearPlayerLoadingTimer();
   const bufferingSpinner = $("#player-buffering-spinner");
   if (bufferingSpinner) bufferingSpinner.hidden = true;
   const embed = $("#embed-player");
   const video = $("#video-player");
   const customWrapper = $("#custom-player-wrapper");
-  state.player.requestId += 1;
-  state.player.nativeSource = null;
-  state.player.trailerTitle = null;
-  togglePlayerSettings(false);
   if (embed) {
     embed.src = "about:blank";
     embed.hidden = true;
@@ -3780,10 +4051,36 @@ function closePlayer() {
   if (video) {
     video.pause();
     video.removeAttribute("src");
+    video.removeAttribute("poster");
+    video.playbackRate = 1;
     video.load();
     video.hidden = true;
   }
   if (customWrapper) customWrapper.hidden = true;
+  const centerPlay = $("#player-center-play");
+  centerPlay?.classList.remove("playing");
+  const currentTimeEl = $("#player-current-time");
+  const durationEl = $("#player-total-duration");
+  const scrubberProgress = $("#scrubber-progress");
+  const scrubberBuffer = $("#scrubber-buffer");
+  const scrubberHandle = $("#scrubber-handle");
+  const speedLabel = $("#ctrl-speed-label");
+  if (currentTimeEl) currentTimeEl.textContent = "0:00";
+  if (durationEl) durationEl.textContent = "0:00";
+  if (scrubberProgress) scrubberProgress.style.width = "0%";
+  if (scrubberBuffer) scrubberBuffer.style.width = "0%";
+  if (scrubberHandle) scrubberHandle.style.left = "0%";
+  if (speedLabel) speedLabel.textContent = "1x";
+}
+
+function closePlayer() {
+  clearLiveStatus();
+  state.player.requestId += 1;
+  state.player.item = null;
+  state.player.nativeSource = null;
+  state.player.trailerTitle = null;
+  togglePlayerSettings(false);
+  stopAllMediaPlayback();
   const pb = $("#player-backdrop");
   const wasOpen = pb && !pb.hidden;
   if (pb) {
@@ -3798,82 +4095,111 @@ function closePlayer() {
   }
 }
 
-// Prompt 5: retry for the native HTML5 player (community uploads and
-// trailers). The embed-server chain in handlePlaybackError() must not run
-// for a direct video file, so errors/stalls on #video-player retry the
-// same source first: up to 3 times, backoff 1s / 3s / 8s, then ERROR.
+// Retry for the native HTML5 player (community uploads and Internet Archive):
+// up to 3 retries for transient network errors/stalls (1s / 3s / 8s), then ERROR.
 const NATIVE_RETRY_DELAYS_MS = [1000, 3000, 8000];
 let nativeRetryCount = 0;
 let nativeStallTimer = null;
+let nativeRetryTimer = null;
+function clearNativeRetryTimer() {
+  if (nativeRetryTimer) { clearTimeout(nativeRetryTimer); nativeRetryTimer = null; }
+}
 function isNativeVideoActive() {
   const video = $("#video-player");
   const wrapper = $("#custom-player-wrapper");
   const embed = $("#embed-player");
-  return Boolean(video && wrapper && !wrapper.hidden && !video.hidden && video.src && (!embed || embed.hidden));
+  return Boolean(video && wrapper && !wrapper.hidden && !video.hidden && video.getAttribute("src") && (!embed || embed.hidden));
 }
 function clearNativeStallTimer() {
   if (nativeStallTimer) { clearTimeout(nativeStallTimer); nativeStallTimer = null; }
 }
 function retryNativeVideo() {
   const video = $("#video-player");
-  if (!video) return false;
+  if (!video || !isNativeVideoActive()) return false;
   if (nativeRetryCount >= NATIVE_RETRY_DELAYS_MS.length) {
     clearNativeStallTimer();
+    clearNativeRetryTimer();
     setPlayerState(PLAYER_STATE.ERROR, "Playback failed after 3 retries. Retry to try again.");
     return false;
   }
   const delay = NATIVE_RETRY_DELAYS_MS[nativeRetryCount];
+  const reqId = state.player.requestId;
   nativeRetryCount += 1;
+  clearNativeRetryTimer();
   setPlayerState(PLAYER_STATE.LOADING, `Connection interrupted · Retrying (${nativeRetryCount}/3)…`);
-  setTimeout(() => {
+  nativeRetryTimer = setTimeout(() => {
+    nativeRetryTimer = null;
+    if (state.player.requestId !== reqId || !isNativeVideoActive()) return;
     try { video.load(); } catch {}
-    video.play().catch(() => {});
+    video.play().catch((err) => {
+      if (state.player.requestId !== reqId) return;
+      if (err?.name === "NotAllowedError") {
+        setPlayerState(PLAYER_STATE.READY, "Tap Play to resume playback.");
+      }
+    });
   }, delay);
   return true;
 }
 function armNativeStallTimer() {
   clearNativeStallTimer();
+  const reqId = state.player.requestId;
   nativeStallTimer = setTimeout(() => {
     const video = $("#video-player");
-    if (!video || video.ended || !isNativeVideoActive()) return;
+    if (state.player.requestId !== reqId || !video || video.ended || !isNativeVideoActive()) return;
     if (video.readyState < 3 && !video.paused) retryNativeVideo();
   }, 8000);
 }
 
-function playNativeVideo(videoUrl, title, poster = "", { videoId = null } = {}) {
-  const embed = $("#embed-player");
+function playNativeVideo(videoUrl, title, poster = "", { videoId = null, mimeType = "" } = {}) {
   const video = $("#video-player");
   const customWrapper = $("#custom-player-wrapper");
   const playerBackdrop = $("#player-backdrop");
   if (!video || !customWrapper) return;
 
-  if (embed) {
-    embed.src = "about:blank";
-    embed.hidden = true;
-  }
+  stopAllMediaPlayback();
+  const requestId = ++state.player.requestId;
+
   customWrapper.hidden = false;
   video.hidden = false;
-  nativeRetryCount = 0;
-  clearNativeStallTimer();
+  video.playsInline = true;
+  video.setAttribute("webkit-playsinline", "");
   video.poster = poster || "";
   const titleEl = $("#player-title");
-  if (titleEl) titleEl.textContent = title || "Community video";
-  if (playerBackdrop) playerBackdrop.hidden = false;
+  if (titleEl) titleEl.textContent = title || "Video playback";
+  if (playerBackdrop) {
+    playerBackdrop.hidden = false;
+    playerBackdrop.removeAttribute("hidden");
+  }
 
-  // Native playback is limited to community uploads and Internet
-  // Archive public-domain films; official trailers use the YouTube
-  // privacy-enhanced embed above.
-  video.src = videoUrl;
-  state.player.nativeSource = { url: videoUrl, title, poster, videoId };
+  state.player.nativeSource = { url: videoUrl, title, poster, videoId, mimeType };
   state.player.trailerTitle = null;
   if (!playerReturnFocus) playerReturnFocus = document.activeElement;
+
+  const normalizedMime = String(mimeType || "").split(";")[0].trim().toLowerCase();
+  if (normalizedMime && typeof video.canPlayType === "function" && video.canPlayType(normalizedMime) === "") {
+    setPlayerState(
+      PLAYER_STATE.ERROR,
+      `This video format (${normalizedMime}) is not supported in your browser. Use H.264/AAC MP4 for Safari & mobile compatibility.`
+    );
+    return;
+  }
+
+  // Native playback is limited to authorized community uploads and
+  // verified Internet Archive public-domain films.
+  video.src = videoUrl;
   video.load();
-  setPlayerState(PLAYER_STATE.LOADING, `Loading ${title || "community video"}…`);
+  setPlayerState(PLAYER_STATE.LOADING, `Loading ${title || "video"}…`);
 
   video.play().then(() => {
-    setPlayerState(PLAYER_STATE.PLAYING, `Playing: ${title || "Community video"}`);
-  }).catch(() => {
-    setPlayerState(PLAYER_STATE.READY, `Ready to play: ${title || "Community video"}`);
+    if (state.player.requestId !== requestId) return;
+    setPlayerState(PLAYER_STATE.PLAYING, `Playing: ${title || "Video"}`);
+  }).catch((err) => {
+    if (state.player.requestId !== requestId) return;
+    if (err?.name === "NotAllowedError") {
+      setPlayerState(PLAYER_STATE.READY, `Ready — press Play to start ${title || "video"}`);
+    } else if (err?.name === "NotSupportedError") {
+      setPlayerState(PLAYER_STATE.ERROR, "This video format or stream could not be played in your browser.");
+    }
   });
 }
 
@@ -3999,25 +4325,49 @@ function initCustomVideoPlayer() {
     }
   });
 
-  // Scrubber seeking
+  // Scrubber seeking (desktop mouse + mobile touch via Pointer/Touch events)
   let isDraggingScrubber = false;
-  const seekFromEvent = (e) => {
+  const seekFromClientX = (clientX) => {
     if (!scrubberWrap || !video.duration) return;
     const rect = scrubberWrap.getBoundingClientRect();
-    const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    if (!rect.width) return;
+    const pos = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     video.currentTime = pos * video.duration;
   };
+  const seekFromEvent = (e) => {
+    const clientX = e.touches?.[0]?.clientX ?? e.changedTouches?.[0]?.clientX ?? e.clientX;
+    if (typeof clientX === "number") seekFromClientX(clientX);
+  };
 
-  scrubberWrap?.addEventListener("mousedown", (e) => {
-    isDraggingScrubber = true;
-    seekFromEvent(e);
-  });
-  window.addEventListener("mousemove", (e) => {
-    if (isDraggingScrubber) seekFromEvent(e);
-  });
-  window.addEventListener("mouseup", () => {
-    isDraggingScrubber = false;
-  });
+  if ("PointerEvent" in window) {
+    scrubberWrap?.addEventListener("pointerdown", (e) => {
+      isDraggingScrubber = true;
+      scrubberWrap.setPointerCapture?.(e.pointerId);
+      seekFromEvent(e);
+    });
+    window.addEventListener("pointermove", (e) => {
+      if (isDraggingScrubber) seekFromEvent(e);
+    });
+    window.addEventListener("pointerup", () => { isDraggingScrubber = false; });
+    window.addEventListener("pointercancel", () => { isDraggingScrubber = false; });
+  } else {
+    scrubberWrap?.addEventListener("mousedown", (e) => {
+      isDraggingScrubber = true;
+      seekFromEvent(e);
+    });
+    window.addEventListener("mousemove", (e) => {
+      if (isDraggingScrubber) seekFromEvent(e);
+    });
+    window.addEventListener("mouseup", () => { isDraggingScrubber = false; });
+    scrubberWrap?.addEventListener("touchstart", (e) => {
+      isDraggingScrubber = true;
+      seekFromEvent(e);
+    }, { passive: true });
+    window.addEventListener("touchmove", (e) => {
+      if (isDraggingScrubber) seekFromEvent(e);
+    }, { passive: true });
+    window.addEventListener("touchend", () => { isDraggingScrubber = false; });
+  }
 
   // Hover preview timestamp
   scrubberWrap?.addEventListener("mousemove", (e) => {
@@ -4102,14 +4452,19 @@ function initCustomVideoPlayer() {
     }
   });
 
-  // Fullscreen
-  fullscreenBtn?.addEventListener("click", () => {
+  // Fullscreen (with iOS Safari webkitEnterFullscreen fallback)
+  const toggleFullscreen = () => {
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});
     } else if (wrapper.requestFullscreen) {
-      wrapper.requestFullscreen().catch(() => {});
+      wrapper.requestFullscreen().catch(() => {
+        if (typeof video.webkitEnterFullscreen === "function") video.webkitEnterFullscreen();
+      });
+    } else if (typeof video.webkitEnterFullscreen === "function") {
+      video.webkitEnterFullscreen();
     }
-  });
+  };
+  fullscreenBtn?.addEventListener("click", toggleFullscreen);
 
   document.addEventListener("fullscreenchange", () => {
     const isFull = Boolean(document.fullscreenElement);
@@ -4124,6 +4479,7 @@ function initCustomVideoPlayer() {
   // Mobile double-tap rewind/fast-forward
   let lastTapTime = 0;
   wrapper.addEventListener("touchend", (e) => {
+    if (e.target.closest("#custom-player-controls, #player-center-play")) return;
     const now = Date.now();
     const diff = now - lastTapTime;
     lastTapTime = now;
@@ -4186,11 +4542,7 @@ function initCustomVideoPlayer() {
       showControls();
     } else if (e.key === "f") {
       e.preventDefault();
-      if (document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
-      } else if (wrapper.requestFullscreen) {
-        wrapper.requestFullscreen().catch(() => {});
-      }
+      toggleFullscreen();
     } else if (e.key >= "0" && e.key <= "9") {
       e.preventDefault();
       if (video.duration) {
@@ -4224,7 +4576,12 @@ function initCreatorStudioAndUploads() {
 
   let selectedFile = null;
 
-  const openUploadModal = () => {
+  const openUploadModal = async () => {
+    await loadAppConfig();
+    if (!appConfig.uploads?.enabled) {
+      showToast("Community video uploads are unavailable in this deployment (upload storage is not configured).");
+      return;
+    }
     if (!state.auth?.user) {
       showToast("Please sign in or create an account to upload videos.");
       openAuthModal("signin");
@@ -4254,14 +4611,17 @@ function initCreatorStudioAndUploads() {
 
   const handleSelectedFile = (file) => {
     if (!file) return;
-    const validExtensions = [".mp4", ".webm", ".mov", ".mkv", ".ogg"];
+    const validExtensions = appConfig.uploads?.allowedExtensions || [".mp4", ".webm", ".mov", ".ogg"];
+    const validMimeTypes = appConfig.uploads?.allowedMimeTypes || ["video/mp4", "video/webm", "video/quicktime", "video/ogg"];
+    const maxBytes = appConfig.uploads?.maxBytes || 150 * 1024 * 1024;
     const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
-    if (!validExtensions.includes(ext) && !file.type.startsWith("video/")) {
-      showToast("Invalid file type. Please select an MP4, WebM, QuickTime, or MKV video.");
+    const mime = String(file.type || "").toLowerCase();
+    if (!validExtensions.includes(ext) || (mime && !validMimeTypes.includes(mime))) {
+      showToast("Unsupported format. Please select an MP4 (H.264/AAC), WebM, MOV, or OGG video.");
       return;
     }
-    if (file.size > 150 * 1024 * 1024) {
-      showToast("File size exceeds 150MB limit.");
+    if (file.size > maxBytes) {
+      showToast(`File size exceeds ${Math.round(maxBytes / (1024 * 1024))}MB limit.`);
       return;
     }
 
@@ -4412,7 +4772,8 @@ async function loadArchiveFilms() {
       return;
     }
     archiveFilms = films;
-    section.hidden = false;
+    films.forEach(registerExtraTitle);
+    section.hidden = !isHomeView;
     row.innerHTML = films.map((film) => renderCard(film)).join("");
     observeLazyImages(row);
   } catch {
@@ -4426,7 +4787,7 @@ async function loadArchiveFilms() {
 function playArchiveFilm(identifier) {
   const film = archiveFilms.find((item) => item.archiveId === identifier);
   if (!film?.streamUrl) return;
-  playNativeVideo(film.streamUrl, film.title, film.image || "");
+  playNativeVideo(film.streamUrl, film.title, film.image || "", { mimeType: film.mimeType || "video/mp4" });
 }
 
 async function loadCommunityVideos() {
@@ -4446,14 +4807,23 @@ async function loadCommunityVideos() {
     const row = $("#community-row");
     if (!section || !row) { finishCommunityLoading(); return; }
 
+    const uploadBtn = $("#community-upload-btn");
+    const storageAvailable = data.storageConfigured !== false && appConfig.uploads?.enabled !== false;
+    if (uploadBtn) uploadBtn.hidden = !storageAvailable;
+
     if (!data.videos || data.videos.length === 0) {
       finishCommunityLoading();
+      if (!storageAvailable) {
+        section.hidden = true;
+        row.innerHTML = "";
+        return;
+      }
       row.innerHTML = stateHtml({ kind: "empty", message: "No community uploads yet." });
-      section.hidden = false;
+      section.hidden = !isHomeView;
       return;
     }
 
-    section.hidden = false;
+    section.hidden = !isHomeView;
     finishCommunityLoading();
     row.innerHTML = data.videos.map((v) => `
       <div class="community-card" data-video-id="${v.id}" tabindex="0" role="button" aria-label="Play ${escapeHtml(v.title)}">
@@ -4470,7 +4840,7 @@ async function loadCommunityVideos() {
         const id = card.dataset.videoId;
         const v = data.videos.find((item) => item.id === id);
         if (v) {
-          playNativeVideo(`/api/videos/stream/${v.id}`, v.title, v.thumbnailPath, { videoId: v.id });
+          playNativeVideo(`/api/videos/stream/${v.id}`, v.title, v.thumbnailPath, { videoId: v.id, mimeType: v.mimeType || "video/mp4" });
         }
       });
       card.addEventListener("keydown", (e) => {
@@ -4538,7 +4908,7 @@ async function loadUserUploads() {
       btn.addEventListener("click", () => {
         const id = btn.dataset.videoId;
         const v = videos.find((item) => item.id === id);
-        if (v) playNativeVideo(`/api/videos/stream/${v.id}`, v.title, v.thumbnailPath, { videoId: v.id });
+        if (v) playNativeVideo(`/api/videos/stream/${v.id}`, v.title, v.thumbnailPath, { videoId: v.id, mimeType: v.mimeType || "video/mp4" });
       });
     });
 
@@ -4670,6 +5040,7 @@ document.addEventListener("click", (event) => {
   }
   if (button.dataset.action === "details") return openDetails(button.dataset.title);
   if (button.dataset.action === "play-archive") { playArchiveFilm(button.dataset.archiveId); return; }
+  if (button.dataset.action === "play-authorized") { playTitle(button.dataset.title); return; }
   if (button.dataset.action === "play") { playTitle(button.dataset.title); return; }
   if (button.dataset.action === "trailer") return void playTrailer(button.dataset.title);
   if (button.dataset.action === "bookmark") {
@@ -4703,7 +5074,7 @@ document.addEventListener("click", (event) => {
     return;
   }
   if (button.id === "close-modal") return closeDetails();
-  if (button.id === "modal-play") { focusWatchHub(); return; }
+  if (button.id === "modal-play") return;
   if (button.id === "player-retry-button" || button.id === "player-inline-retry") return void retryPlayback();
   if (button.id === "player-settings-toggle") return togglePlayerSettings();
   if (button.id === "close-player") return closePlayer();
@@ -4718,18 +5089,11 @@ document.addEventListener("click", (event) => {
   if (button.id === "revert-demo-btn") return void revertToDemo();
   if (button.id === "clear-watchlist-btn") return clearWatchlist();
   if (button.id === "notifications-button") return showToast("You are all caught up");
-  if (button.id === "profile-signout-btn") {
-    showToast("Signed out. Switched to guest mode.");
-    setSection("home", true);
-    return;
-  }
 });
 
 let statusViewWired = false;
 
-// Real server-status view (replaces the old behaviour where the
-// "Server status" pill just opened Settings). Reads the live config +
-// health endpoints and the currently loaded catalog cache.
+// Real server-status view (reads live /api/config + /api/health + catalog state).
 async function openStatusView() {
   const modal = $("#status-backdrop");
   const body = $("#status-view-body");
@@ -4747,16 +5111,18 @@ async function openStatusView() {
     const res = await fetch(buildApiUrl("config"));
     const data = await res.json().catch(() => ({}));
     const configured = Boolean(data.tmdbApiKeyConfigured ?? data.configured);
-    rows.push(["TMDB proxy", configured ? "Configured" : "Using browser fallback", configured ? "TMDB requests use the server-side proxy when available." : "TMDB_API_KEY is not set on the server. The browser may use its existing fallback key."]);
+    rows.push(["TMDB proxy", configured ? "Configured" : "Unconfigured", configured ? "TMDB requests run through the server-side /api/tmdb proxy." : "TMDB_API_KEY is not set on the server."]);
+    rows.push(["Accounts & profiles", data.auth?.enabled ? "Enabled" : "Unavailable", data.auth?.enabled ? `Persistence: ${data.auth.persistence || "active"}` : "Persistent account storage is not configured in this deployment."]);
+    rows.push(["Community uploads", data.uploads?.enabled ? "Enabled" : "Unavailable", data.uploads?.enabled ? `Storage mode: ${data.uploads.mode || "local"}` : "Persistent upload storage is not configured in this deployment."]);
   } catch {
-    rows.push(["Catalog API", "Unavailable", "Could not reach the catalog service — check your connection."]);
+    rows.push(["Catalog API", "Unavailable", "Could not reach /api/config — check your connection."]);
   }
   try {
-    const res = await fetch("/api/health.json");
+    const res = await fetch(buildApiUrl("health"));
     const data = await res.json().catch(() => ({}));
-    rows.push(["Community upload service", data.ok ? (data.status || "Healthy") : "Unknown", `Service: ${data.service || "ustream"}`]);
+    rows.push(["API health", data.ok ? (data.status || "Healthy") : "Unknown", `Service: ${data.service || "ustream"}`]);
   } catch {
-    rows.push(["Community upload service", "Unavailable", "Health endpoint did not respond."]);
+    rows.push(["API health", "Unavailable", "Health endpoint did not respond."]);
   }
   rows.push(["Catalog loaded", `${catalog.length} titles`, `Current section: ${state.section || "home"}`]);
   rows.push(["Adult (18+) content", isAdultEnabled() ? "Enabled (age confirmed)" : "Off (default)", "Toggle it in Settings — an age confirmation is required to enable it."]);
@@ -4877,6 +5243,7 @@ $("[data-player-settings]")?.addEventListener("toggle", (event) => {
 });
 
 $("#video-player").addEventListener("canplay", () => {
+  if (!isNativeVideoActive()) return;
   if (currentPlayerState === PLAYER_STATE.LOADING) {
     setPlayerState(PLAYER_STATE.READY);
   }
@@ -4888,39 +5255,45 @@ $("#video-player").addEventListener("canplay", () => {
 // a never-loading embed into an error state instead of black "PLAYING".
 $("#embed-player")?.addEventListener("load", () => {
   const embed = $("#embed-player");
-  if (!embed || !embed.src || embed.src === "about:blank") return;
+  if (!embed || embed.hidden || !embed.src || embed.src === "about:blank") return;
   if (currentPlayerState === PLAYER_STATE.LOADING) {
-    setPlayerState(PLAYER_STATE.PLAYING, state.player?.item ? `Playing: ${state.player.item.title}` : "Playing video");
+    setPlayerState(PLAYER_STATE.PLAYING, state.player?.trailerTitle ? `Playing official trailer: ${state.player.trailerTitle}` : (state.player?.item ? `Playing: ${state.player.item.title}` : "Playing video"));
   }
 });
 
 $("#video-player").addEventListener("play", () => {
+  if (!isNativeVideoActive()) return;
   setPlayerState(PLAYER_STATE.PLAYING);
 });
 
 $("#video-player").addEventListener("pause", () => {
+  if (!isNativeVideoActive()) return;
   if (currentPlayerState === PLAYER_STATE.PLAYING) {
     setPlayerState(PLAYER_STATE.READY);
   }
 });
 
 $("#video-player").addEventListener("waiting", () => {
+  if (!isNativeVideoActive()) return;
   setPlayerState(PLAYER_STATE.LOADING, "Loading video…");
-  if (isNativeVideoActive()) armNativeStallTimer();
+  armNativeStallTimer();
 });
 
 $("#video-player").addEventListener("playing", () => {
+  if (!isNativeVideoActive()) return;
   nativeRetryCount = 0;
   clearNativeStallTimer();
   setPlayerState(PLAYER_STATE.PLAYING);
 });
 
 $("#video-player").addEventListener("ended", () => {
+  if (!isNativeVideoActive()) return;
   clearNativeStallTimer();
   setPlayerState(PLAYER_STATE.READY, "Finished. Play again or close the player.");
 });
 
 $("#video-player").addEventListener("error", () => {
+  if (!isNativeVideoActive()) return;
   handlePlaybackError();
 });
 
@@ -4948,265 +5321,8 @@ document.addEventListener("keydown", (event) => {
 // Authentication, Viewer Profiles & Security State Controller
 // ==========================================================================
 
-const LocalAuthVault = {
-  getStore() {
-    return storage.get("ustream_local_auth_store", { users: [], profiles: [], activeUserId: null, activeProfileId: null });
-  },
-  saveStore(store) {
-    storage.set("ustream_local_auth_store", store);
-  },
-  handleRequest(endpoint, method, body) {
-    const store = this.getStore();
-    const route = endpoint.split("?")[0].replace(/\/$/, "");
-    const now = Date.now();
-
-    // 1. GET /api/auth/me
-    if (method === "GET" && route === "/api/auth/me") {
-      const user = store.users.find((u) => u.id === store.activeUserId);
-      if (!user) return { ok: true, status: 200, data: { ok: true, user: null, profiles: [], activeProfile: null } };
-      const profiles = store.profiles.filter((p) => p.userId === user.id);
-      const activeProfile = profiles.find((p) => p.id === store.activeProfileId) || profiles.find((p) => p.isPrimary) || profiles[0] || null;
-      return {
-        ok: true,
-        status: 200,
-        data: {
-          ok: true,
-          user,
-          profiles,
-          activeProfile,
-          session: { id: "local_session", createdAt: now }
-        }
-      };
-    }
-
-    // 2. POST /api/auth/register
-    if (method === "POST" && route === "/api/auth/register") {
-      const email = String(body?.email || "").trim().toLowerCase();
-      const name = String(body?.name || "").trim();
-      const password = String(body?.password || "");
-      if (!email || !password || !name) {
-        return { ok: false, status: 400, data: { ok: false, error: "Please fill in all fields." } };
-      }
-      if (password.length < 8) {
-        return { ok: false, status: 400, data: { ok: false, error: "Password must be at least 8 characters long." } };
-      }
-      let existing = store.users.find((u) => u.email === email);
-      if (existing) {
-        return { ok: false, status: 400, data: { ok: false, error: "An account with this email already exists." } };
-      }
-      const userId = "user_" + Math.random().toString(36).slice(2, 10);
-      const user = {
-        id: userId,
-        email,
-        name,
-        password,
-        isEmailVerified: true,
-        createdAt: now
-      };
-      const profileId = "prof_" + Math.random().toString(36).slice(2, 10);
-      const profile = {
-        id: profileId,
-        userId,
-        name,
-        avatar: "🦊",
-        isKids: false,
-        maturityRating: "ALL",
-        language: "en",
-        hasPin: false,
-        isPrimary: true,
-        createdAt: now
-      };
-      store.users.push(user);
-      store.profiles.push(profile);
-      store.activeUserId = userId;
-      store.activeProfileId = profileId;
-      this.saveStore(store);
-      return {
-        ok: true,
-        status: 201,
-        data: {
-          ok: true,
-          user,
-          profiles: [profile],
-          activeProfile: profile,
-          token: "local_token_" + userId
-        }
-      };
-    }
-
-    // 3. POST /api/auth/login
-    if (method === "POST" && route === "/api/auth/login") {
-      const email = String(body?.email || "").trim().toLowerCase();
-      const password = String(body?.password || "");
-      let user = store.users.find((u) => u.email === email);
-      if (!user) {
-        if (email.includes("@") && password.length >= 6) {
-          const name = email.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-          const userId = "user_" + Math.random().toString(36).slice(2, 10);
-          user = { id: userId, email, name, password, isEmailVerified: true, createdAt: now };
-          const profileId = "prof_" + Math.random().toString(36).slice(2, 10);
-          const profile = { id: profileId, userId, name, avatar: "🦊", isKids: false, maturityRating: "ALL", language: "en", hasPin: false, isPrimary: true, createdAt: now };
-          store.users.push(user);
-          store.profiles.push(profile);
-          store.activeUserId = userId;
-          store.activeProfileId = profileId;
-          this.saveStore(store);
-          return {
-            ok: true,
-            status: 200,
-            data: {
-              ok: true,
-              user,
-              profiles: [profile],
-              activeProfile: profile,
-              token: "local_token_" + userId
-            }
-          };
-        }
-        return { ok: false, status: 401, data: { ok: false, error: "Invalid email or password." } };
-      }
-      if (user.password && user.password !== password) {
-        return { ok: false, status: 401, data: { ok: false, error: "Invalid email or password." } };
-      }
-      store.activeUserId = user.id;
-      let profiles = store.profiles.filter((p) => p.userId === user.id);
-      if (profiles.length === 0) {
-        const profile = { id: "prof_" + Math.random().toString(36).slice(2, 10), userId: user.id, name: user.name, avatar: "🦊", isKids: false, maturityRating: "ALL", language: "en", hasPin: false, isPrimary: true, createdAt: now };
-        store.profiles.push(profile);
-        profiles = [profile];
-      }
-      const activeProfile = profiles.find((p) => p.id === store.activeProfileId) || profiles.find((p) => p.isPrimary) || profiles[0];
-      store.activeProfileId = activeProfile.id;
-      this.saveStore(store);
-      return {
-        ok: true,
-        status: 200,
-        data: {
-          ok: true,
-          user,
-          profiles,
-          activeProfile,
-          token: "local_token_" + user.id
-        }
-      };
-    }
-
-    // 4. POST /api/auth/logout & /api/auth/logout-all
-    if (method === "POST" && (route === "/api/auth/logout" || route === "/api/auth/logout-all")) {
-      store.activeUserId = null;
-      store.activeProfileId = null;
-      this.saveStore(store);
-      return { ok: true, status: 200, data: { ok: true, message: "Logged out" } };
-    }
-
-    // 5. GET /api/profiles
-    if (method === "GET" && route === "/api/profiles") {
-      const user = store.users.find((u) => u.id === store.activeUserId);
-      if (!user) return { ok: false, status: 401, data: { ok: false, error: "Authentication required" } };
-      const profiles = store.profiles.filter((p) => p.userId === user.id);
-      return { ok: true, status: 200, data: { ok: true, profiles } };
-    }
-
-    // 6. POST /api/profiles (Create Profile)
-    if (method === "POST" && route === "/api/profiles") {
-      const user = store.users.find((u) => u.id === store.activeUserId);
-      if (!user) return { ok: false, status: 401, data: { ok: false, error: "Authentication required" } };
-      const userProfiles = store.profiles.filter((p) => p.userId === user.id);
-      if (userProfiles.length >= 5) {
-        return { ok: false, status: 400, data: { ok: false, error: "Maximum limit of 5 viewer profiles reached." } };
-      }
-      const name = String(body?.name || "").trim();
-      if (!name) return { ok: false, status: 400, data: { ok: false, error: "Profile name is required." } };
-      const profileId = "prof_" + Math.random().toString(36).slice(2, 10);
-      const newProfile = {
-        id: profileId,
-        userId: user.id,
-        name,
-        avatar: body?.avatar || "🦊",
-        isKids: Boolean(body?.isKids),
-        maturityRating: body?.maturityRating || "ALL",
-        language: body?.language || "en",
-        hasPin: Boolean(body?.pin),
-        pin: body?.pin || null,
-        isPrimary: false,
-        createdAt: now
-      };
-      store.profiles.push(newProfile);
-      this.saveStore(store);
-      return { ok: true, status: 201, data: { ok: true, profile: newProfile } };
-    }
-
-    // 7. PUT /api/profiles/:id (Update Profile)
-    if ((method === "PUT" || method === "POST") && route.startsWith("/api/profiles/") && !route.includes("/select") && !route.includes("/verify-pin") && !route.includes("/delete")) {
-      const profileId = route.split("/").pop();
-      const profile = store.profiles.find((p) => p.id === profileId);
-      if (!profile) return { ok: false, status: 404, data: { ok: false, error: "Profile not found." } };
-      if (body?.name) profile.name = String(body.name).trim();
-      if (body?.avatar) profile.avatar = body.avatar;
-      if (typeof body?.isKids !== "undefined") profile.isKids = Boolean(body.isKids);
-      if (body?.maturityRating) profile.maturityRating = body.maturityRating;
-      if (body?.language) profile.language = body.language;
-      if (body?.pin) {
-        profile.hasPin = true;
-        profile.pin = body.pin;
-      } else if (body?.pin === "") {
-        profile.hasPin = false;
-        profile.pin = null;
-      }
-      this.saveStore(store);
-      return { ok: true, status: 200, data: { ok: true, profile } };
-    }
-
-    // 8. DELETE /api/profiles/:id
-    if ((method === "DELETE" && route.startsWith("/api/profiles/")) || (method === "POST" && route.endsWith("/delete"))) {
-      const parts = route.split("/");
-      const profileId = method === "DELETE" ? parts.pop() : parts[parts.length - 2];
-      const profile = store.profiles.find((p) => p.id === profileId);
-      if (!profile) return { ok: false, status: 404, data: { ok: false, error: "Profile not found." } };
-      if (profile.isPrimary) return { ok: false, status: 400, data: { ok: false, error: "Primary profile cannot be deleted." } };
-      store.profiles = store.profiles.filter((p) => p.id !== profileId);
-      if (store.activeProfileId === profileId) {
-        const primary = store.profiles.find((p) => p.userId === profile.userId && p.isPrimary) || store.profiles.find((p) => p.userId === profile.userId);
-        store.activeProfileId = primary ? primary.id : null;
-      }
-      this.saveStore(store);
-      return { ok: true, status: 200, data: { ok: true, message: "Profile deleted." } };
-    }
-
-    // 9. POST /api/profiles/:id/select
-    if (method === "POST" && route.includes("/select")) {
-      const parts = route.split("/");
-      const profileId = parts[parts.indexOf("select") - 1] || body?.profileId;
-      const profile = store.profiles.find((p) => p.id === profileId);
-      if (!profile) return { ok: false, status: 404, data: { ok: false, error: "Profile not found." } };
-      store.activeProfileId = profile.id;
-      this.saveStore(store);
-      return { ok: true, status: 200, data: { ok: true, profile } };
-    }
-
-    // 10. POST /api/profiles/:id/verify-pin
-    if (method === "POST" && route.includes("/verify-pin")) {
-      const parts = route.split("/");
-      const profileId = parts[parts.indexOf("verify-pin") - 1];
-      const profile = store.profiles.find((p) => p.id === profileId);
-      if (!profile) return { ok: false, status: 404, data: { ok: false, error: "Profile not found." } };
-      if (!profile.hasPin || profile.pin === body?.pin) {
-        return { ok: true, status: 200, data: { ok: true } };
-      }
-      return { ok: false, status: 403, data: { ok: false, error: "Incorrect PIN" } };
-    }
-
-    // 11. Watchlist and History
-    if (route.startsWith("/api/profile/watchlist")) {
-      return { ok: true, status: 200, data: { ok: true, watchlist: [] } };
-    }
-    if (route.startsWith("/api/profile/history")) {
-      return { ok: true, status: 200, data: { ok: true, history: [] } };
-    }
-
-    return { ok: true, status: 200, data: { ok: true } };
-  }
-};
+// Clean up any legacy client-side credential vault from older builds.
+try { localStorage.removeItem("ustream_local_auth_store"); } catch {}
 
 async function authApi(endpoint, method = "GET", body = null) {
   const token = localStorage.getItem("ustream_auth_token");
@@ -5225,30 +5341,25 @@ async function authApi(endpoint, method = "GET", body = null) {
   if (body) options.body = JSON.stringify(body);
   try {
     const res = await fetch(endpoint, options);
-    if (res.ok) {
-      const data = await res.json().catch(() => null);
-      if (data && data.ok !== false) {
-        return { ok: true, status: res.status, data };
-      }
-      if (data && data.error) {
-        return { ok: false, status: res.status, data };
-      }
+    const data = await res.json().catch(() => null);
+    if (res.ok && data && data.ok !== false) {
+      return { ok: true, status: res.status, data };
     }
-    // If backend returns 500, 404, or non-JSON (e.g. serverless invocation failure)
-    if (res.status >= 500 || res.status === 404) {
-      return LocalAuthVault.handleRequest(endpoint, method, body);
-    }
-    const data = await res.json().catch(() => ({ ok: false, error: "Network response error" }));
-    return { ok: res.ok && data.ok !== false, status: res.status, data };
-  } catch (err) {
-    return LocalAuthVault.handleRequest(endpoint, method, body);
+    return {
+      ok: false,
+      status: res.status,
+      data: data || { ok: false, error: res.status === 503 ? "Account service is not configured in this deployment." : "Request failed." }
+    };
+  } catch {
+    return { ok: false, status: 0, data: { ok: false, error: "Could not reach the authentication service." } };
   }
 }
 
 function updateAuthUI() {
   const signedIn = Boolean(state.auth.user);
+  const authEnabled = Boolean(appConfig.auth?.enabled);
   const profile = state.auth.activeProfile;
-  if (topbarLoginBtn) topbarLoginBtn.hidden = signedIn;
+  if (topbarLoginBtn) topbarLoginBtn.hidden = !authEnabled || signedIn;
   if (profileMenuWrap) profileMenuWrap.hidden = !signedIn;
   if (authStateSec) authStateSec.hidden = !signedIn;
   if (guestStateSec) guestStateSec.hidden = signedIn;
@@ -5370,7 +5481,7 @@ async function initAuth() {
   } else {
     // Guest State
     updateAuthUI();
-    if (topbarLoginBtn) topbarLoginBtn.hidden = false;
+    syncCapabilityUI();
     if (profileMenuWrap) profileMenuWrap.hidden = true;
     if (authStateSec) authStateSec.hidden = true;
     if (guestStateSec) guestStateSec.hidden = false;
@@ -5401,10 +5512,41 @@ async function loadSessions() {
   }).join("");
 }
 
+function syncCapabilityUI() {
+  const authEnabled = Boolean(appConfig.auth?.enabled);
+  const googleEnabled = authEnabled && Boolean(appConfig.auth?.googleOAuthEnabled);
+  const uploadsEnabled = Boolean(appConfig.uploads?.enabled);
+  $$(".google-oauth-btn, .auth-divider").forEach((el) => { el.hidden = !googleEnabled; });
+  if (topbarLoginBtn) topbarLoginBtn.hidden = !authEnabled || Boolean(state.auth.user);
+  const guestBtn = $("#guest-signin-btn");
+  if (guestBtn) {
+    guestBtn.hidden = !authEnabled;
+    guestBtn.disabled = !authEnabled;
+  }
+  const guestTitle = $("#profile-guest-state .guest-card h2");
+  const guestDesc = $("#profile-guest-state .guest-card p");
+  if (guestTitle && guestDesc) {
+    if (authEnabled) {
+      guestTitle.textContent = "Sign in to Ustream";
+      guestDesc.textContent = "Create viewer profiles, sync your watchlist across devices, and keep track of where you left off.";
+    } else {
+      guestTitle.textContent = "Guest Mode";
+      guestDesc.textContent = "Account sign-in is unavailable in this deployment. Your My List and display preferences are still saved in this browser.";
+    }
+  }
+  const uploadBtns = [$("#topbar-upload-btn"), $("#profile-upload-btn"), $("#community-upload-btn")];
+  uploadBtns.forEach((btn) => { if (btn) btn.hidden = !uploadsEnabled; });
+}
+
 function openAuthModal(tab = "signin", returnUrl = null) {
+  if (!appConfig.auth?.enabled) {
+    showToast("Account sign-in is unavailable in this deployment (auth database is not configured).");
+    return;
+  }
   state.auth.returnUrl = returnUrl || window.location.hash || "#/home";
   const backdrop = $("#auth-backdrop");
   if (!backdrop) return;
+  syncCapabilityUI();
   backdrop.hidden = false;
   switchAuthTab(tab);
 }
@@ -6730,8 +6872,9 @@ function initModalTabsAndHeroInteractions() {
 
   $("#modal-trailer")?.addEventListener("click", () => {
     if (state.activeModal) {
+      const title = state.activeModal.title;
       closeDetails();
-      playTrailer(state.activeModal.title);
+      void playTrailer(title);
     }
   });
 
@@ -6816,18 +6959,24 @@ function initRouter() {
 if (typeof window !== "undefined" && typeof document !== "undefined") {
   loadShowcaseCatalog();
   setupAuthEventListeners();
-  void initAuth();
   initAppearanceSettings();
   initSearchModal();
   initCustomVideoPlayer();
   initCreatorStudioAndUploads();
-  void loadCommunityVideos();
-  void loadArchiveFilms();
   initModalTabsAndHeroInteractions();
   initRouter();
   initInfiniteScroll();
-  void loadLiveCatalog();
-  void loadNewestRecommendations();
+  void (async () => {
+    await loadAppConfig();
+    syncCapabilityUI();
+    await Promise.all([
+      initAuth(),
+      loadCommunityVideos(),
+      loadArchiveFilms(),
+      loadLiveCatalog(),
+      loadNewestRecommendations(),
+    ]);
+  })();
   hideStartupLoader();
   if (document.readyState === "complete" || document.readyState === "interactive") {
     hideStartupLoader();

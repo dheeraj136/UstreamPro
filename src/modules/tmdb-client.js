@@ -68,20 +68,22 @@ export function createTmdbClient({
         // TMDB's own "resource not found" (status_code 34) is an answer.
         if (body && (body.status_code === 34 || body.status_message)) throw new TmdbError("Not found", 404);
       }
-      // Any proxy failure (503 unconfigured, 404/405 missing route, or a
-      // 5xx function crash) means the proxy is unusable for this session:
-      // stop wasting a retry + backoff on it for every request and go
-      // direct immediately. (A 500 from a crashed function used to leave
-      // proxyAvailable true, so every catalog call paid the proxy's
-      // timeout before falling back — that is why the live catalog
-      // showed only the curated titles.)
-      proxyAvailable = false;
-      return undefined; // fall back to direct
+      // Only fall back to direct keys if keys are actually configured.
+      // When no client keys exist (production default), keep proxyAvailable
+      // enabled so retries and subsequent requests still use /api/tmdb.
+      if (keys.length > 0) {
+        proxyAvailable = false;
+        return undefined; // fall back to direct
+      }
+      throw new TmdbError(error.message || "TMDB proxy request failed", error.status || 503);
     }
     const data = await res.json().catch(() => undefined);
     if (data === undefined || isHealthStub(data)) {
-      proxyAvailable = false;
-      return undefined;
+      if (keys.length > 0) {
+        proxyAvailable = false;
+        return undefined;
+      }
+      throw new TmdbError("TMDB proxy returned an invalid response", 502);
     }
     return data;
   }

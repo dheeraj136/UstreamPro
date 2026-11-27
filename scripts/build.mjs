@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { copyFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
+import { getServerCapabilities } from "../lib/http-utils.js";
 
 const root = process.cwd();
 const publicDir = join(root, "public");
@@ -25,10 +26,7 @@ for (const file of ["index.html", "styles.css", "app.js", "robots.txt", "sitemap
 // can serve them with "immutable". Plain copies are kept as a fallback.
 // NOTE: do NOT delete old hashed files here. Vercel's build output
 // collection traces public/ and fails the whole deployment with
-// ENOENT when a file it saw is deleted mid-build (observed 2026-11-22:
-// both Prompt 5 deployments failed with ENOENT for the old hashed app
-// file after the hash changed). Old hashed files are unreferenced and
-// harmless; they are cleaned up in git, not in the build.
+// ENOENT when a file it saw is deleted mid-build.
 
 const hashedNames = {};
 for (const name of ["styles.css", "app.js"]) {
@@ -83,15 +81,10 @@ for (const iconFile of ["favicon.svg", "favicon.png", "apple-touch-icon.png"]) {
   }
 }
 
-const tmdbKeyConfigured = Boolean(String(process.env.TMDB_API_KEY || "").trim());
+// Public non-secret capability snapshot fallback (never contains API keys/tokens).
 await writeFile(
   join(publicApiDir, "config.json"),
-  JSON.stringify({
-    ok: true,
-    configured: tmdbKeyConfigured,
-    tmdbApiKeyConfigured: tmdbKeyConfigured,
-    mode: tmdbKeyConfigured ? "live" : "browser-fallback",
-  }, null, 2),
+  JSON.stringify(getServerCapabilities(), null, 2),
   "utf8"
 );
 
@@ -100,21 +93,5 @@ await writeFile(
   JSON.stringify({ ok: true, status: "healthy", service: "ustream" }, null, 2),
   "utf8"
 );
-
-// Bug 6 residual: the build used to overwrite the checked-in api JSON
-// with empty stubs on every build, so /api/catalog returned nothing
-// and live totals depended entirely on direct TMDB fetches. Only write
-// a stub when the file is missing or empty; preserve real data.
-const writeApiStubIfMissing = async (name, content) => {
-  const target = join(publicApiDir, name);
-  try {
-    const existing = await import("node:fs/promises").then((m) => m.readFile(target, "utf8"));
-    if (existing.trim().length > 40) return;
-  } catch {}
-  await writeFile(target, content, "utf8");
-};
-await writeApiStubIfMissing("catalog.json", JSON.stringify({ ok: true, results: [] }, null, 2));
-await writeApiStubIfMissing("search.json", JSON.stringify({ ok: true, results: [] }, null, 2));
-await writeApiStubIfMissing("videos.json", JSON.stringify({ ok: true, videos: [] }, null, 2));
 
 console.log("Build complete.");

@@ -1,20 +1,31 @@
 import { createServer } from "node:http";
 import { stat, readFile } from "node:fs/promises";
 import { createReadStream } from "node:fs";
-import { extname, resolve } from "node:path";
+import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-// Load local .env before importing the request handler, which reads
-// TMDB_API_KEY when it receives a request.
-try {
-  const envText = await readFile(new URL("../.env", import.meta.url), "utf8");
-  for (const line of envText.split(/\r?\n/)) {
-    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
-    if (!match || Object.hasOwn(process.env, match[1])) continue;
-    const value = match[2].replace(/^(["'])(.*)\1$/, "$2");
-    process.env[match[1]] = value;
-  }
-} catch {}
+
+// Mark local server runtime so NODE_ENV=production locally still uses ./data
+if (!process.env.LOCAL_DEV && !process.env.VERCEL) {
+  process.env.LOCAL_DEV = "1";
+}
+
+// Load local .env and .env.local before importing request handlers.
+for (const envFile of ["../.env", "../.env.local"]) {
+  try {
+    const envText = await readFile(new URL(envFile, import.meta.url), "utf8");
+    for (const line of envText.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+      if (!match || Object.hasOwn(process.env, match[1])) continue;
+      const value = match[2].replace(/^(["'])(.*)\1$/, "$2");
+      process.env[match[1]] = value;
+    }
+  } catch {}
+}
+
 const { default: handler } = await import("../lib/server.js");
+const { getCorsHeaders, parseByteRange } = await import("../lib/http-utils.js");
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const PORT = Number(process.env.PORT || 4174);
@@ -27,10 +38,12 @@ const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
   ".svg": "image/svg+xml",
   ".json": "application/json; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".webp": "image/webp",
+  ".ico": "image/x-icon",
   ".mp4": "video/mp4",
   ".webm": "video/webm",
   ".ogg": "video/ogg",
@@ -40,18 +53,24 @@ const MIME_TYPES = {
   ".vtt": "text/vtt; charset=utf-8",
 };
 
+const STATIC_ROOTS = [
+  resolve(ROOT, "public"),
+  resolve(ROOT, "src"),
+  resolve(ROOT, "data"),
+  ROOT,
+];
+
 const serveStatic = async (req, res, pathname) => {
   let decoded = pathname;
   try { decoded = decodeURIComponent(pathname); } catch {}
   const requested = decoded === "/" ? "/index.html" : decoded;
-  const candidates = [
-    resolve(ROOT, "public", `.${requested}`),
-    resolve(ROOT, "src", `.${requested}`),
-    resolve(ROOT, "data", `.${requested}`),
-    resolve(ROOT, `.${requested}`),
-  ];
+  const relPath = requested.replace(/^\/+/, "");
 
-  for (const candidate of candidates) {
+  for (const baseDir of STATIC_ROOTS) {
+    const candidate = resolve(baseDir, relPath);
+    if (candidate !== baseDir && !candidate.startsWith(baseDir + sep)) {
+      continue;
+    }
     try {
       const fileStat = await stat(candidate);
       if (!fileStat.isFile()) continue;
@@ -59,22 +78,24 @@ const serveStatic = async (req, res, pathname) => {
       const totalSize = fileStat.size;
       const contentType = MIME_TYPES[extname(candidate).toLowerCase()] || "application/octet-stream";
       const isMedia = contentType.startsWith("video/") || contentType.startsWith("audio/") || contentType.includes("mpegurl");
+      const cors = getCorsHeaders(req, {
+        methods: "GET, HEAD, OPTIONS",
+        headers: "Range, Content-Type, Accept",
+        exposeHeaders: "Content-Range, Accept-Ranges, Content-Length",
+      });
 
-      // HTTP Byte-Range Request Handling (RFC 7233)
-      const range = req.headers.range;
-      if (range && isMedia) {
-        const parts = range.replace(/bytes=/, "").split("-");
-        const start = parseInt(parts[0], 10) || 0;
-        const end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
+      const parsedRange = isMedia ? parseByteRange(req.headers.range, totalSize) : null;
+      if (parsedRange && !parsedRange.valid) {
+        res.writeHead(416, {
+          "Content-Range": `bytes */${totalSize}`,
+          "Accept-Ranges": "bytes",
+          ...cors,
+        });
+        return res.end();
+      }
 
-        if (start >= totalSize || end >= totalSize || start > end) {
-          res.writeHead(416, {
-            "Content-Range": `bytes */${totalSize}`,
-            "Access-Control-Allow-Origin": "*",
-          });
-          return res.end();
-        }
-
+      if (parsedRange) {
+        const { start, end } = parsedRange;
         const chunkSize = end - start + 1;
         res.writeHead(206, {
           "Content-Range": `bytes ${start}-${end}/${totalSize}`,
@@ -82,7 +103,8 @@ const serveStatic = async (req, res, pathname) => {
           "Content-Length": chunkSize,
           "Content-Type": contentType,
           "Cache-Control": "public, max-age=3600",
-          "Access-Control-Allow-Origin": "*",
+          "Cross-Origin-Resource-Policy": "cross-origin",
+          ...cors,
         });
 
         if (req.method === "HEAD") return res.end();
@@ -95,7 +117,8 @@ const serveStatic = async (req, res, pathname) => {
         "Content-Length": totalSize,
         "Accept-Ranges": "bytes",
         "Cache-Control": isMedia ? "public, max-age=3600" : "no-cache",
-        "Access-Control-Allow-Origin": "*",
+        ...(isMedia ? { "Cross-Origin-Resource-Policy": "cross-origin" } : {}),
+        ...cors,
       });
 
       if (req.method === "HEAD") return res.end();
@@ -104,7 +127,7 @@ const serveStatic = async (req, res, pathname) => {
     } catch {}
   }
 
-  res.writeHead(404, { "Content-Type": "application/json" });
+  res.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify({ error: "Not found", path: requested }));
 };
 
