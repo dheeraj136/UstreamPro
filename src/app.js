@@ -3809,33 +3809,17 @@ async function playStreamContent(item, episodeId = null) {
   setPlayerState(PLAYER_STATE.LOADING, `Loading stream for ${item.title}…`);
 
   try {
+    const rawId = item.tmdbId ?? item.id;
+    const isNumericId = /^\d+$/.test(String(rawId ?? ""));
     let epId = episodeId;
-    let movId = null;
-
-    if (mediaType === "movie") {
-      movId = item.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-    } else if (!epId) {
-      if (isAnime) {
-        const searchRes = await fetch(`/api/animeworld?action=search&query=${encodeURIComponent(item.title)}`);
-        const searchData = await searchRes.json();
-        if (searchData?.results?.length) {
-          const first = searchData.results[0];
-          if (first.seriesId) epId = `${first.seriesId}-ep-1`;
-          else if (first.movieId) movId = first.movieId;
-        }
-      }
-      if (!epId && !movId) {
-        const slug = item.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-        epId = `${slug}-ep-1`;
-      }
-    }
+    let movId = mediaType === "movie" ? (isNumericId ? String(rawId) : item.title) : null;
 
     const queryParams = new URLSearchParams();
     if (epId) queryParams.set("episodeId", epId);
     if (movId) queryParams.set("movieId", movId);
     queryParams.set("title", item.title);
     queryParams.set("type", mediaType);
-    if (item.tmdbId || item.id) queryParams.set("tmdbId", String(item.tmdbId || item.id));
+    if (isNumericId) queryParams.set("tmdbId", String(rawId));
 
     const streamRes = await fetch(`/api/animeworld?action=stream&${queryParams.toString()}`);
     const streamData = await streamRes.json();
@@ -3922,8 +3906,13 @@ async function loadAnimeEpisodes(item, container) {
     const searchData = await searchRes.json();
     let episodes = [];
     if (searchData?.results?.length) {
-      const match = searchData.results[0];
-      if (match.seriesId) {
+      const normItem = item.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const match = searchData.results.find((r) => {
+        const normR = (r.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        return normR.includes(normItem) || normItem.includes(normR);
+      }) || (searchData.results.length === 1 ? searchData.results[0] : null);
+
+      if (match && match.seriesId) {
         const seasonsRes = await fetch(`/api/animeworld?action=seasons&seriesID=${encodeURIComponent(match.seriesId)}`);
         const seasonsData = await seasonsRes.json();
         const seasonId = seasonsData?.seasons?.[0]?.seasonId || "s1";

@@ -78,10 +78,11 @@ export function normalizeStream(rawUrl) {
  */
 export function findAnimeInDb(queryStr) {
   if (!queryStr || !animeCatalog.length) return null;
-  const q = String(queryStr).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  if (!q) return null;
+  const rawQ = String(queryStr).trim();
+  const q = rawQ.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  if (!q || q.length < 2) return null;
 
-  // Exact title or slug match
+  // 1. Exact match on title or slug
   let match = animeCatalog.find((a) => {
     const t = a.title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
     const s = (a.slug || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -89,23 +90,27 @@ export function findAnimeInDb(queryStr) {
   });
   if (match) return match;
 
-  // Substring match
+  // 2. Exact match ignoring punctuation and 'hindi', 'dubbed', 'subbed', 'season', 'ss' suffixes
+  const qNorm = q.replace(/\b(hindi|dubbed|subbed|season|ss\d+|ss)\b/g, "").replace(/\s+/g, " ").trim();
+  if (qNorm) {
+    match = animeCatalog.find((a) => {
+      const tNorm = a.title.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\b(hindi|dubbed|subbed|season|ss\d+|ss)\b/g, "").replace(/\s+/g, " ").trim();
+      const sNorm = (a.slug || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\b(hindi|dubbed|subbed|season|ss\d+|ss)\b/g, "").replace(/\s+/g, " ").trim();
+      return tNorm === qNorm || sNorm === qNorm;
+    });
+    if (match) return match;
+  }
+
+  // 3. Whole phrase boundary match: title contains whole phrase q with word boundaries
   match = animeCatalog.find((a) => {
     const t = a.title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
     const s = (a.slug || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-    return t.includes(q) || q.includes(t) || (s && (s.includes(q) || q.includes(s)));
+    const regex = new RegExp("(^|\\s)" + q + "(\\s|$)", "i");
+    return regex.test(t) || regex.test(s);
   });
   if (match) return match;
 
-  // Token match
-  const tokens = q.split(" ").filter((w) => w.length > 2);
-  if (tokens.length > 0) {
-    match = animeCatalog.find((a) => {
-      const t = a.title.toLowerCase();
-      return tokens.every((tok) => t.includes(tok));
-    });
-  }
-  return match || null;
+  return null;
 }
 
 /**
@@ -444,33 +449,32 @@ export default async function handler(req, res) {
       const type = query.type || (movieId ? "movie" : "series");
       const tmdbId = query.tmdbId || query.id || null;
 
-      if (!episodeId && !movieId) {
-        if (title) {
-          const slug = String(title).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-          if (type === "movie") {
-            movieId = slug;
-          } else {
-            episodeId = `${slug}-ep-1`;
-          }
-        } else if (tmdbId) {
-          if (type === "movie") {
-            movieId = String(tmdbId);
-          } else {
-            episodeId = `${tmdbId}-ep-1`;
-          }
-        }
-      }
-
-      if (!episodeId && !movieId) {
-        return res.status(400).json({ success: false, error: "Missing episodeId or movieId parameter" });
+      if (!episodeId && !movieId && !title && !tmdbId) {
+        return res.status(400).json({ success: false, error: "Missing episodeId, movieId, title, or tmdbId parameter" });
       }
 
       // Check Anime DB first (AbyssPlayer high-speed streams with multi-language tracks)
-      const animeMatch = findAnimeInDb(title) || findAnimeInDb(movieId) || findAnimeInDb(episodeId);
+      // Only match by title if title is provided. Never allow a fallback episodeId to hijack an explicit non-anime title!
+      let animeMatch = title ? findAnimeInDb(title) : null;
+      if (!animeMatch && movieId && !/^\d+$/.test(String(movieId))) {
+        animeMatch = findAnimeInDb(movieId);
+      }
+      if (!animeMatch && !title && !movieId && episodeId && !/^\d+$/.test(String(episodeId))) {
+        animeMatch = findAnimeInDb(episodeId);
+      }
+
       if (animeMatch && Array.isArray(animeMatch.episodes) && animeMatch.episodes.length > 0) {
-        const epNumMatch = episodeId ? (String(episodeId).match(/(\d+)$/)?.[1] || "1") : "1";
-        const targetEp = animeMatch.episodes.find((ep) => String(ep.ep) === String(epNumMatch) || ep.ep === epNumMatch)
-          || animeMatch.episodes[0];
+        const sMatch = episodeId ? (String(episodeId).match(/s(\d+)/i)?.[1] || null) : null;
+        const epNumMatch = episodeId
+          ? (String(episodeId).match(/ep(?:isode)?[-_]?(\d+)/i)?.[1] || String(episodeId).match(/(\d+)$/)?.[1] || "1")
+          : "1";
+
+        let targetEp = animeMatch.episodes.find((ep) => {
+          const matchesEp = String(ep.ep) === String(epNumMatch);
+          if (sMatch) return matchesEp && String(ep.s || "1") === String(sMatch);
+          return matchesEp;
+        });
+        if (!targetEp) targetEp = animeMatch.episodes[0];
 
         const normalized = normalizeStream(targetEp.u);
         const servers = [
@@ -489,7 +493,7 @@ export default async function handler(req, res) {
             file: null,
           },
           current: {
-            episodeId: episodeId || `${animeMatch.slug}-ep-${targetEp.ep}`,
+            episodeId: episodeId || `${animeMatch.slug}-s${targetEp.s || "1"}-ep-${targetEp.ep}`,
             title: targetEp.t || `Episode ${targetEp.ep}`,
             episodeNumber: String(targetEp.ep),
             season: String(targetEp.s || "1"),
@@ -504,9 +508,10 @@ export default async function handler(req, res) {
       }
 
       // Universal Embed streaming for Movies and TV Series (2embed + vidsrc.pm)
-      const cleanStreamId = tmdbId || movieId || (episodeId ? episodeId.replace(/-ep-\d+$/, "") : "");
-      const epNum = episodeId ? (String(episodeId).match(/(\d+)$/)?.[1] || "1") : "1";
-      const seasonNum = "1";
+      const isNumeric = /^\d+$/.test(String(tmdbId || ""));
+      const cleanStreamId = isNumeric ? String(tmdbId) : (movieId || (episodeId ? episodeId.replace(/-ep-\d+$/, "") : (title ? title.toLowerCase().replace(/[^a-z0-9]+/g, "-") : "")));
+      const epNum = episodeId ? (String(episodeId).match(/ep(?:isode)?[-_]?(\d+)/i)?.[1] || String(episodeId).match(/(\d+)$/)?.[1] || "1") : "1";
+      const seasonNum = episodeId ? (String(episodeId).match(/s(\d+)/i)?.[1] || "1") : "1";
 
       const isMovie = type === "movie" || !episodeId;
       const server1 = isMovie
@@ -593,7 +598,7 @@ export default async function handler(req, res) {
         (a) => a.title.toLowerCase().includes(qLower) || qLower.includes(a.title.toLowerCase())
       );
 
-      const results = (matchedCurated.length ? matchedCurated : CURATED_ANIME).map((a) => ({
+      const results = matchedCurated.map((a) => ({
         title: a.title,
         image: a.image,
         year: a.year,

@@ -131,6 +131,33 @@ test("handler returns 400 for stream without episodeId or movieId", async () => 
   assert.equal(res._body.success, false);
 });
 
+test("handler search returns empty results for unknown title without falling back to Naruto", async () => {
+  const { req, res } = mockReqRes({ url: "/api/animeworld?action=search&query=Spirited%20Away%20XYZ" });
+  await animeworldHandler(req, res);
+  assert.equal(res._status, 200);
+  assert.equal(res._body.success, true);
+  assert.deepEqual(res._body.results, []);
+});
+
+test("handler streams TMDB movie correctly without anime hijacking", async () => {
+  const { req, res } = mockReqRes({ url: "/api/animeworld?action=stream&title=Spirited%20Away&tmdbId=129&type=movie" });
+  await animeworldHandler(req, res);
+  assert.equal(res._status, 200);
+  assert.equal(res._body.success, true);
+  assert.equal(res._body.source, "ustream-streaming-engine");
+  assert.match(res._body.stream.streamLink, /2embed\.cc\/embed\/129/);
+});
+
+test("handler streams genuine anime with Abyss HD player", async () => {
+  const { req, res } = mockReqRes({ url: "/api/animeworld?action=stream&title=Naruto&type=series" });
+  await animeworldHandler(req, res);
+  assert.equal(res._status, 200);
+  assert.equal(res._body.success, true);
+  assert.equal(res._body.source, "animeworld-india");
+  assert.match(res._body.stream.streamLink, /abyssplayer\.com/);
+  assert.equal(res._body.series.title, "Naruto");
+});
+
 test("handler handles OPTIONS for CORS preflight", async () => {
   const { req, res } = mockReqRes({ method: "OPTIONS", url: "/api/animeworld" });
   await animeworldHandler(req, res);
