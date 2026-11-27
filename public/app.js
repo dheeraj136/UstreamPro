@@ -2221,10 +2221,6 @@ function setFeatured(item) {
     playBtn.innerHTML = `${renderIcon("play", "icon-sm")} <span>Play</span>`;
   }
 
-  const trailerBtn = $("#hero-trailer");
-  if (trailerBtn) trailerBtn.dataset.title = item.title;
-  if (trailerBtn) trailerBtn.hidden = trailerUnavailableTitles.has(item.title);
-
   const detailsBtn = $("#hero-details");
   if (detailsBtn) detailsBtn.dataset.title = item.title;
 
@@ -2271,9 +2267,9 @@ function pickOfficialTrailer(videos) {
 
 function setTrailerButtonsHidden() {
   const hero = $("#hero-trailer");
-  if (hero) hero.hidden = trailerUnavailableTitles.has(hero.dataset.title || featured?.title);
+  if (hero) hero.hidden = true;
   const modal = $("#modal-trailer");
-  if (modal) modal.hidden = trailerUnavailableTitles.has(state.activeModal?.title);
+  if (modal) modal.hidden = true;
 }
 
 async function playTrailer(title) {
@@ -3250,87 +3246,13 @@ function stopHeroMotionPreview() {
     clearTimeout(heroTrailerTimer);
     heroTrailerTimer = null;
   }
-  const videoWrap = $("#hero-video-wrap");
-  const trailerFrame = $("#hero-trailer-frame");
-  const muteBtn = $("#hero-mute-toggle");
-  if (videoWrap) {
-    videoWrap.hidden = true;
-    videoWrap.classList.remove("active");
-  }
-  if (trailerFrame) {
-    trailerFrame.src = "about:blank";
-  }
-  if (muteBtn) {
-    muteBtn.hidden = true;
-  }
 }
 
-function toggleHeroMute() {
-  const trailerFrame = $("#hero-trailer-frame");
-  const muteIcon = $("#hero-mute-icon");
-  if (!trailerFrame || !trailerFrame.contentWindow) return;
+function toggleHeroMute() {}
 
-  heroPreviewMuted = !heroPreviewMuted;
-  const command = heroPreviewMuted ? '{"event":"command","func":"mute"}' : '{"event":"command","func":"unMute"}';
-  trailerFrame.contentWindow.postMessage(command, "*");
-
-  if (muteIcon) {
-    muteIcon.innerHTML = heroPreviewMuted
-      ? '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>'
-      : '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>';
-  }
+function startHeroMotionPreview() {
+  // Motion trailer preview disabled in favor of direct content playback
 }
-
-function startHeroMotionPreview(item) {
-  stopHeroMotionPreview();
-  if (!item) return;
-
-  heroTrailerTimer = setTimeout(async () => {
-    try {
-      let trailerKey = null;
-      const tmdbId = item.tmdbId || item.id;
-      const isSeries = item.type === "series" || item.category === "series" || item.category === "tv";
-      const mediaType = isSeries ? "tv" : "movie";
-
-      if (tmdbId) {
-        try {
-          const videoData = await fetchTmdbApi(`/${mediaType}/${tmdbId}/videos`);
-          const videos = videoData?.results || [];
-          const trailer = pickOfficialTrailer(videos);
-          if (trailer?.key) trailerKey = trailer.key;
-        } catch {}
-      }
-
-      if (!trailerKey) {
-        try {
-          const searchData = await fetchTmdbApi(`/search/${mediaType}?query=${encodeURIComponent(item.title)}`);
-          const found = searchData?.results?.[0];
-          if (found?.id) {
-            const videoData = await fetchTmdbApi(`/${mediaType}/${found.id}/videos`);
-            const videos = videoData?.results || [];
-            const trailer = pickOfficialTrailer(videos);
-            if (trailer?.key) trailerKey = trailer.key;
-          }
-        } catch {}
-      }
-
-      if (trailerKey && featured?.title === item.title) {
-        const videoWrap = $("#hero-video-wrap");
-        const trailerFrame = $("#hero-trailer-frame");
-        const muteBtn = $("#hero-mute-toggle");
-        if (trailerFrame && videoWrap) {
-          trailerFrame.src = `https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&mute=1&controls=0&loop=1&playlist=${trailerKey}&enablejsapi=1&playsinline=1`;
-          videoWrap.hidden = false;
-          videoWrap.classList.add("active");
-          if (muteBtn) muteBtn.hidden = false;
-        }
-      }
-    } catch (err) {
-      console.warn("Hero preview playback skipped:", err);
-    }
-  }, 1800);
-}
-
 
 async function fetchTitleCredits(item) {
   const tmdbId = item.tmdbId || item.id;
@@ -3470,9 +3392,6 @@ function openDetails(title, { updateHash = true, focusWatch = false } = {}) {
     playbackNotice.textContent = "";
   }
   void hydrateItemMetadata(item);
-
-  const modalTrailerBtn = $("#modal-trailer");
-  if (modalTrailerBtn) modalTrailerBtn.hidden = trailerUnavailableTitles.has(item.title);
 
   // Show only genres actually supplied by the catalog.
   const specsGrid = $("#modal-specs-grid");
@@ -3865,7 +3784,7 @@ function togglePlayerSettings(force) {
 
 
 
-async function playAnime(item, episodeId = null) {
+async function playStreamContent(item, episodeId = null) {
   stopAllMediaPlayback();
   const requestId = ++state.player.requestId;
   const isCurrentRequest = () => state.player.requestId === requestId;
@@ -3875,27 +3794,43 @@ async function playAnime(item, episodeId = null) {
   state.player.item = item;
   state.player.trailerTitle = null;
   state.player.nativeSource = null;
-  if (playerTitle) playerTitle.textContent = `${item.title} — Hindi Dub / Sub`;
+  const isAnime = item.category === "anime" || item.isJapaneseAnime;
+  const mediaType = (item.type === "movie" || item.category === "movie") ? "movie" : "series";
+
+  if (playerTitle) playerTitle.textContent = `${item.title} — Streaming`;
   if (playerBackdrop) { playerBackdrop.hidden = false; playerBackdrop.removeAttribute("hidden"); }
-  setPlayerState(PLAYER_STATE.LOADING, `Loading anime stream for ${item.title}…`);
+  setPlayerState(PLAYER_STATE.LOADING, `Loading stream for ${item.title}…`);
 
   try {
     let epId = episodeId;
-    if (!epId) {
-      const searchRes = await fetch(`/api/animeworld?action=search&query=${encodeURIComponent(item.title)}`);
-      const searchData = await searchRes.json();
-      if (searchData?.results?.length) {
-        const first = searchData.results[0];
-        if (first.seriesId) epId = `${first.seriesId}-ep-1`;
-        else if (first.movieId) epId = first.movieId;
+    let movId = null;
+
+    if (mediaType === "movie") {
+      movId = item.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    } else if (!epId) {
+      if (isAnime) {
+        const searchRes = await fetch(`/api/animeworld?action=search&query=${encodeURIComponent(item.title)}`);
+        const searchData = await searchRes.json();
+        if (searchData?.results?.length) {
+          const first = searchData.results[0];
+          if (first.seriesId) epId = `${first.seriesId}-ep-1`;
+          else if (first.movieId) movId = first.movieId;
+        }
       }
-      if (!epId) {
+      if (!epId && !movId) {
         const slug = item.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
         epId = `${slug}-ep-1`;
       }
     }
 
-    const streamRes = await fetch(`/api/animeworld?action=stream&episodeId=${encodeURIComponent(epId)}`);
+    const queryParams = new URLSearchParams();
+    if (epId) queryParams.set("episodeId", epId);
+    if (movId) queryParams.set("movieId", movId);
+    queryParams.set("title", item.title);
+    queryParams.set("type", mediaType);
+    if (item.tmdbId || item.id) queryParams.set("tmdbId", String(item.tmdbId || item.id));
+
+    const streamRes = await fetch(`/api/animeworld?action=stream&${queryParams.toString()}`);
     const streamData = await streamRes.json();
     if (!isCurrentRequest()) return;
 
@@ -3907,24 +3842,26 @@ async function playAnime(item, episodeId = null) {
       if (embedPlayer) {
         embedPlayer.hidden = false;
         embedPlayer.src = streamLink;
-        embedPlayer.title = `${item.title} — AnimeWorld Streaming`;
+        embedPlayer.title = `${item.title} — Streaming`;
       }
       if (playerTitle) {
         playerTitle.textContent = streamData.current?.title
           ? `${item.title} — ${streamData.current.title}`
-          : `${item.title} — Hindi Dub / Sub`;
+          : `${item.title} — Full Feature`;
       }
       setPlayerState(PLAYER_STATE.READY);
       return;
     }
   } catch (err) {
-    console.warn("[AnimeWorld Player]", err);
+    console.warn("[AnimeWorld Streaming]", err);
   }
 
   if (isCurrentRequest()) {
-    await playTrailer(item.title);
+    setPlayerState(PLAYER_STATE.ERROR, "Streaming is loading. Please tap Retry to resume playback.");
   }
 }
+
+const playAnime = playStreamContent;
 
 async function loadAnimeEpisodes(item, container) {
   if (!container) return;
@@ -3996,11 +3933,8 @@ function playTitle(title) {
     playAuthorizedItem(item);
     return;
   }
-  if (item.category === "anime" || item.isJapaneseAnime) {
-    playAnime(item);
-    return;
-  }
-  playTrailer(item.title);
+  // Stream full content via AnimeWorld streaming API
+  playStreamContent(item);
 }
 
 
@@ -4011,8 +3945,8 @@ async function retryPlayback() {
     playNativeVideo(source.url, source.title, source.poster, { videoId: source.videoId, mimeType: source.mimeType || "" });
     return;
   }
-  if (state.player?.trailerTitle) {
-    await playTrailer(state.player.trailerTitle);
+  if (state.player?.item) {
+    await playStreamContent(state.player.item);
   }
 }
 
@@ -5042,7 +4976,7 @@ document.addEventListener("click", (event) => {
   if (button.dataset.action === "play-archive") { playArchiveFilm(button.dataset.archiveId); return; }
   if (button.dataset.action === "play-authorized") { playTitle(button.dataset.title); return; }
   if (button.dataset.action === "play") { playTitle(button.dataset.title); return; }
-  if (button.dataset.action === "trailer") return void playTrailer(button.dataset.title);
+  if (button.dataset.action === "trailer") return void playTitle(button.dataset.title);
   if (button.dataset.action === "bookmark") {
     const title = button.dataset.title || featured?.title;
     if (title) {
@@ -6874,13 +6808,12 @@ function initModalTabsAndHeroInteractions() {
     if (state.activeModal) {
       const title = state.activeModal.title;
       closeDetails();
-      void playTrailer(title);
+      void playTitle(title);
     }
   });
 
   $("#hero-trailer")?.addEventListener("click", () => {
-    stopHeroMotionPreview();
-    playTrailer(featured?.title);
+    playTitle(featured?.title);
   });
   $("#hero-mute-toggle")?.addEventListener("click", toggleHeroMute);
 }

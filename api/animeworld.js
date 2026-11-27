@@ -399,8 +399,28 @@ export default async function handler(req, res) {
   try {
     // 1. STREAM
     if (action === "stream") {
-      const episodeId = query.episodeId || query.episode || null;
-      const movieId = query.movieId || query.movie || null;
+      let episodeId = query.episodeId || query.episode || null;
+      let movieId = query.movieId || query.movie || null;
+      const title = query.title || query.t || null;
+      const type = query.type || (movieId ? "movie" : "series");
+      const tmdbId = query.tmdbId || query.id || null;
+
+      if (!episodeId && !movieId) {
+        if (title) {
+          const slug = String(title).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+          if (type === "movie") {
+            movieId = slug;
+          } else {
+            episodeId = `${slug}-ep-1`;
+          }
+        } else if (tmdbId) {
+          if (type === "movie") {
+            movieId = String(tmdbId);
+          } else {
+            episodeId = `${tmdbId}-ep-1`;
+          }
+        }
+      }
 
       if (!episodeId && !movieId) {
         return res.status(400).json({ success: false, error: "Missing episodeId or movieId parameter" });
@@ -422,9 +442,13 @@ export default async function handler(req, res) {
       }
 
       // Generate fallback stream response with universal player
+      const epNum = episodeId ? (episodeId.match(/(\d+)$/)?.[1] || "1") : "1";
+      const seriesSlug = episodeId ? episodeId.replace(/-ep-\d+$/, "") : "";
+      const streamId = tmdbId || (episodeId ? seriesSlug : movieId);
+
       const fallbackStreamLink = episodeId
-        ? `https://vidsrc.cc/v2/embed/tv/${encodeURIComponent(episodeId.replace(/-ep-\d+$/, ""))}/1/${episodeId.match(/\d+$/)?.[0] || 1}?autoPlay=1`
-        : `https://vidsrc.cc/v2/embed/movie/${encodeURIComponent(movieId)}?autoPlay=1`;
+        ? `https://vidsrc.cc/v2/embed/tv/${encodeURIComponent(streamId)}/1/${epNum}?autoPlay=1`
+        : `https://vidsrc.cc/v2/embed/movie/${encodeURIComponent(streamId)}?autoPlay=1`;
 
       return res.status(200).json({
         success: true,
@@ -436,11 +460,11 @@ export default async function handler(req, res) {
         },
         current: {
           episodeId,
-          title: episodeId ? `Episode ${episodeId.replace(/^.*-ep-/, "")}` : "Playing Movie",
-          overview: "Hindi dubbed streaming enabled.",
+          title: episodeId ? `Episode ${epNum}` : (title || "Full Feature"),
+          overview: "Full-length streaming enabled.",
         },
         series: {
-          title: episodeId ? episodeId.replace(/-ep-\d+$/, "").replace(/-/g, " ") : "Anime",
+          title: title || (episodeId ? seriesSlug.replace(/-/g, " ") : "Streaming Feature"),
           season: "Season 1",
         },
       });
